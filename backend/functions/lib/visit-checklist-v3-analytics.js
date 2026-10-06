@@ -3,6 +3,7 @@ const score=require('./pulse-v3-score');
 const {listAccepted}=require('./pulse-v3-store');
 const {aggregateDashboard}=require('./visit-checklist-dashboard-aggregate');
 const {authorizeVisitReport}=require('./visit-report-context');
+const {effectiveGrants}=require('./visit-checklist-department-access');
 const {bad}=require('./visit-checklist-dashboard-filters');
 
 /** A repeatable-read transaction ties metadata, revisions and assessment pointers to one response. */
@@ -19,22 +20,23 @@ async function readDataset(db,actor,projectId,query={},action='view') {
  const requestedPolicy=String(query.policy||activePolicy);
  if(query.policy&&!([activePolicy,...(config.archive_policies||[])]).includes(query.policy))throw bad('Версия оценивания не активирована для этого проекта');
  const allRecords=await listAccepted(db,projectId,requestedPolicy||'__not_configured__');
+ const activeGrants=await effectiveGrants(db,actor.id,action,projectId,config);
+ if(query.department&&!activeGrants.some(g=>g.lesson_id==null&&(g.department_id==null||String(g.department_id)===String(query.department)))){const e=new Error('Нет доступа к выбранной кафедре');e.httpStatus=403;throw e;}
+ if(!activeGrants.length){const e=new Error('Доступ к аналитике кафедр не назначен.');e.httpStatus=403;throw e;}
+ const departmentIds=activeGrants.filter(g=>g.lesson_id==null&&g.department_id!=null).map(g=>String(g.department_id));
+ const globalAccess=activeGrants.some(g=>g.lesson_id==null&&g.department_id==null);
  const bindings=(await db.query(`SELECT b.lesson_id AS id,b.teacher_user_id AS teacher_id,b.department_id,b.metadata,
       u.display_name AS teacher_label FROM pulse_visit_report_lesson_bindings b JOIN users u ON u.id=b.teacher_user_id
       WHERE EXISTS(SELECT 1 FROM pulse_v3_checklists c WHERE c.project_id=$1 AND c.lesson_id=b.lesson_id AND c.status='submitted')
-      AND EXISTS(SELECT 1 FROM pulse_visit_report_grants g WHERE g.user_id=$2 AND g.action=$3
+      AND ($4::boolean OR b.department_id=ANY($5::text[]) OR EXISTS(SELECT 1 FROM pulse_visit_report_grants g WHERE g.user_id=$2 AND g.action=$3
         AND g.valid_from<=now() AND (g.valid_until IS NULL OR g.valid_until>now())
-        AND (g.lesson_id IS NULL OR g.lesson_id=b.lesson_id) AND (g.department_id IS NULL OR g.department_id=b.department_id))`,[projectId,actor.id,action])).rows;
+        AND (g.lesson_id IS NULL OR g.lesson_id=b.lesson_id) AND (g.department_id IS NULL OR g.department_id=b.department_id)))`,[projectId,actor.id,action,globalAccess,departmentIds])).rows;
  const sourceMetadata=(await db.query(`SELECT c.checklist_id,c.response_id,v.original_json,v.created_at,
       r.answers_json FROM pulse_v3_checklists c JOIN pulse_v3_revisions v
       ON v.project_id=c.project_id AND v.checklist_id=c.checklist_id AND v.revision=c.current_revision
       LEFT JOIN lesson_visit_responses r ON r.id=c.response_id WHERE c.project_id=$1 AND c.status='submitted'`,[projectId])).rows;
- const activeGrants=(await db.query(`SELECT lesson_id,department_id FROM pulse_visit_report_grants WHERE user_id=$1 AND action=$2 AND valid_from<=now() AND (valid_until IS NULL OR valid_until>now())`,[actor.id,action])).rows;
- if(query.department&&!activeGrants.some(g=>g.lesson_id==null&&(g.department_id==null||String(g.department_id)===String(query.department)))){const e=new Error('Нет доступа к выбранной кафедре');e.httpStatus=403;throw e;}
- if(!activeGrants.length){const e=new Error('Доступ к аналитике кафедр не назначен.');e.httpStatus=403;throw e;}
  const users=(await db.query('SELECT id,display_name FROM users WHERE id::text=ANY($1::text[])',[allRecords.map(r=>String(r.checklist.author_id||''))])).rows;
  const byId=new Map(sourceMetadata.map(r=>[r.checklist_id,r]));
- const deliveries=(await db.query(`SELECT d.lesson_id,d.aggregation_version,d.sent_at,d.opened_at,u.display_name AS sender_name FROM pulse_visit_report_deliveries d JOIN users u ON u.id=d.sender_user_id WHERE d.lesson_id=ANY($1::text[]) ORDER BY d.lesson_id,d.version DESC`,[bindings.map(b=>String(b.id))])).rows;
  const lessons=bindings.map(row=>({...row.metadata,id:String(row.id),teacher_id:String(row.teacher_id),teacher_label:row.teacher_label,department_id:String(row.department_id||''),department:row.metadata?.department||String(row.department_id||'')}));
  const global=activeGrants.some(g=>g.lesson_id==null&&g.department_id==null);
  const records=allRecords.filter(r=>lessons.some(l=>l.id===String(r.checklist.lesson_id))||(global&&!r.checklist.lesson_id)).map(r=>{
@@ -43,9 +45,8 @@ async function readDataset(db,actor,projectId,query={},action='view') {
   return {...r,created_at:meta?.created_at,author:users.find(u=>String(u.id)===String(r.checklist.author_id))?.display_name||String(r.checklist.author_id||''),author_label:users.find(u=>String(u.id)===String(r.checklist.author_id))?.display_name||String(r.checklist.author_id||''),format:format==='онлайн'||format==='online'?'online':format==='очно'||format==='offline'?'offline':'',self_adjustment:r.checklist.source==='self_analysis'&&r.assessment_id&&r.results?score.roomAdjustment([{...r,checklist:{...r.checklist,source:'observation'}}]).amount:0};
  });
  const adjustments=(await db.query('SELECT * FROM pulse_v3_room_adjustments WHERE project_id=$1 AND lesson_id=ANY($2::text[])',[projectId,lessons.map(l=>l.id)])).rows;
- for(const lesson of lessons){const current=records.filter(r=>String(r.checklist.lesson_id)===lesson.id);const latest=deliveries.find(d=>String(d.lesson_id)===lesson.id);lesson.report_status=latest?(latest.aggregation_version!==score.aggregationVersion(current)?'Есть обновление':latest.opened_at?'Открыто учителем':'Отправлено'):'Не отправлено';lesson.report_sent_at=latest?.sent_at||null;lesson.report_sender=latest?.sender_name||null;}
- const grants=(await db.query(`SELECT lesson_id,department_id FROM pulse_visit_report_grants WHERE user_id=$1 AND action=$2
-   AND valid_from<=now() AND (valid_until IS NULL OR valid_until>now())`,[actor.id,action])).rows;
+
+ const grants=activeGrants;
  const permitted=(id,department)=>grants.some(g=>(g.department_id==null||String(g.department_id)===String(department))&&g.lesson_id==null);
  // Roster/history must be explicitly bound to stable user IDs and effective membership dates.
  const configured=Array.isArray(config.roster)?config.roster:[];
@@ -60,8 +61,15 @@ async function readDataset(db,actor,projectId,query={},action='view') {
  return {interface:(()=>{const {history,...current}=require('./pulse-interface-settings').settings(config);return current;})(),project:{id:Number(project.id),title:project.title},records:scopedRecords,lessons:scopedLessons,roster:defaultDepartments?.size?roster.filter(t=>t.departments.some(d=>defaultDepartments.has(String(typeof d==='string'?d:d.id)))):roster,leaders,assigned_departments:assigned.map(l=>({id:String(l.department_id),label:lessons.find(x=>x.department_id===String(l.department_id))?.department||String(l.department_id)})),adjustments,calendar:config.calendar,
   message:[!activePolicy?'Активная политика оценивания не настроена: принятые результаты не используются.':null,!configured.length?'Полный исторический состав кафедр не настроен; охват показан по проверенным связям уроков.':null,records.some(r=>!r.checklist.lesson_id)?'Есть неподвязанные старые чек-листы. Они требуют сверки и не объединены по учителю и дате.':null].filter(Boolean).join(' ')};
 }
+async function aggregateWithReportStatuses(tx,dataset,query,settings={}) {
+ const preliminary=aggregateDashboard(dataset,query,undefined,{paginate:false});
+ const decorated=await require('./visit-report-statuses').decorateVisitReportStatuses(tx,preliminary.lessons,dataset.records);
+ const statuses=new Map(decorated.map(l=>[l.id,Object.fromEntries(Object.entries(l).filter(([key])=>key.startsWith('report_')))]));
+ for(const lesson of dataset.lessons){Object.assign(lesson,statuses.get(lesson.id)||{});lesson.report_sender=lesson.report_sender_name||null;}
+ return aggregateDashboard(dataset,query,undefined,settings);
+}
 async function readDashboardV3(db,actor,projectId,query={}) {
- return consistentRead(db,async tx=>{const dataset=await readDataset(tx,actor,projectId,query);if(!dataset)return null;const dashboard=aggregateDashboard(dataset,query);dashboard.interface=dataset.interface;
+ return consistentRead(db,async tx=>{const dataset=await readDataset(tx,actor,projectId,query);if(!dataset)return null;const dashboard=await aggregateWithReportStatuses(tx,dataset,query);
  if(dashboard.filters.period==='week'){const from=new Date(`${dashboard.filters.from}T00:00:00Z`);const previousStart=new Date(+from-7*86400000).toISOString().slice(0,10);const previous=aggregateDashboard(dataset,{...query,week_start:previousStart});dashboard.weekly_comparison=dashboard.groups.map(g=>{const prev=previous.groups.find(p=>p.policy===g.policy&&p.maximum===g.maximum);return {current:g,previous:prev||null,change:prev?score.mean([g.value,{numerator:-prev.value.numerator,denominator:prev.value.denominator}]).numerator: null};});for(const row of dashboard.weekly_comparison)if(row.previous){const v=score.mean([row.current.value,{numerator:-row.previous.value.numerator,denominator:row.previous.value.denominator}]);row.change={numerator:v.numerator*2,denominator:v.denominator};}dashboard.previous_week={from:previous.filters.from,to:previous.filters.to};}
  return require('./pulse-interface-settings').applyLabels(dashboard,dataset.interface.names);});
 }
@@ -86,7 +94,7 @@ async function readExportContext(db,actor,query={}) {
   if(!projectId)throw bad('Нет общего проекта чек-листа');
   const dataset=await readDataset(tx,actor,projectId,query,'export');if(!dataset)throw bad('Проект не найден');
   // Aggregate once without pagination; this is the exact provider for screen, Excel and report snapshots.
-  const filters={...query,page:'1',size:'100'};const dashboard=aggregateDashboard(dataset,filters,undefined,{paginate:false});
+  const filters={...query,page:'1',size:'100'};const dashboard=await aggregateWithReportStatuses(tx,dataset,filters,{paginate:false});
   // The export must contain all selected rows rather than only the first 100 rows.
   const all=require('./pulse-interface-settings').applyLabels(dashboard,dataset.interface.names);
   const selectedIds=new Set(all.lessons.map(l=>l.id));

@@ -611,6 +611,21 @@ export async function cabinetLessonVisitScheduleNotify(body: {
   return { full_name: data.full_name || '' };
 }
 
+export type VisitSelfConfirmations = {confirmations:{selfId:number;lessonId:number;actorId?:number;confirmedAt?:string}[];canConfirm:boolean};
+export async function getVisitSelfConfirmations(projectId:number):Promise<VisitSelfConfirmations> {
+ const res=await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}/self-confirmations`,{headers:adminHeaders()});
+ const data=await parseJson<VisitSelfConfirmations & {error?:string;message?:string}>(res);
+ if(res.status===403)return {confirmations:[],canConfirm:false};
+ if(!res.ok)throw new Error(apiErrText(data,res.statusText));
+ return data;
+}
+export async function putVisitSelfConfirmation(projectId:number,selfId:number,lessonId:number):Promise<VisitSelfConfirmations> {
+ const res=await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}/self-confirmations`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({selfId,lessonId})});
+ const data=await parseJson<VisitSelfConfirmations & {error?:string;message?:string}>(res);
+ if(!res.ok)throw new Error(apiErrText(data,res.statusText));
+ return data;
+}
+
 export type LessonVisitSelfLink = {
   self_response_id: number;
   lesson_response_id: number;

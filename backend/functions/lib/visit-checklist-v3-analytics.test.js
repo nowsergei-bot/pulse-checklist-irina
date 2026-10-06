@@ -11,10 +11,11 @@ function database(departments=null,{send=false}={}){
   if(sql.includes('FROM pulse_v3_checklists c')&&sql.includes('LEFT JOIN pulse_v3_active_assessments'))return {rows:records.map(r=>({...r,results_json:r.results,checklist:r.checklist}))};
   if(sql.includes('SELECT b.lesson_id AS id')){assert.match(sql,/EXISTS\(SELECT 1 FROM pulse_visit_report_grants/);return {rows:controls.lessons.filter(l=>!departments||departments.includes(l.department)).map(l=>({id:l.lesson_id,teacher_id:l.teacher_id,teacher_label:`Учитель ${l.teacher_id}`,department_id:l.department,metadata:{...l,department:l.department}}))};}
   if(sql.includes('SELECT c.checklist_id,c.response_id'))return {rows:records.map(r=>({checklist_id:r.checklist.checklist_id,original_json:{general:{visit_format:'очно'}}}))};
+  if(sql.includes('FROM pulse_visit_report_attempts'))return {rows:db.attempts||[]};
   if(sql.includes('FROM pulse_visit_report_grants'))return {rows:grants};
   if(sql.includes('FROM users WHERE id::text'))return {rows:[{id:'Н-1',display_name:'Наблюдатель 1'},{id:'Н-2',display_name:'Наблюдатель 2'}]};
   if(sql.includes('FROM pulse_v3_room_adjustments'))return {rows:[]};
-  if(sql.includes('FROM pulse_visit_report_deliveries d'))return {rows:send?[{lesson_id:'У-101',aggregation_version:score.aggregationVersion(records.filter(r=>r.checklist.lesson_id==='У-101')),sent_at:'2026-09-28T12:00:00Z',opened_at:null,sender_name:'Руководитель'}]:[]};
+  if(sql.includes('FROM pulse_visit_report_deliveries d'))return {rows:send?[{lesson_id:'У-101',aggregation_version:score.aggregationVersion(records.filter(r=>r.checklist.lesson_id==='У-101')),sent_at:'2026-09-28T12:00:00Z',opened_at:null,sender_name:'Руководитель',snapshot:db.snapshot}]:[]};
   if(sql.includes('SELECT DISTINCT project_id'))return {rows:[{project_id:1}]};
   if(sql.includes('FROM pulse_visit_report_deliveries'))return {rows:[]};
   if(sql.includes('FROM pulse_v3_revisions'))return {rows:[]};
@@ -36,7 +37,9 @@ test('A33/A47/A54: screen/export/report reuse accepted IDs and exact lesson resu
  assert.equal(exported.teachers.length,table.page.total);assert.equal(exported.aggregation_version,table.aggregation_version);assert.deepEqual(exported.assessment_ids,table.assessment_ids);
 });
 test('actual delivery status replaces unsent fallback and keeps sender/date',async()=>{
- const db=database(null,{send:true});const data=await readDashboardV3(db,{id:9},1,{period:'all_time',selection:'all'});const lesson=data.lessons.find(l=>l.id==='У-101');
+ const baseline=await readDashboardV3(database(),{id:9},1,{period:'all_time',selection:'all'});const original=baseline.lessons.find(l=>l.id==='У-101');
+ const keys=['id','date','teacher_id','teacher_label','department','department_id','class_name','subject','topic','adjustment','adjustment_reason'];
+ const db=database(null,{send:true});db.snapshot={lesson:Object.fromEntries(keys.filter(k=>original[k]!==undefined).map(k=>[k,original[k]])),result:{final:original.result.value}};const data=await readDashboardV3(db,{id:9},1,{period:'all_time',selection:'all'});const lesson=data.lessons.find(l=>l.id==='У-101');
  assert.equal(lesson.report_status,'Отправлено');assert.equal(lesson.report_sender,'Руководитель');assert.ok(lesson.report_sent_at);assert.equal(data.queue.some(l=>l.id==='У-101'),false);
 });
 test('consistent reads never start a nested transaction on a borrowed client',async()=>{
@@ -45,4 +48,15 @@ test('consistent reads never start a nested transaction on a borrowed client',as
 });
 test('department assignment administration follows existing permission checks, never department title alone',()=>{
  assert.equal(canManage({id:9,role:'teacher',permissions:[]}),false);assert.equal(canManage({id:9,permissions:['users.manage']}),true);assert.equal(canManage({id:9,role:'admin'}),true);
+});
+
+test('persisted sending/error states and metadata changes reach the queue and teacher detail',async()=>{
+ const query={period:'all_time',selection:'all',view:'teacher',teacher:'А'};
+ const db=database();db.attempts=[{lesson_id:'У-101',status:'sending',delivered:false,started_at:new Date().toISOString()}];
+ let data=await readDashboardV3(db,{id:9},1,query);assert.equal(data.lessons.find(l=>l.id==='У-101').report_status,'Отправляется');assert.equal(data.queue.some(l=>l.id==='У-101'),false);
+ db.attempts=[{lesson_id:'У-101',status:'failed',delivered:false,error:'Проверенная ошибка',started_at:new Date().toISOString()}];
+ data=await readDashboardV3(db,{id:9},1,query);assert.equal(data.queue.find(l=>l.id==='У-101').report_status,'Ошибка отправки');assert.equal(data.teacher.lessons.find(l=>l.id==='У-101').report_error,'Проверенная ошибка');
+ const sent=database(null,{send:true});const original=data.lessons.find(l=>l.id==='У-101');const keys=['id','date','teacher_id','teacher_label','department','department_id','class_name','subject','topic','adjustment','adjustment_reason'];
+ sent.snapshot={lesson:{...Object.fromEntries(keys.filter(k=>original[k]!==undefined).map(k=>[k,original[k]])),topic:'Прежняя тема'},result:{final:original.result.value}};
+ data=await readDashboardV3(sent,{id:9},1,query);assert.equal(data.queue.find(l=>l.id==='У-101').report_status,'Есть обновление');
 });

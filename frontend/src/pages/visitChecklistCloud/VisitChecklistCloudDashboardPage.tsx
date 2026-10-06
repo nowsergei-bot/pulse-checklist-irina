@@ -1,9 +1,8 @@
-import VisitChecklistV3Dashboard from '../visitChecklistV3/VisitChecklistV3Dashboard';
 import VisitChecklistReportDashboard from '../../components/VisitChecklistReportDashboard';
 import '../../styles/lessonAnalytics.css';
 import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getLessonVisitProject, getVisitChecklistDashboard, getVisitChecklistDashboardTeacher, listLessonVisitResponses, patchVisitChecklistDashboardTeacher, postVisitChecklistDashboardRebuild, postVisitChecklistDashboardSchoolAi, postVisitChecklistDashboardTeacherAi } from '../../api/visitChecklist';
+import { getVisitSelfConfirmations, putVisitSelfConfirmation, getLessonVisitProject, getVisitChecklistDashboard, getVisitChecklistDashboardTeacher, listLessonVisitResponses, patchVisitChecklistDashboardTeacher, postVisitChecklistDashboardRebuild, postVisitChecklistDashboardSchoolAi, postVisitChecklistDashboardTeacherAi } from '../../api/visitChecklist';
 import { type VisitChecklistDashCard, type VisitChecklistDashPayload, type VisitChecklistDashTeacherListItem, type VisitChecklistPrepareProgress, type VisitChecklistSchoolAi, type VisitChecklistSchoolAiReport } from '../../api/visitChecklist';
 import defaultSeed from '../../lib/lessonVisitChecklist/defaultSeed.json';
 import type {
@@ -443,7 +442,6 @@ function LegacyVisitChecklistCloudDashboardPage() {
   return (
     <div className="page vcd-page mo-eng-dash-page">
       <div ref={dashPdfRef}>
-        {liveReady && !loading && !loadErr ? <VisitChecklistReportDashboard projectId={projectId} responses={liveResponses} checklist={liveChecklist} directory={liveDirectory || defaultSeed.directory} /> : null}
         <details className="card glass-surface" style={{ padding: '1rem' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Архивная аналитика и отчёты по прежней шкале</summary>
         <header className="mo-eng-dash-hero vcd-hero">
@@ -1099,10 +1097,29 @@ function TeacherPickRow({
 
 export default function VisitChecklistCloudDashboardPage() {
   const [archiveOpen, setArchiveOpen] = useState(false);
-  return <div className="page"><LegacyVisitChecklistCloudDashboardPage />
-    <details onToggle={(event) => setArchiveOpen(event.currentTarget.open)}>
-      <summary>Настройки версионного оценивания и доступа</summary>
-      {archiveOpen ? <VisitChecklistV3Dashboard /> : null}
+  return <div className="page"><PrimaryVisitChecklistSummary />
+    <details className="card glass-surface" style={{padding:'1rem'}} onToggle={(event) => setArchiveOpen(event.currentTarget.open)}>
+      <summary>Архивная аналитика</summary>
+      {archiveOpen ? <LegacyVisitChecklistCloudDashboardPage /> : null}
     </details>
   </div>;
+}
+
+function PrimaryVisitChecklistSummary() {
+  const [params] = useSearchParams();
+  const hint = params.get('project');
+  const [data,setData] = useState<{projectId:number;confirmations:{selfId:number;lessonId:number;actorId?:number;confirmedAt?:string}[];canConfirm:boolean;responses:LessonVisitResponseRow[];checklist:LessonVisitChecklistConfig;directory:LessonVisitDirectory}|null>(null);
+  const [error,setError] = useState(''), [retry,setRetry] = useState(0);
+  useEffect(() => {
+    let active=true;setData(null);setError('');
+    const project = hint && /^\d+$/.test(hint) ? Promise.resolve(Number(hint)) : getVisitChecklistDashboard().then(d => d.project?.id);
+    void project.then(id => {
+      if(!id) throw new Error('Не найден проект чек-листа уроков.');
+      return Promise.all([listLessonVisitResponses(id),getLessonVisitProject(id),getVisitSelfConfirmations(id)]);
+    }).then(([responses,pack,links]) => {
+      if(active) setData({projectId:pack.project.id,...links,responses,checklist:pack.draft.checklist,directory:pack.draft.directory});
+    }).catch(e => {if(active)setError(humanizeVisitChecklistCloudError(e,'Не удалось загрузить сводку посещений уроков'));});
+    return () => {active=false;};
+  },[hint,retry]);
+  return data ? <VisitChecklistReportDashboard projectId={data.projectId} responses={data.responses} checklist={data.checklist} directory={data.directory} legacyConfirmations={data.confirmations} canConfirm={data.canConfirm} onLegacyConfirm={async (selfId,lessonId)=>(await putVisitSelfConfirmation(data.projectId,selfId,lessonId)).confirmations}/> : <section className="vcr-dashboard" aria-busy={!error}><header className="vcr-header"><div><p className="vcr-eyebrow">Пульс · аналитика посещений уроков</p><h2>Сводка посещений уроков</h2></div></header>{error ? <div role="alert"><p>{error}</p><button onClick={() => setRetry(v => v+1)}>Повторить загрузку</button></div> : <p role="status">Загружаем посещённые уроки…</p>}</section>;
 }

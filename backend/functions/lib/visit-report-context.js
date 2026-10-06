@@ -8,11 +8,14 @@ async function authorizeVisitReport(db, actor, action, lesson) {
   const binding = lesson.lesson || lesson;
   const lessonId = binding.id ?? binding.lesson_id;
   const departmentId = binding.department_id ?? binding.department;
-  const granted = await db.query(`SELECT 1 FROM pulse_visit_report_grants WHERE user_id=$1 AND action=$2
-    AND valid_from<=now() AND (valid_until IS NULL OR valid_until>now())
-    AND (lesson_id IS NULL OR lesson_id=$3) AND (department_id IS NULL OR department_id=$4) LIMIT 1`,
-  [actor.id,action,String(lessonId),departmentId == null ? null : String(departmentId)]);
-  if (!granted.rows.length) throw problem(403,'Нет доступа к данным урока');
+  const {effectiveGrants,permits}=require('./visit-checklist-department-access');
+  const explicit=(await db.query(`SELECT lesson_id,department_id FROM pulse_visit_report_grants WHERE user_id=$1 AND action=$2 AND valid_from<=now() AND (valid_until IS NULL OR valid_until>now())`,[actor.id,action])).rows;
+  if(permits(explicit,lessonId,departmentId)) return;
+  let projects;
+  try { projects=(await db.query("SELECT DISTINCT project_id FROM pulse_v3_checklists WHERE lesson_id=$1 AND status='submitted'",[String(lessonId)])).rows; } catch(error) { if(error.code==='42P01') throw problem(403,'Нет подтверждённого назначения кафедры'); throw error; }
+  if(projects.length!==1) throw problem(403,'Нет однозначной связи урока с проектом');
+  const grants=await effectiveGrants(db,actor.id,action,projects[0].project_id);
+  if(!permits(grants,lessonId,departmentId)) throw problem(403,'Нет доступа к данным урока');
 }
 
 /** Inject the same server context used by dashboard; never read untrusted client results. */

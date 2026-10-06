@@ -70,7 +70,6 @@ async function handleGetDashboardV3(pool, user, viaAdminKey, sessionUser, event,
   const denied = requireSession(user, viaAdminKey, sessionUser);
   if (denied) return denied;
   const actor = visitChecklistAnalyticsActor(user, sessionUser);
-  if (!actor?.id) return json(401, { error: 'Нужна сессия пользователя для проверки доступа к кафедрам.' });
   try {
     const query = parseQuery(event);
     if (teacherKey === '__department_assignments__') {
@@ -78,6 +77,7 @@ async function handleGetDashboardV3(pool, user, viaAdminKey, sessionUser, event,
       if (!projectId) return json(404, {error:'Нет общего проекта чек-листа.'});
       return json(200, await require('./lib/visit-checklist-department-assignments').readAssignments(pool, actor, projectId, viaAdminKey));
     }
+  if (!actor?.id) return json(401, { error: 'Нужна сессия пользователя для проверки доступа к кафедрам.' });
     if (teacherKey) { query.teacher = decodeURIComponent(String(teacherKey)); query.view = 'teacher'; }
     const projectId = await resolveProjectId(pool, query.project);
     if (!projectId) return json(404, { error: 'Нет общего проекта чек-листа.' });
@@ -388,6 +388,7 @@ async function handlePostVisitChecklistDashboardRebuild(pool, user, viaAdminKey,
 }
 
 module.exports = {
+  handleGetDashboardV3,
   handleGetVisitChecklistDashboard,
   handleGetVisitChecklistDashboardTeacher,
   handlePatchVisitChecklistDashboardTeacher,

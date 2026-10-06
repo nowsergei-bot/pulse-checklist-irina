@@ -2,7 +2,7 @@ import {useState} from 'react';
 import {patchDepartmentAssignment,type InterfaceSettings} from '../../api/visitChecklistV3';
 const groups=['screens','navigation','teacher_tabs','sections','filters','metrics','blocks','scored_criteria','descriptive_criteria','exports','new_manager_actions'] as const;
 const groupTitles=['Экраны','Навигация','Вкладки учителя','Разделы','Фильтры','Показатели','Блоки','Критерии с баллами','Описательные пункты','Excel','Отправка отчёта'];
-const optional={weekly_comparison:'Еженедельная сводка',report_queue:'Очередь отчётов',block_results:'Таблица блоков',priorities:'Приоритеты методической работы',risk:'Группа риска',version_details:'Версия расчёта'};
+const optional={weekly_comparison:'Еженедельная сводка',report_queue:'Очередь отчётов',block_results:'Таблица блоков',priorities:'Приоритеты методической работы',risk:'Нужна методическая поддержка',version_details:'Версия расчёта'};
 export default function InterfaceSettingsEditor({projectId,settings,onChange}:{projectId:number;settings:InterfaceSettings;onChange:()=>void}){
  const [group,setGroup]=useState<typeof groups[number]>('screens');
  const [labels,setLabels]=useState<Record<string,Record<string,string>>>(()=>Object.fromEntries(groups.map(g=>[g,{...settings.names[g]}])));

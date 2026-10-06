@@ -76,7 +76,7 @@ function isTlsCertChainOrVerifyErrorMessage(msg) {
 function isLikelyGigaChatOutboundUrl(url) {
   try {
     const h = new URL(String(url)).hostname.toLowerCase();
-    return h.includes('sberbank.ru') || h.includes('sber.ru') || h.includes('gigachat');
+    return h.includes('sberbank.ru') || h.includes('sber.ru') || h.includes('gigachat') || h === 'api.giga.chat';
   } catch {
     return false;
   }
@@ -160,7 +160,29 @@ function getInsecureGigaDispatcher(undici) {
   return gigaInsecureDispatcher;
 }
 
+async function fetchWithGigaTrustedCa(url, init) {
+  const https = require('node:https');
+  const tls = require('node:tls');
+  const fs = require('node:fs');
+  const ca = fs.readFileSync(require('node:path').join(__dirname, '../certs/russian-trusted-root-ca.crt'), 'utf8');
+  const request = new Request(url, init);
+  const body = request.body ? Buffer.from(await request.arrayBuffer()) : null;
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {method:request.method, headers:Object.fromEntries(request.headers), ca:[...tls.rootCertificates,ca], rejectUnauthorized:true}, res => {
+      const chunks=[];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('error', reject);
+      res.on('end', () => resolve(new Response([204,205,304].includes(res.statusCode) ? null : Buffer.concat(chunks), {status:res.statusCode, headers:res.headers})));
+    });
+    req.on('error', reject);
+    req.setTimeout(120000, () => req.destroy(new Error('GigaChat request timed out')));
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
 async function gigaFetch(url, init) {
+  if (isLikelyGigaChatOutboundUrl(url) && String(url).startsWith('https://')) return fetchWithGigaTrustedCa(url, init);
   const insecureFirst = shouldUseInsecureGigaTls(url, process.env);
   const undici = loadUndici();
 
@@ -914,6 +936,10 @@ async function runChatCompletion(messages, opts = {}) {
 }
 
 module.exports = {
+  getGigaChatAccessToken,
+  gigaFetch,
+  gigaChatChatBaseUrl,
+  fetchGigaChatChat,
   chatCompletion,
   isOpenAiUnsupportedRegion,
   formatGeoBlockHint,

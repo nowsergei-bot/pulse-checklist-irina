@@ -226,7 +226,7 @@ function pathFromProxyParam(raw) {
 }
 
 function normalizePath(event) {
-  const params = event.pathParameters || {};
+  const params = event.pathParameters || event.pathParams || {};
   if (params.proxy != null && String(params.proxy).length > 0 && !isBrokenPathParam(params.proxy)) {
     return pathFromProxyParam(params.proxy);
   }

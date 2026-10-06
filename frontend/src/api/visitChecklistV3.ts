@@ -1,7 +1,7 @@
 import { API_BASE, adminHeaders, apiErrText, apiFetch, parseJson } from './http';
 import type { Dashboard } from '../pages/visitChecklistV3/types';
 export async function getVisitChecklistV3(params: URLSearchParams, signal?: AbortSignal): Promise<Dashboard> {
- const response = await apiFetch(`${API_BASE}/api/visit-checklist-dashboard?${params}`, { headers: adminHeaders(), signal });
+ const response = await apiFetch(`${API_BASE}/api/visit-checklist-dashboard/v3?${params}`, { headers: adminHeaders(), signal });
  const payload = await parseJson<Dashboard & { error?: string; message?: string }>(response);
  if (!response.ok) throw new Error(response.status===401?'Нужен вход в Пульс.':response.status===403?'Нет доступа к выбранной аналитике.':response.status>=500?'Ошибка загрузки аналитики. '+apiErrText(payload,'Повторите попытку позже.'):apiErrText(payload, response.statusText));
  if (!payload.aggregation_version || !payload.counts) throw new Error('Сервер не вернул согласованную версию аналитики.');
