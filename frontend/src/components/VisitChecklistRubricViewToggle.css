@@ -1,0 +1,44 @@
+.visit-checklist-rubric-view-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0.2rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border, #c8d0e0) 88%, transparent);
+  background: color-mix(in srgb, var(--surface, #fff) 90%, var(--accent, #4f6ef7) 10%);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text, #111) 4%, transparent);
+}
+
+.visit-checklist-rubric-view-toggle__btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted, #64748b);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.42rem 0.85rem;
+  border-radius: 9px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+  white-space: nowrap;
+}
+
+.visit-checklist-rubric-view-toggle__btn:hover {
+  color: var(--text, #0f172a);
+}
+
+.visit-checklist-rubric-view-toggle__btn--active {
+  background: var(--accent, #4f6ef7);
+  color: #fff;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--accent, #4f6ef7) 35%, transparent);
+}
+
+.visit-checklist-rubric-view-toggle--compact .visit-checklist-rubric-view-toggle__btn {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.7rem;
+}

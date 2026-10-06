@@ -1,0 +1,107 @@
+.visit-checklist-analytics-page {
+  --vca-sidebar-width: min(320px, 100%);
+}
+
+.visit-checklist-analytics-page__layout {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 1100px) {
+  .visit-checklist-analytics-page__layout--with-sidebar {
+    grid-template-columns: 1fr var(--vca-sidebar-width);
+    align-items: start;
+  }
+}
+
+.visit-checklist-analytics-page__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.visit-checklist-analytics-page__main {
+  min-width: 0;
+}
+
+.visit-checklist-analytics-page__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.visit-checklist-analytics-busy-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 12, 20, 0.35);
+  pointer-events: none;
+}
+
+.visit-checklist-analytics-busy-overlay__text {
+  margin: 0;
+  padding: 0.85rem 1.2rem;
+  border-radius: 10px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.92));
+  font-weight: 600;
+}
+
+.visit-checklist-teacher-card-body-placeholder {
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.1);
+  font-size: 0.82rem;
+}
+
+.visit-checklist-teacher-card-bg-status {
+  margin: 0.5rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  font-size: 0.84rem;
+}
+
+.visit-checklist-teacher-card-bg-status--compact {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 0.82rem;
+}
+
+.visit-checklist-teacher-card-bg-status__title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text, #0f172a);
+}
+
+.visit-checklist-teacher-card-bg-status__eta,
+.visit-checklist-teacher-card-bg-status__hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.lesson-analytics-teacher-card__details {
+  margin: 0;
+}
+
+.lesson-analytics-teacher-card__summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.lesson-analytics-teacher-card__summary::-webkit-details-marker {
+  display: none;
+}
+
+.lesson-analytics-teacher-card__summary-toggle {
+  flex-shrink: 0;
+  pointer-events: none;
+}

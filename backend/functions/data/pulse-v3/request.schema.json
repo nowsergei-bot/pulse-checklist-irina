@@ -1,0 +1,1124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pulse:assessment-request:v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "source_hash",
+    "rubric_version",
+    "rubric_hash",
+    "contract_version",
+    "prompt_version",
+    "rules_hash",
+    "rubric",
+    "scoring_rules",
+    "checklist"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rubric_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rubric_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rules_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rubric": {
+      "type": "object"
+    },
+    "scoring_rules": {
+      "type": "string"
+    },
+    "checklist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checklist_id",
+        "lesson_id",
+        "revision",
+        "source",
+        "author_id",
+        "form_version",
+        "rubric_version",
+        "answers"
+      ],
+      "properties": {
+        "checklist_id": {
+          "type": "string"
+        },
+        "lesson_id": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "observation",
+            "self_analysis"
+          ]
+        },
+        "author_id": {
+          "type": "string"
+        },
+        "form_version": {
+          "type": "string"
+        },
+        "rubric_version": {
+          "const": "pulse-100-v2-2026-10-01"
+        },
+        "answers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "1.1",
+            "1.2",
+            "2.1",
+            "2.2",
+            "2.3",
+            "3.1",
+            "3.2",
+            "3.3",
+            "3.4",
+            "3.5",
+            "3.6",
+            "3.7",
+            "3.8",
+            "4.1",
+            "4.2",
+            "5.1",
+            "5.2",
+            "5.3",
+            "5.4",
+            "6.1",
+            "6.2",
+            "7.1",
+            "8.1",
+            "8.2",
+            "9.1",
+            "9.2",
+            "9.3",
+            "10.1",
+            "10.2",
+            "10.3"
+          ],
+          "properties": {
+            "1.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "1.2": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "2.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "2.2": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "2.3": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "3.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "3.2": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "3.3": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "3.4": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "3.5": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "3.6": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "3.7": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "3.8": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "4.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "4.2": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "5.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "5.2": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "5.3": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "5.4": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "6.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "6.2": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "7.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "8.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "8.2": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "9.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "9.2": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "9.3": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "10.1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "10.2": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "10.3": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "selected_options",
+                "text"
+              ],
+              "properties": {
+                "selected_options": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

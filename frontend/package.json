@@ -1,0 +1,43 @@
+{
+  "name": "pulse-checklist-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "test": "tsx --test src/lib/lessonVisitChecklist/visitChecklistReport.test.ts src/lib/lessonVisitChecklist/visitChecklistCompare.test.ts src/lib/lessonVisitChecklist/visitChecklistFormat.test.ts",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/haptics": "^7.0.5",
+    "@xyflow/react": "^12.10.2",
+    "capacitor-voice-recorder": "^6.0.0",
+    "docx": "^9.7.1",
+    "exceljs": "^4.4.0",
+    "framer-motion": "^11.18.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "jszip": "^3.10.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.3.289",
+    "pptxgenjs": "^3.12.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "recharts": "^2.13.3",
+    "xlsx": "^0.18.5",
+    "@fortune-sheet/react": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "typescript": "~5.6.3",
+    "vite": "^5.4.11",
+    "tsx": "^4.20.0"
+  }
+}

@@ -1,0 +1,1598 @@
+{
+  "v": 1,
+  "generalFields": [
+    {
+      "id": "visit_date",
+      "label": "Дата посещения",
+      "type": "date",
+      "required": true
+    },
+    {
+      "id": "visitor_name",
+      "label": "ФИО посетившего урок",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "visit_format",
+      "label": "Формат посещения урока",
+      "type": "radio",
+      "required": true,
+      "options": [
+        "очно",
+        "онлайн",
+        "Самоанализ"
+      ]
+    },
+    {
+      "id": "class_name",
+      "label": "Класс",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "student_count",
+      "label": "Количество обучающихся на уроке",
+      "type": "text",
+      "required": false
+    },
+    {
+      "id": "subject",
+      "label": "Предмет",
+      "type": "select",
+      "required": true,
+      "options": [
+        "Биология",
+        "География",
+        "Физика",
+        "Химия",
+        "Литература",
+        "Русский язык",
+        "Алгебра",
+        "Геометрия",
+        "Математика",
+        "ТВиС",
+        "Гуманитарная эрудиция",
+        "Историческая география",
+        "История",
+        "Информатика",
+        "Обществознание",
+        "Политология",
+        "Право",
+        "Экономика",
+        "МХК",
+        "Английский язык",
+        "Испанский язык",
+        "Китайский язык",
+        "Музыка",
+        "Технология",
+        "Робототехника",
+        "Кулинария",
+        "ИЗО",
+        "Рукоделие",
+        "Лидерство",
+        "Литературное чтение",
+        "Окружающий",
+        "Физическая культура",
+        "Фитнес",
+        "Спорт по выбору",
+        "Плавание",
+        "ART",
+        "ESL",
+        "Geography",
+        "Physical Education",
+        "Science"
+      ]
+    },
+    {
+      "id": "department_id",
+      "label": "Кафедра",
+      "type": "department",
+      "required": true
+    },
+    {
+      "id": "teacher_id",
+      "label": "ФИО педагога",
+      "type": "teacher",
+      "required": true
+    }
+  ],
+  "sections": [
+    {
+      "id": "sec_0",
+      "code": "1",
+      "title": "Организационный блок",
+      "questions": [
+        {
+          "id": "q_1",
+          "code": "1.1",
+          "text": "Готовность к уроку (классная доска оформлена, раздаточный материал готов, рабочее место учителя подготовлено и т.д.)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "готов",
+            "частично",
+            "не готов"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_2",
+          "code": "1.2",
+          "text": "Санитарное состояние кабинета",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "удовлетворительное",
+            "неудовлетворительное"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "sec_1",
+      "code": "2",
+      "title": "Целеполагание",
+      "questions": [
+        {
+          "id": "q_3",
+          "code": "2.1",
+          "text": "Цели урока сформулированы:",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "учителем",
+            "совместно с обучающимися",
+            "обучающимися",
+            "не сформулированы"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_4",
+          "code": "2.2",
+          "text": "Цели урока соответствуют теме урока",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "да",
+            "нет"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_5",
+          "code": "2.3",
+          "text": "Цели урока понятны обучающимся",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "да",
+            "нет"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "sec_2",
+      "code": "3",
+      "title": "Методическая и психолого-педагогическая грамотность",
+      "questions": [
+        {
+          "id": "q_6",
+          "code": "3.1",
+          "text": "Содержание учебного материала соответствует поставленным целям урока, а также учебной программе",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "да",
+            "нет"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_7",
+          "code": "3.2",
+          "text": "Структура урока данного типа",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "четкая",
+            "структура не прослеживается"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_8",
+          "code": "3.3",
+          "text": "Темп урока соответствует возрасту и индивидуально-психологическим особенностям обучающихся",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "да",
+            "нет"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_9",
+          "code": "3.4",
+          "text": "На уроке чередуются формы работы и виды активности (динамика урока)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "да",
+            "нет"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_10",
+          "code": "3.5",
+          "text": "Межпредметные связи",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "присутствуют",
+            "отсутствуют"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_11",
+          "code": "3.6",
+          "text": "Задания дифференцированы в соответствии с уровнями обучающихся.",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "дифференцированность заданий предусмотрена",
+            "фронтальные задания \"одно для всех\""
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_12",
+          "code": "3.7",
+          "text": "Содержание объясняется через (какие методы)",
+          "type": "checkbox",
+          "required": true,
+          "options": [
+            "создание проблемной ситуации (противоречия)",
+            "самостоятельную работу обучающихся (в т.ч. В группе)",
+            "домашнее задание (в т.ч. \"перевёрнутый класс\")",
+            "самостоятельная работа с учебником",
+            "учебная лекция",
+            "пример педагога / объяснение через обучающихся, имеющих образцово-показательную технику (на физической культуре)",
+            "другое"
+          ],
+          "allowMultiple": true,
+          "hint": ""
+        },
+        {
+          "id": "q_13",
+          "code": "3.8",
+          "text": "Информация о домашнем задании",
+          "type": "checkbox",
+          "required": true,
+          "options": [
+            "дается инструктаж по выполнению (возможно по ходу урока)",
+            "задание дано в достаточном объеме",
+            "задание соответствует содержанию и целям урока",
+            "домашнее задание не соответствует содержанию и целям урока",
+            "домашнее задание избыточно",
+            "домашнее задание не задано (в соответствии с типом урока)"
+          ],
+          "allowMultiple": true,
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "sec_3",
+      "code": "4",
+      "title": "Корректность и глубина понимания предметного содержания",
+      "questions": [
+        {
+          "id": "q_14",
+          "code": "4.1",
+          "text": "Учебный материал",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "доступен и понятен обучающимся, соответствует их индивидуальным и возрастным особенностям",
+            "не соответствует уровню обучающихся, сложно воспринимается"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_15",
+          "code": "4.2",
+          "text": "Владение учителем учебным материалом предмета",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "обладает глубокими знаниями по теме урока",
+            "достаточный уровень",
+            "требует улучшения"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "sec_4",
+      "code": "5",
+      "title": "Результативность",
+      "questions": [
+        {
+          "id": "q_16",
+          "code": "5.1",
+          "text": "Обратная связь учителя обучающимся",
+          "type": "checkbox",
+          "required": true,
+          "options": [
+            "на каждом этапе урока",
+            "в конце урока",
+            "обратная связь конкретная, развивающая",
+            "обратная связь дается формально",
+            "обратная связь не была организована"
+          ],
+          "allowMultiple": true,
+          "hint": ""
+        },
+        {
+          "id": "q_17",
+          "code": "5.2",
+          "text": "Рефлексия на уроке",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "присутствует",
+            "отсутствует"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_18",
+          "code": "5.3",
+          "text": "Формы контроля усвоения содержания",
+          "type": "checkbox",
+          "required": true,
+          "options": [
+            "фронтальный опрос",
+            "индивидуальный опрос",
+            "дидактическая игра",
+            "тестирование",
+            "решение задач, упражнений"
+          ],
+          "allowMultiple": true,
+          "hint": ""
+        },
+        {
+          "id": "q_19",
+          "code": "5.4",
+          "text": "Виды оценивания на уроке",
+          "type": "checkbox",
+          "required": true,
+          "options": [
+            "самооценка",
+            "взаимооценка",
+            "экспертная оценка учителем",
+            "отсутствует"
+          ],
+          "allowMultiple": true,
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "sec_5",
+      "code": "6",
+      "title": "Мотивация и вовлеченность",
+      "questions": [
+        {
+          "id": "q_20",
+          "code": "6.1",
+          "text": "Привлечение внимания и пробуждение интереса к теме через",
+          "type": "checkbox",
+          "required": true,
+          "options": [
+            "Учёт индивидуальных, возрастных и психологических особенностей обучающихся",
+            "эмоциональное вовлечение",
+            "Вовлечение в разные виды практической деятельности (эвристической, исследовательской, творческой и др.)",
+            "Разнообразие приёмов",
+            "Смену видов деятельности в соответствии с динамикой работоспособности обучающихся",
+            "Постановку актуальной для обучающихся проблемы для рассмотрения и решения в ходе урока",
+            "Обращение к имеющемуся личностно значимому и социально значимому опыту обучающихся",
+            "Поддержку вопросов обучающихся по теме занятия",
+            "Организацию и сопровождение взаимодействия и учебного сотрудничества обучающихся (работа в парах, группах, организация процесса общего обсуждения)",
+            "Другое (вписать свои варианты)",
+            "Способы мотивации на уроке не применялись"
+          ],
+          "allowMultiple": true,
+          "hint": ""
+        },
+        {
+          "id": "q_21",
+          "code": "6.2",
+          "text": "Вовлечённость учащихся в процесс урока",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "100% обучающихся активно вовлечены в урок (через парную, групповую/командную формы работы, включённость в общее обсуждение)",
+            "Вовлечены большинство обучающихся (не менее ¾ класса), но некоторые остаются пассивными",
+            "Вовлечена только часть класса (сильные ученики, лидеры), большая часть остаётся пассивной",
+            "Массовое отсутствие вовлечённости, пассивность класса в целом, имеются эпизоды деструктивного поведения"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "sec_6",
+      "code": "7",
+      "title": "Воспитательный потенциал урока",
+      "questions": [
+        {
+          "id": "q_22",
+          "code": "7.1",
+          "text": "На уроке используются методы и приемы, обеспечивающие формирование ценностей Гимназии и традиционных российских духовно-нравственных ценностей с учетом возрастных особенностей обучающихся",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "да",
+            "нет"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "sec_7",
+      "code": "8",
+      "title": "Инструменты",
+      "questions": [
+        {
+          "id": "q_23",
+          "code": "8.1",
+          "text": "Цифровые инструменты",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "используются сообразно типу урока",
+            "используются нецелесообразно",
+            "не используются"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_24",
+          "code": "8.2",
+          "text": "Качество и уместность наглядных материалов (в т.ч. материал отражен на доске, в схемах и т.п.)",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "высокое, уместны",
+            "среднее, не всегда уместны",
+            "низкое, неуместны",
+            "не использовались, что снизило качество урока",
+            "не использовались ввиду специфики урока"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "sec_8",
+      "code": "9",
+      "title": "Коммуникативная культура",
+      "questions": [
+        {
+          "id": "q_25",
+          "code": "9.1",
+          "text": "Характер педагогического общения",
+          "type": "checkbox",
+          "required": true,
+          "options": [
+            "Общение строится в уважительном, доброжелательном и деловом тоне",
+            "Учитель некорректно обращается к учащимся, в том числе присутствует фамильярность, использование ярлыков, насмешек и публичного обесценивания",
+            "Учитель внимательно выслушивает ответы: не перебивает без необходимости, даёт время подумать и закончить высказывание",
+            "\"монолог\" учителя большую часть урока"
+          ],
+          "allowMultiple": true,
+          "hint": ""
+        },
+        {
+          "id": "q_26",
+          "code": "9.2",
+          "text": "Стиль общения",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "авторитарный",
+            "попустительский",
+            "сотрудничество (координация деятельности обучающихся)"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_27",
+          "code": "9.3",
+          "text": "Психологический климат урока",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "комфортная атмосфера урока (позитивный настрой на работу у обучающихся)",
+            "атмосфера на уроке не создана (обучающиеся \"занимаются своими делами\")",
+            "психологический комфорт отсутствует (напряжённый климат, \"страх ошибки\" у учащихся)"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "sec_9",
+      "code": "10",
+      "title": "Общая оценка урока",
+      "questions": [
+        {
+          "id": "q_28",
+          "code": "10.1",
+          "text": "Оцените уровень представленного урока",
+          "type": "radio",
+          "required": true,
+          "options": [
+            "очень высокий",
+            "высокий",
+            "средний",
+            "ниже среднего",
+            "низкий"
+          ],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_29",
+          "code": "10.2",
+          "text": "Общие выводы: сформулируйте конкретные наблюдения (положительные моменты, зоны роста).",
+          "type": "text",
+          "required": false,
+          "options": [],
+          "allowMultiple": false,
+          "hint": ""
+        },
+        {
+          "id": "q_30",
+          "code": "10.3",
+          "text": "Что я возьму с собой с этого урока?",
+          "type": "text",
+          "required": false,
+          "options": [],
+          "allowMultiple": false,
+          "hint": ""
+        }
+      ]
+    }
+  ],
+  "directory": {
+    "departments": [
+      {
+        "id": "dept_7",
+        "name": "Кафедра начального образования"
+      },
+      {
+        "id": "dept_0",
+        "name": "Кафедра английского языка"
+      },
+      {
+        "id": "dept_2",
+        "name": "Кафедра математики и информатики"
+      },
+      {
+        "id": "dept_9",
+        "name": "Международный департамент"
+      },
+      {
+        "id": "dept_3",
+        "name": "Кафедра словесности"
+      },
+      {
+        "id": "dept_1",
+        "name": "Кафедра естественных наук"
+      },
+      {
+        "id": "dept_4",
+        "name": "Кафедра социальных наук"
+      },
+      {
+        "id": "dept_6",
+        "name": "Кафедра спорта"
+      },
+      {
+        "id": "dept_5",
+        "name": "Кафедра искусства и культуры"
+      },
+      {
+        "id": "dept_8",
+        "name": "Кафедра лидерства"
+      },
+      {
+        "id": "dept_admin",
+        "name": "Администрация"
+      },
+      {
+        "id": "dept_academic",
+        "name": "Учебная часть"
+      }
+    ],
+    "teachers": [
+      {
+        "id": "teacher_3",
+        "name": "Абзалимова Альфия Ямилевна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_4",
+        "name": "Акбатырова Мария Николаевна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_157",
+        "name": "Акимов Дмитрий Валерьевич",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_174",
+        "name": "Аксенов Владимир Николаевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_15",
+        "name": "Бардакова Елизавета Игоревна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "staff_admin_basovskii",
+        "name": "Басовский Виталий Валерьевич",
+        "departmentId": "dept_admin"
+      },
+      {
+        "id": "teacher_16",
+        "name": "Батурина Ксения Сергеевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_17",
+        "name": "Башкатов Алексей Юрьевич",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_18",
+        "name": "Белов Алексей Андреевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_19",
+        "name": "Белова Наталья Руслановна",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_20",
+        "name": "Белошкурская Ольга Владимировна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_21",
+        "name": "Билаш Юлия Васильевна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_172",
+        "name": "Бирнс Тимоти Винсент",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_22",
+        "name": "Бобр Арина Дмитриевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_23",
+        "name": "Болтуцкая Яна Александровна",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_24",
+        "name": "Борисов Иван Евгеньевич",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_26",
+        "name": "Бугайчук Алексей Юрьевич",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_27",
+        "name": "Буздыгар Михаил Андреевич",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_28",
+        "name": "Букия Марина Евгеньевна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_29",
+        "name": "Бурзяева София Николаевна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_175",
+        "name": "Буров Александр Валерьевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_30",
+        "name": "Буякевич Ольга Александровна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_145",
+        "name": "Вард Брайн Лоуренс",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_189",
+        "name": "Васенкова Елена Владимировна",
+        "departmentId": "dept_8"
+      },
+      {
+        "id": "teacher_176",
+        "name": "Васильева Валерия Анатольевна",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_31",
+        "name": "Васильева Ксения Николаевна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_32",
+        "name": "Вахутинская Юлия Александровна",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_33",
+        "name": "Верболоз Екатерина Евгеньевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_150",
+        "name": "Витовски Сара Лоджиа",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_34",
+        "name": "Волкова Дарья Вячеславовна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_35",
+        "name": "Волкова Наталья Анатольевна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "staff_academic_volkova",
+        "name": "Волкова Наталья Анатольевна",
+        "departmentId": "dept_academic"
+      },
+      {
+        "id": "teacher_36",
+        "name": "Волкова Ольга Ивановна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "staff_academic_vorobeva",
+        "name": "Воробьева Лидия Анатольевна",
+        "departmentId": "dept_academic"
+      },
+      {
+        "id": "teacher_38",
+        "name": "Гальцева Екатерина Дмитриевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_40",
+        "name": "Голощапова Тамара Игоревна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_12",
+        "name": "Горбачева Анна Александровна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_41",
+        "name": "Грицун Дмитрий Алексеевич",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_87",
+        "name": "Грушевая Любовь Николаевна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_43",
+        "name": "Гула Егор Александрович",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_44",
+        "name": "Гусева Екатерина Дмитриевна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_45",
+        "name": "Данилкина Татьяна Васильевна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_46",
+        "name": "Дацко Никита Игоревич",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_47",
+        "name": "Джулиан Мариус Якобус Андриан",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_49",
+        "name": "Драгайцев Дмитрий Владимирович",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_37",
+        "name": "Дробинин Григорий Дмитриевич",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_158",
+        "name": "Дубинина Маргарита Борисовна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_50",
+        "name": "Егиян Виталий Эрикович",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_51",
+        "name": "Еделькин Артем Александрович",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "staff_admin_eliseev",
+        "name": "Елисеев Артемий Сергеевич",
+        "departmentId": "dept_admin"
+      },
+      {
+        "id": "teacher_57",
+        "name": "Жеребцов Андрей Анатольевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_177",
+        "name": "Жиганов Егор Иванович",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_178",
+        "name": "Жиганов Никита Иванович",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_58",
+        "name": "Жиганова Лариса Петровна",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_59",
+        "name": "Замятина Мария Михайловна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_60",
+        "name": "Запорожская Юлия Борисовна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "staff_admin_zenkovich",
+        "name": "Зенькович Наталья Владимировна",
+        "departmentId": "dept_admin"
+      },
+      {
+        "id": "teacher_61",
+        "name": "Золотухина Ольга Анатольевна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_62",
+        "name": "Зотов Александр Александрович",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "staff_academic_zubova",
+        "name": "Зубова Кристина Андреевна",
+        "departmentId": "dept_academic"
+      },
+      {
+        "id": "teacher_63",
+        "name": "Зыков Михаил Анатольевич",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_151",
+        "name": "Ибарра Гаксиола Сергио Антонио",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_66",
+        "name": "Ильина Наталья Александровна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_187",
+        "name": "Илюшкина Татьяна",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_67",
+        "name": "Исаев Даниил Юрьевич",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_169",
+        "name": "Кай Свертил",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_9",
+        "name": "Камышанова Анастасия Валерьевна",
+        "departmentId": "dept_8"
+      },
+      {
+        "id": "teacher_165",
+        "name": "Кастанеда Юзета Ариана",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_55",
+        "name": "Клементьева Екатерина Сергеевна",
+        "departmentId": "dept_8"
+      },
+      {
+        "id": "teacher_70",
+        "name": "Клюева Татьяна Борисовна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_179",
+        "name": "Клюкин Никита Сергеевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_71",
+        "name": "Князева Лидия Гунаровна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_180",
+        "name": "Кондина Анастасия Александровна",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_73",
+        "name": "Коновалова Елена Игоревна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_170",
+        "name": "Конрад Кристина Олеговна",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_115",
+        "name": "Копырина Светлана Юрьевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_74",
+        "name": "Корнеев Павел Геннадьевич",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_75",
+        "name": "Корытова Ольга Михайловна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_76",
+        "name": "Костюкович Ирина Сергеевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "staff_academic_kostyukovich",
+        "name": "Костюкович Ирина Сергеевна",
+        "departmentId": "dept_academic"
+      },
+      {
+        "id": "teacher_159",
+        "name": "Котец Алексей Фёдорович",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_77",
+        "name": "Кривовязь Мария Владимировна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_79",
+        "name": "Круглова Галина Игоревна",
+        "departmentId": "dept_8"
+      },
+      {
+        "id": "teacher_160",
+        "name": "Крутько Артем Анатольевич",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_153",
+        "name": "Кубасова Елизавета Михайловна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_52",
+        "name": "Куликова Екатерина Александровна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_81",
+        "name": "Курманина Галина Владимировна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_82",
+        "name": "Курохтина Татьяна Анатольевна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_83",
+        "name": "Кухновец Наталья Сергеевна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_53",
+        "name": "Кушниренко Екатерина Владимировна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_154",
+        "name": "Ланских Дарья Алексеевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_185",
+        "name": "Лоскутов Дмитрий Алексеевич",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_86",
+        "name": "Любимов Сергей Евгеньевич",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_161",
+        "name": "Люстров Константин Сергеевич",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "staff_admin_maisuradze",
+        "name": "Майсурадзе Майя Отариевна",
+        "departmentId": "dept_admin"
+      },
+      {
+        "id": "teacher_88",
+        "name": "Маковская Виктория Андреевна",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_90",
+        "name": "Максутов Тимур Тагирович",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_91",
+        "name": "Малахов Андрей Сергеевич",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_92",
+        "name": "Мальков Тарас Анатольевич",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_93",
+        "name": "Маматкова Александра Сергеевна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_94",
+        "name": "Маргиева Нелли Александровна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_127",
+        "name": "Маркольт Фабиан Ласло",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_96",
+        "name": "Масенко Светлана Александровна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_65",
+        "name": "Матвеев Игорь Алексеевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_97",
+        "name": "Матюхин Андрей Николаевич",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_164",
+        "name": "Медина Торрес Джесус Альфредо",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_99",
+        "name": "Меркин Дмитрий Борисович",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_100",
+        "name": "Миллер Наталья Владимировна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_162",
+        "name": "Митяжин Роман Валерьевич",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_101",
+        "name": "Молчанов Александр Юрьевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_102",
+        "name": "Морозов Тимофей Сергеевич",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_103",
+        "name": "Морозова Лилия Анатольевна",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_104",
+        "name": "Муртазина Регина Наиловна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_105",
+        "name": "Мустаева Ольга Андреевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_188",
+        "name": "Наумова Ольга Сергеевна",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_186",
+        "name": "Нижегородцев Дмитрий Владимирович",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "staff_admin_novozhilov",
+        "name": "Новожилов Сергей Валерьевич",
+        "departmentId": "dept_admin"
+      },
+      {
+        "id": "teacher_107",
+        "name": "Ноздря Кирилл Сергеевич",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_190",
+        "name": "Обрайен Тони Майкл",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_149",
+        "name": "Оуэнс Майкл Лоуеренс",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_78",
+        "name": "Павлова Кристина Михайловна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_147",
+        "name": "Паньокколо Даниэль Фрэнсис",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_109",
+        "name": "Парфирьев Дмитрий Станиславович",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_56",
+        "name": "Пескова Елизавета Павловна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_155",
+        "name": "Петрова Анна Юрьевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "staff_academic_petrova",
+        "name": "Петрова Наталья Витальевна",
+        "departmentId": "dept_academic"
+      },
+      {
+        "id": "teacher_106",
+        "name": "Петрушевски Никола",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_148",
+        "name": "Пиетлович Марина",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_110",
+        "name": "Пилипенко Лариса Михайловна",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_39",
+        "name": "Плешаков Георгий Андреевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_111",
+        "name": "Плешакова Ольга Александровна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "staff_admin_prishchep",
+        "name": "Прищеп Александр Александрович",
+        "departmentId": "dept_admin"
+      },
+      {
+        "id": "teacher_146",
+        "name": "Ригас Куртни Джиллиан",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_5",
+        "name": "Родчиков Александр Александрович",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_6",
+        "name": "Рубцов Александр Федорович",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_112",
+        "name": "Рузавин Сергей Андреевич",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_54",
+        "name": "Румбах Екатерина Владимировна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_113",
+        "name": "Русакова Нина Игоревна",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_64",
+        "name": "Савиных Иван Сергеевич",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_108",
+        "name": "Самошкина Ольга Анатольевна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_114",
+        "name": "Свердлова Наталья Викторовна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_116",
+        "name": "Слонимский Денис Львович",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_181",
+        "name": "Смага Никита Владимирович",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_8",
+        "name": "Собакина Алина Михайловна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_152",
+        "name": "Собянина (Волощенко) Анна Владиславовна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_117",
+        "name": "Соловьёв Сергей Анатольевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_118",
+        "name": "Стариков Даниил Александрович",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_119",
+        "name": "Стекачев Артем Евгеньевич",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_120",
+        "name": "Степанова Яна Эдуардовна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_121",
+        "name": "Страхов Александр Борисович",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_163",
+        "name": "Сурмач Лариса Сергеевна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_122",
+        "name": "Сухова Евгения Вадимовна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_123",
+        "name": "Сычева Юлия Андреевна",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_0",
+        "name": "Терехина Александра Владимировна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_173",
+        "name": "Ткаченко Мария Александровна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_13",
+        "name": "Томонова Анна Викторовна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_168",
+        "name": "Торри Джон Луциен",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_124",
+        "name": "Трушникова Полина Александровна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_126",
+        "name": "Уржумов Алексей Александрович",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_182",
+        "name": "Ушакова Ксения Ивановна",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "staff_admin_fadeeva",
+        "name": "Фадеева Дарья Сергеевна",
+        "departmentId": "dept_admin"
+      },
+      {
+        "id": "teacher_183",
+        "name": "Федоров Олег Дмитриевич",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_129",
+        "name": "Фешина Юлия Владимировна",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_2",
+        "name": "Францев Алексей Алексеевич",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_130",
+        "name": "Фролов Павел Павлович",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_156",
+        "name": "Фролова Мария Дмитриевна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_131",
+        "name": "Халиков Никита Андреевич",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_48",
+        "name": "Харитонов Дмитрий Васильевич",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_132",
+        "name": "Хмыз Татьяна Иосифовна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "staff_admin_khoroshilov",
+        "name": "Хорошилов Алексей Александрович",
+        "departmentId": "dept_admin"
+      },
+      {
+        "id": "teacher_133",
+        "name": "Чаплыгина Мария Олеговна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_68",
+        "name": "Шагинян Кристина Левановна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_184",
+        "name": "Шайдулина М.Д.",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_134",
+        "name": "Шалыбкова Анна Андреевна",
+        "departmentId": "dept_1"
+      },
+      {
+        "id": "teacher_135",
+        "name": "Шаповалова Оксана Владимировна",
+        "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_136",
+        "name": "Шаров Владимир Юрьевич",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_137",
+        "name": "Шевченко Елена Сергеевна",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_138",
+        "name": "Шепелева Анастасия Руслановна",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_139",
+        "name": "Шилина Ольга Николаевна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "staff_admin_shinkevich",
+        "name": "Шинкевич Марина Николаевна",
+        "departmentId": "dept_admin"
+      },
+      {
+        "id": "teacher_140",
+        "name": "Шмыков Клим Евгеньевич",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "teacher_142",
+        "name": "Щербакова Ольга Николаевна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_144",
+        "name": "Энтони Смит",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_11",
+        "name": "Юрьева Анастасия Александровна",
+        "departmentId": "dept_7"
+      },
+      {
+        "id": "teacher_10",
+        "name": "Ющенко Анастасия Вячеславовна",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_143",
+        "name": "Ядрин Александр Викторович",
+        "departmentId": "dept_2"
+      },
+      {
+        "id": "teacher_166",
+        "name": "Elena Rasmussen",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_167",
+        "name": "Gary Krautkramer",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_171",
+        "name": "Paul Conrad",
+        "departmentId": "dept_9"
+      }
+    ]
+  }
+}

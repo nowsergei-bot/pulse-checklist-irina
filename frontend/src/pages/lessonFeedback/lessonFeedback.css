@@ -1,0 +1,286 @@
+.lf-page {
+  --lf-ink: #1a1512;
+  --lf-muted: #5c5148;
+  --lf-line: rgba(26, 21, 18, 0.12);
+  --lf-red: var(--cab-red, #7f0a10);
+  --lf-green: #206e46;
+  --lf-amber: #b47814;
+  color: var(--lf-ink);
+}
+
+.lf-page.ea-page--desk {
+  max-width: none;
+}
+
+.lf-temp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+.lf-temp--hot { color: #9a1c12; }
+.lf-temp--warm { color: #b47814; }
+.lf-temp--steady { color: #1f4e79; }
+.lf-temp--cool { color: #5c5148; }
+.lf-temp--cold { color: #7f0a10; }
+.lf-temp--empty { color: var(--lf-muted); }
+
+.lf-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+@media (min-width: 900px) {
+  .lf-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .lf-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.lf-card {
+  border: 1px solid var(--lf-line);
+  background: #fff;
+  padding: 0.85rem 0.95rem 1rem;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.lf-card:hover {
+  border-color: rgba(127, 10, 16, 0.35);
+}
+
+.lf-card h3 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.lf-card .ea-note {
+  margin: 0;
+}
+
+.lf-mini {
+  height: 42px;
+}
+
+.lf-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lf-muted);
+}
+
+.lf-badge--ok { color: var(--lf-green); }
+.lf-badge--wait { color: var(--lf-amber); }
+
+.lf-prose {
+  line-height: 1.55;
+  max-width: 46rem;
+}
+
+.lf-prose ul {
+  margin: 0.35rem 0 0.7rem;
+  padding-left: 1.1rem;
+}
+
+.lf-heat {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.lf-heat th,
+.lf-heat td {
+  padding: 0.3rem 0.35rem;
+  border-bottom: 1px solid var(--lf-line);
+  white-space: nowrap;
+}
+
+.lf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.6rem 0;
+}
+
+.lf-hub-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 0.35rem 0 1.1rem;
+}
+
+.lf-hub-btn {
+  --hub-accent: var(--cab-red);
+  --hub-ink: var(--cab-ink);
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 10.25rem;
+  max-width: 15.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.18rem;
+  padding: 0.7rem 0.85rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--hub-accent) 42%, var(--cab-line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hub-accent) 12%, var(--cab-card, #fff));
+  color: var(--cab-ink);
+  text-decoration: none;
+  transform: scale(1);
+  transform-origin: center center;
+  transition: transform 0.16s ease;
+}
+
+.app-public a.lf-hub-btn,
+.app-public a.lf-hub-btn:link,
+.app-public a.lf-hub-btn:visited,
+.app-public a.lf-hub-btn:hover,
+.app-public a.lf-hub-btn:focus,
+.app-public a.lf-hub-btn:focus-visible,
+.app-public a.lf-hub-btn:active,
+.app-public.app-public--cabinet.app-public--pulse-product a.lf-hub-btn,
+.app-public.app-public--cabinet.app-public--pulse-product a.lf-hub-btn:hover,
+.app-public.app-public--cabinet.app-public--cabinet-dark a.lf-hub-btn,
+.app-public.app-public--cabinet.app-public--cabinet-dark a.lf-hub-btn:hover {
+  text-decoration: none;
+  color: var(--hub-ink, var(--cab-ink));
+}
+
+.lf-hub-btn:hover,
+.lf-hub-btn:focus-visible {
+  transform: scale(1.06);
+}
+
+.lf-hub-btn__kicker {
+  font-size: var(--cab-fs-kicker, 0.68rem);
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hub-accent);
+}
+
+.lf-hub-btn strong {
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+.lf-hub-btn--me {
+  --hub-accent: var(--cab-red);
+}
+
+.lf-hub-btn--analytics {
+  --hub-accent: var(--cab-red);
+}
+
+.lf-hub-btn--observer {
+  --hub-accent: var(--brand-red, var(--cab-red));
+  --hub-ink: #fff;
+  background: color-mix(in srgb, var(--hub-accent) 88%, #fff);
+  color: var(--hub-ink);
+}
+
+.lf-hub-btn--observer .lf-hub-btn__kicker {
+  color: #fff;
+}
+
+.lf-hub-btn--self {
+  --hub-accent: var(--cab-red);
+}
+
+.lf-hub-extra {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0 0 1.25rem;
+}
+
+.lf-hub-extra-link {
+  font-weight: 600;
+  color: var(--lf-red);
+  text-decoration: none;
+}
+
+.lf-hub-extra-link:hover {
+  text-decoration: underline;
+}
+
+.lf-hub-own {
+  scroll-margin-top: 1.25rem;
+}
+
+.lf-visit-form {
+  --cab-form-max: 820px;
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  max-width: var(--cab-form-max);
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+.app-public.app-public--cabinet .lf-visit-form,
+.app-public.app-public--work .lf-visit-form,
+.app-public .page.public-form-root.lf-visit-form {
+  width: 100%;
+  max-width: var(--cab-form-max, 820px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.lf-visit-form .public-form-stack,
+.lf-visit-form .card,
+.lf-visit-form .public-form-glass-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.lf-visit-form .public-choice-btn.is-self-analysis {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.lf-visit-form .public-choice-btn.is-self-analysis.is-selected {
+  color: #4b5563;
+  background: rgba(107, 114, 128, 0.12);
+  border-color: rgba(107, 114, 128, 0.45);
+  box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.08);
+}
+
+.lf-visit-form .public-choice-btn.is-self-analysis.is-selected .public-choice-dot {
+  background: #6b7280;
+  box-shadow: 0 0 10px rgba(107, 114, 128, 0.55);
+}
+
+@media (max-width: 720px) {
+  .lf-hub-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .lf-hub-btn {
+    width: 100%;
+    max-width: none;
+    min-height: 44px;
+  }
+}

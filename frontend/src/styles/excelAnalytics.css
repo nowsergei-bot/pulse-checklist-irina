@@ -1,0 +1,2006 @@
+/* ——— Наблюдения из Excel ——— */
+.excel-analytics-page .excel-analytics-hero {
+  margin-bottom: 1rem;
+}
+
+.excel-analytics-section {
+  margin-bottom: 1rem;
+}
+
+.excel-analytics-filename {
+  margin: 0.5rem 0 0;
+}
+
+.excel-analytics-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.excel-analytics-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--page-muted);
+}
+
+.excel-analytics-select {
+  min-width: 12rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  font: inherit;
+}
+
+.excel-analytics-select-wide {
+  min-width: min(100%, 22rem);
+}
+
+.excel-analytics-input {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  font: inherit;
+  max-width: 100%;
+}
+
+.excel-analytics-inline {
+  width: 8rem;
+}
+
+.excel-analytics-templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  margin: 0.75rem 0 1rem;
+}
+
+.excel-analytics-table-wrap {
+  overflow: auto;
+  max-height: min(70vh, 640px);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+}
+
+.excel-analytics-table-wrap--full-sheet {
+  max-height: min(78vh, 760px);
+}
+
+.excel-analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.excel-analytics-table--full-sheet {
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.8rem;
+}
+
+.excel-analytics-th-sheet,
+.excel-analytics-cell-sheet {
+  max-width: 11rem;
+  min-width: 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.excel-analytics-th-fixed,
+.excel-analytics-td-fixed {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 4.5rem;
+  max-width: 5.5rem;
+  background: #fff;
+  box-shadow: 3px 0 8px -4px rgba(15, 23, 42, 0.2);
+}
+
+.excel-analytics-table--full-sheet thead .excel-analytics-th-fixed {
+  background: #f9fafb;
+  z-index: 3;
+}
+
+.excel-analytics-table--full-sheet tr:nth-child(even) .excel-analytics-td-fixed {
+  background: #fafafa;
+}
+
+.excel-analytics-table--full-sheet tr:hover .excel-analytics-td-fixed {
+  background: rgba(227, 6, 19, 0.04);
+}
+
+.excel-analytics-th-fixed--after-num,
+.excel-analytics-td-fixed--after-num {
+  left: 5.35rem;
+}
+
+.excel-analytics-table--full-sheet thead .excel-analytics-th-fixed--after-num {
+  background: #f9fafb;
+}
+
+.excel-analytics-table th,
+.excel-analytics-table td {
+  border-bottom: 1px solid var(--card-border);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.excel-analytics-table th {
+  background: #f9fafb;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.excel-analytics-cell-clip {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.excel-analytics-ordinal {
+  margin-top: 1rem;
+}
+
+.excel-analytics-textarea {
+  width: 100%;
+  max-width: 36rem;
+  padding: 0.6rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  margin-bottom: 0.5rem;
+}
+
+.excel-analytics-preview {
+  margin-top: 0.75rem;
+}
+
+.excel-analytics-run {
+  margin-top: 1rem;
+}
+
+.excel-service-strip-note {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(227, 6, 19, 0.2);
+  background: rgba(227, 6, 19, 0.05);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  max-width: 52rem;
+}
+
+.excel-analytics-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.excel-analytics-filter-title {
+  font-weight: 800;
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+}
+
+.excel-analytics-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.excel-analytics-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: #fff;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.excel-analytics-pre {
+  white-space: pre-wrap;
+  margin: 0;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--card-border);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.excel-analytics-chart {
+  margin: 1rem 0 1.5rem;
+}
+
+.visit-checklist-chart .recharts-wrapper,
+.visit-checklist-chart .recharts-responsive-container,
+.visit-checklist-chart .recharts-surface,
+.visit-checklist-chart svg {
+  overflow: visible !important;
+}
+
+.visit-checklist-chart svg text,
+.visit-checklist-chart svg tspan {
+  letter-spacing: 0 !important;
+  word-spacing: 0 !important;
+  font-kerning: none;
+}
+
+.excel-analytics-chart-block {
+  margin-bottom: 1rem;
+}
+
+/* ——— Дашборд Excel ——— */
+.excel-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.excel-dashboard--stacked {
+  gap: 1.25rem;
+}
+
+/* Полная ширина: срез сверху, под ним графики и ПУЛЬС */
+.excel-dashboard--fullwidth {
+  width: 100%;
+}
+
+.excel-dashboard-below-slice {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.excel-dashboard-filter-ai-derived {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--card-border);
+}
+
+.excel-dashboard-filter-ai-actions--wrap {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.excel-derived-source-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 12rem;
+}
+
+.excel-derived-source-select {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg, #fff);
+  color: inherit;
+}
+
+.excel-derived-dim-list {
+  list-style: none;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.excel-derived-dim-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.88rem;
+}
+
+.excel-derived-dim-remove {
+  margin-left: auto;
+}
+
+.excel-dashboard-slice-strip {
+  width: 100%;
+  padding: 1.1rem 1.25rem 1.2rem;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  box-shadow: 0 14px 42px rgba(15, 23, 42, 0.07);
+}
+
+.excel-dashboard-slice-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.excel-dashboard-slice-intro {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.excel-dashboard-slice-kicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand-red);
+}
+
+.excel-dashboard-slice-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.22rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--page-fg);
+}
+
+.excel-dashboard-slice-lead {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  max-width: 56rem;
+}
+
+.excel-dashboard-slice-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.excel-dashboard-kpis--slice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.excel-dashboard-kpis--slice .excel-dashboard-kpi {
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid rgba(227, 6, 19, 0.14);
+  background: rgba(227, 6, 19, 0.05);
+}
+
+.excel-dashboard-slice-ai {
+  padding-top: 0.85rem;
+  margin-top: 0.35rem;
+  border-top: 1px dashed var(--card-border);
+}
+
+.excel-dashboard-slice-ai-details {
+  margin: 0;
+}
+
+.excel-dashboard-slice-ai-summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--page-fg);
+  padding: 0.35rem 0;
+  list-style: none;
+}
+
+.excel-dashboard-slice-ai-summary::-webkit-details-marker {
+  display: none;
+}
+
+.excel-dashboard-slice-ai-inner {
+  padding-top: 0.45rem;
+}
+
+.excel-dashboard-slice-ai-lead {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.excel-dashboard-slice-ai--assist {
+  margin-top: 0.5rem;
+}
+
+.excel-dashboard-ai-assist-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 960px) {
+  .excel-dashboard-ai-assist-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.excel-dashboard-ai-assist-block {
+  padding: 0.65rem 0.75rem;
+  min-width: 0;
+}
+
+.excel-dashboard-ai-assist-block--wide {
+  grid-column: 1 / -1;
+}
+
+.excel-dashboard-ai-assist-block-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.excel-dashboard-ai-assist-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.excel-dashboard-ai-assist-row--wrap {
+  align-items: center;
+}
+
+.excel-dashboard-ai-assist-textarea {
+  width: 100%;
+  margin: 0.35rem 0;
+  box-sizing: border-box;
+}
+
+.excel-dashboard-ai-assist-output {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.excel-dashboard-ai-assist-pre {
+  margin: 0.35rem 0 0;
+  font-family: inherit;
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+}
+
+.excel-code-inline {
+  font-size: 0.78em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: rgba(17, 24, 39, 0.06);
+}
+
+.excel-filter-hierarchy-nested {
+  margin: 0.25rem 0 0 0.35rem;
+  padding-left: 0.25rem;
+  border-left: 1px dashed rgba(17, 24, 39, 0.12);
+}
+
+.excel-dashboard-slice-hint {
+  margin: 0.65rem 0 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.excel-dashboard-slice-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  align-items: stretch;
+}
+
+.excel-slice-section {
+  width: 100%;
+  min-width: 0;
+}
+
+.excel-slice-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.88rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: var(--page-fg);
+}
+
+.excel-dashboard-slice-filters-grid {
+  display: grid;
+  /* Одна колонка: каждое измерение — полная ширина, подряд (не «разъезжается» на несколько карточек в ряд) */
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+  width: 100%;
+  align-items: stretch;
+}
+
+/* Строка измерения: слева подпись (+ скрыть), справа чипы плотной сеткой */
+.excel-dashboard-slice-filters-grid .excel-slice-dimension {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.65rem 1rem;
+  padding: 0.4rem 0.55rem 0.45rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.excel-dashboard-slice-filters-grid .excel-slice-dimension-head {
+  flex: 0 0 auto;
+  width: min(100%, 11.5rem);
+  margin-bottom: 0;
+}
+
+.excel-dashboard-slice-filters-grid .excel-slice-dimension-head--row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.excel-dashboard-slice-filters-grid .excel-slice-dimension-body {
+  flex: 1 1 min(0, 100%);
+  min-width: 0;
+}
+
+.excel-dashboard-slice-filters-grid .excel-analytics-filter-actions {
+  margin-top: 0.3rem;
+}
+
+/* Плотнее чипы только в срезе Excel */
+.excel-dashboard-slice-filters-grid .excel-analytics-filter-chips {
+  gap: 0.26rem 0.35rem;
+  margin-bottom: 0.15rem;
+}
+
+.excel-dashboard-slice-filters-grid .excel-analytics-chip {
+  padding: 0.12rem 0.38rem;
+  font-size: 0.74rem;
+  gap: 0.28rem;
+  line-height: 1.25;
+}
+
+.excel-dashboard-slice-filters-grid .excel-slice-dimension-label {
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.excel-dashboard-slice-filters-grid .excel-slice-dimension-hide {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.32rem;
+  align-self: flex-start;
+}
+
+@media (max-width: 640px) {
+  .excel-dashboard-slice-filters-grid .excel-slice-dimension {
+    flex-direction: column;
+  }
+
+  .excel-dashboard-slice-filters-grid .excel-slice-dimension-head {
+    width: 100%;
+  }
+}
+
+.excel-slice-dimension-head {
+  margin-bottom: 0.35rem;
+}
+
+.excel-slice-dimension-head--row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.excel-slice-dimension-hide {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+}
+
+.pulse-slice-filters-collapsible-summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.65rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--page-fg);
+  padding: 0.1rem 0;
+}
+
+.pulse-slice-filters-collapsible-summary--compact {
+  font-size: 1rem;
+}
+
+.pulse-slice-filters-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.pulse-slice-filters-collapsible-hint {
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.35;
+  max-width: min(100%, 42rem);
+}
+
+.pulse-slice-filters-collapsible-body {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed var(--card-border);
+}
+
+.excel-hidden-filters-details {
+  margin-top: 0.75rem;
+}
+
+.excel-hidden-filters-summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.excel-hidden-filters-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.excel-session-restore-banner {
+  margin: 0 0 0.75rem;
+}
+
+.excel-session-hint {
+  margin: 0.35rem 0 0;
+  max-width: 52rem;
+}
+
+.excel-recent-projects-folder {
+  margin-bottom: 0.75rem;
+}
+
+.excel-recent-projects-lead {
+  margin: 0.35rem 0 0;
+  max-width: 52rem;
+}
+
+.excel-open-project-callout {
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid rgba(100, 180, 255, 0.35);
+  background: rgba(60, 120, 200, 0.12);
+  color: var(--page-fg);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  max-width: 52rem;
+}
+
+.excel-recent-projects-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.excel-recent-projects-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.excel-recent-projects-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: min(100%, 14rem);
+}
+
+.excel-recent-projects-name {
+  font-weight: 700;
+  color: var(--page-fg);
+}
+
+.excel-recent-projects-meta {
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.excel-recent-projects-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.excel-save-project-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.excel-save-project-field {
+  flex: 1 1 12rem;
+  min-width: min(100%, 12rem);
+}
+
+.excel-save-project-btn {
+  flex: 0 0 auto;
+}
+
+.excel-save-linked {
+  font-size: 0.85rem;
+  width: 100%;
+  flex-basis: 100%;
+}
+
+.excel-save-project-wait {
+  margin: 0.5rem 0 0;
+  max-width: 48rem;
+  font-size: 0.9rem;
+}
+
+.excel-dashboard-slice-toolbar .excel-dashboard-save-project {
+  flex-shrink: 0;
+}
+
+.excel-dashboard-mid-save-bar {
+  width: 100%;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(227, 6, 19, 0.28);
+  background: linear-gradient(135deg, rgba(227, 6, 19, 0.07), rgba(227, 6, 19, 0.02));
+}
+
+.excel-dashboard-mid-save-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.excel-dashboard-mid-save-text {
+  margin: 0;
+  flex: 1 1 16rem;
+  min-width: min(100%, 12rem);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--page-fg);
+}
+
+.excel-dashboard-mid-save-text strong {
+  font-weight: 800;
+}
+
+.excel-dashboard-mid-save-btn {
+  flex-shrink: 0;
+}
+
+.excel-dashboard-mid-save-anchor {
+  color: var(--brand-red);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.excel-slice-dimension-label {
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--page-fg);
+}
+
+.excel-slice-dimension-body .excel-analytics-filter-chips {
+  overflow: visible;
+  max-height: none;
+}
+
+.excel-slice-dimension-body .excel-analytics-filter-chips {
+  padding-right: 0;
+}
+
+.excel-dash-chart-catalog .excel-dash-card-sub {
+  max-width: none;
+}
+
+.excel-analytics-chart--tall {
+  min-height: 0;
+}
+
+.excel-histogram-multi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 252px), 1fr));
+  gap: 1rem;
+}
+
+.excel-filter-distributions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.excel-filter-distribution-mini {
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.excel-filter-distribution-mini-title {
+  margin: 0 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--page-fg, #0f172a);
+}
+
+.excel-filter-distribution-mini-chart {
+  margin: 0;
+  min-height: 0;
+}
+
+.excel-filter-distribution-mini--clickable {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.excel-filter-distribution-mini--clickable:hover {
+  border-color: rgba(17, 94, 89, 0.35);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.12);
+}
+
+.excel-filter-distribution-mini--clickable:focus-visible {
+  outline: 2px solid #115e59;
+  outline-offset: 2px;
+}
+
+.excel-filter-dist-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.excel-filter-dist-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: rgba(17, 24, 39, 0.35);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+}
+
+.excel-filter-dist-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(920px, 100%);
+  max-height: min(92vh, 900px);
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.1rem 1.15rem;
+  overflow: hidden;
+}
+
+.excel-filter-dist-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+  flex-shrink: 0;
+}
+
+.excel-filter-dist-modal-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--page-fg);
+}
+
+.excel-filter-dist-modal-sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.excel-filter-dist-modal-close {
+  flex-shrink: 0;
+}
+
+.excel-filter-dist-modal-chart-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.excel-pulse-vs-notes-hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  max-width: 58rem;
+}
+
+.excel-histogram-mini {
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.excel-histogram-mini-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.excel-histogram-mini-chart {
+  margin: 0;
+}
+
+.excel-histogram-multi-with-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 1rem;
+  align-items: start;
+}
+
+.excel-histogram-multi-with-panel--solo {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 900px) {
+  .excel-histogram-multi-with-panel:not(.excel-histogram-multi-with-panel--solo) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.excel-metric-drill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.excel-metric-drill-row--solo .excel-metric-drill-chart-wrap {
+  flex: 1 1 100%;
+}
+
+.excel-metric-drill-chart-wrap {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.excel-metric-drill-panel {
+  flex: 0 1 280px;
+  max-width: 100%;
+  max-height: min(70vh, 420px);
+  overflow: auto;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.excel-metric-drill-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.excel-metric-drill-panel-metric {
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.excel-metric-drill-panel-bin {
+  font-size: 0.72rem;
+  color: var(--muted-fg, #64748b);
+  margin-top: 0.15rem;
+}
+
+.excel-metric-drill-close {
+  flex-shrink: 0;
+  padding: 0.1rem 0.45rem;
+  min-height: 0;
+  line-height: 1.2;
+  font-size: 1.1rem;
+}
+
+.excel-metric-drill-panel-hint {
+  font-size: 0.72rem;
+  margin: 0 0 0.5rem;
+  line-height: 1.35;
+}
+
+.excel-metric-drill-teacher-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.excel-metric-drill-teacher-list li + li {
+  margin-top: 0.25rem;
+}
+
+.excel-metric-drill-teacher-btn {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  text-align: left;
+  padding: 0.35rem 0.45rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.excel-metric-drill-teacher-btn:hover {
+  border-color: rgba(227, 6, 19, 0.35);
+}
+
+.excel-metric-drill-teacher-name {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.excel-metric-drill-narrative {
+  margin-top: 0.65rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.excel-metric-drill-narrative-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.excel-metric-drill-narrative-pre {
+  max-height: 200px;
+  overflow: auto;
+  font-size: 0.68rem;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.excel-metric-drill-mini-summary {
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(17, 24, 39, 0.1);
+}
+
+.excel-metric-drill-mini-summary-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.excel-metric-drill-mini-summary-lead {
+  margin: 0 0 0.4rem;
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.excel-metric-drill-mini-summary-body {
+  font-size: 0.68rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 168px;
+  overflow: auto;
+  padding: 0.4rem 0.45rem;
+  border-radius: var(--radius-sm);
+  background: rgba(17, 24, 39, 0.04);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  margin-bottom: 0.45rem;
+}
+
+.excel-metric-drill-mini-summary-btn {
+  width: 100%;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.5rem;
+  min-height: 0;
+}
+
+.excel-metric-pick-hint {
+  margin-top: -0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.excel-mentor-heatmap-cell {
+  transition: background-color 0.15s ease;
+}
+
+.excel-dashboard-workspace {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 1.15rem 1.35rem;
+  align-items: start;
+}
+
+@media (max-width: 1023px) {
+  .excel-dashboard-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+.excel-dashboard-sidebar {
+  min-width: 0;
+}
+
+.excel-dashboard-sidebar-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.05rem 1.15rem;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid rgba(17, 24, 39, 0.09);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 55%, rgba(241, 245, 249, 0.5) 100%);
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.06);
+}
+
+@media (min-width: 1024px) {
+  .excel-dashboard-sidebar-card {
+    position: sticky;
+    top: 0.75rem;
+    max-height: calc(100vh - 1.25rem);
+  }
+}
+
+.excel-dashboard-sidebar-kicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-red);
+}
+
+.excel-dashboard-sidebar-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.12rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--page-fg);
+}
+
+.excel-dashboard-sidebar-lead {
+  margin: 0 0 0.65rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.excel-dashboard-kpis--sidebar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+.excel-dashboard-kpis--sidebar .excel-dashboard-kpi {
+  min-width: 0;
+  padding: 0.45rem 0.4rem;
+  border-radius: 10px;
+  border: 1px solid rgba(227, 6, 19, 0.14);
+  background: rgba(227, 6, 19, 0.05);
+}
+
+.excel-dashboard-kpis--sidebar .excel-dashboard-kpi-value {
+  font-size: 1.28rem;
+}
+
+.excel-dashboard-kpis--sidebar .excel-dashboard-kpi-label {
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.excel-dashboard-reset--block {
+  width: 100%;
+}
+
+.excel-dashboard-filters-heading {
+  margin: 0 0 0.4rem;
+  font-size: 0.98rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.excel-dashboard-filter-ai-note {
+  margin: 0 0 0.55rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.excel-dashboard-filter-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.5rem;
+}
+
+.excel-dashboard-filter-ai-hint-msg {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #b45309;
+}
+
+.excel-dashboard-filter-section {
+  margin-bottom: 1.35rem;
+}
+
+.excel-dashboard-filter-section:last-child {
+  margin-bottom: 0;
+}
+
+.excel-dashboard-filter-section-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.excel-analytics-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.4rem;
+}
+
+.excel-dashboard-sidebar-filters {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0.85rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+  overflow: visible;
+}
+
+.excel-dash-board-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.excel-dash-panel-row {
+  display: grid;
+  gap: 1rem;
+}
+
+.excel-dash-panel-row--two {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .excel-dash-panel-row--two {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.excel-dash-card--data-panel .excel-dash-card-title,
+.excel-dash-card--metrics-table .excel-dash-card-title,
+.excel-dash-card--ai-report .excel-dash-card-title {
+  margin-bottom: 0.35rem;
+}
+
+.excel-dash-table-scroll {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.excel-dash-table-scroll--tall {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.excel-dash-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.excel-dash-data-table th,
+.excel-dash-data-table td {
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+  vertical-align: top;
+}
+
+.excel-dash-data-table thead th {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  background: rgba(248, 250, 252, 0.95);
+}
+
+.excel-dash-data-table tbody th[scope='row'] {
+  width: 42%;
+  font-weight: 700;
+  color: #475569;
+  background: rgba(248, 250, 252, 0.5);
+}
+
+.excel-dash-data-table--dense th,
+.excel-dash-data-table--dense td {
+  padding: 0.4rem 0.55rem;
+  font-size: 0.82rem;
+}
+
+.excel-dash-data-table-key {
+  font-weight: 600;
+  max-width: 12rem;
+}
+
+.excel-dash-data-table-metric-name {
+  font-weight: 600;
+  max-width: min(28rem, 55vw);
+}
+
+.excel-dash-data-table-total td {
+  font-weight: 700;
+  background: rgba(227, 6, 19, 0.06);
+  border-top: 1px solid rgba(227, 6, 19, 0.15);
+}
+
+.excel-dash-mentor-table-wrap {
+  margin-top: 0.85rem;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.excel-dash-card--ai-report {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(227, 6, 19, 0.12);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(254, 248, 248, 0.92) 40%, rgba(248, 250, 252, 0.96) 100%);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
+}
+
+.excel-dash-card--deep-report {
+  margin-top: 1rem;
+  border-color: rgba(15, 23, 42, 0.1);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.99) 0%, rgba(241, 245, 249, 0.9) 55%, rgba(248, 250, 252, 0.98) 100%);
+}
+
+.excel-deep-focus-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  font-size: 0.88rem;
+}
+
+.excel-deep-focus-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 4.5rem;
+  font-size: 0.9rem;
+}
+
+.excel-deep-report-actions {
+  margin-top: 0.75rem;
+}
+
+.excel-inline-code {
+  font-size: 0.85em;
+  padding: 0.08rem 0.35rem;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.excel-dash-ai-report-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.excel-dash-ai-report-badge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--brand-red);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(227, 6, 19, 0.1);
+  border: 1px solid rgba(227, 6, 19, 0.18);
+}
+
+.excel-ai-report-prose {
+  margin: 0.85rem 0 0;
+  padding: 1rem 1.15rem 1.1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  font-size: 0.95rem;
+  line-height: 1.68;
+  color: #1e293b;
+  max-width: 52rem;
+}
+
+.excel-ai-report-prose p {
+  margin: 0 0 1rem;
+}
+
+.excel-ai-report-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.excel-ai-report-placeholder {
+  margin: 0.75rem 0 0;
+  font-style: italic;
+}
+
+.excel-ai-report-facts {
+  margin-top: 1rem;
+  border-radius: 10px;
+  border: 1px dashed rgba(15, 23, 42, 0.15);
+  padding: 0.35rem 0.65rem 0.65rem;
+  background: rgba(248, 250, 252, 0.65);
+}
+
+.excel-ai-report-facts-summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #475569;
+  padding: 0.35rem 0;
+  list-style: none;
+}
+
+.excel-ai-report-facts-summary::-webkit-details-marker {
+  display: none;
+}
+
+.excel-ai-report-facts-pre {
+  margin: 0.5rem 0 0;
+  max-height: 240px;
+  overflow: auto;
+  font-size: 0.78rem;
+}
+
+.excel-dashboard-table-lead {
+  margin: -0.25rem 0 0.85rem;
+  font-size: 0.88rem;
+  max-width: 48rem;
+}
+
+.excel-dashboard-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.excel-dashboard-main-head {
+  padding: 1.05rem 1.2rem 1.1rem;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: linear-gradient(120deg, rgba(227, 6, 19, 0.07) 0%, rgba(255, 255, 255, 0.92) 42%, rgba(248, 250, 252, 0.95) 100%);
+  border-left: 4px solid var(--brand-red);
+}
+
+.excel-dashboard-main-kicker {
+  margin: 0 0 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand-red);
+}
+
+.excel-dashboard-main-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.2rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--page-fg);
+}
+
+.excel-dashboard-main-lead {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  max-width: 48rem;
+}
+
+.excel-dashboard-main-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.excel-dashboard-main-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.excel-dashboard-main-body .excel-dashboard-main-charts {
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .excel-dashboard-main-body--with-dock {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  }
+}
+
+.excel-chart-drill-dock {
+  position: sticky;
+  top: 0.75rem;
+  align-self: start;
+  max-height: min(85vh, 560px);
+  scroll-margin-top: 1rem;
+  scroll-margin-bottom: 1rem;
+}
+
+@media (max-width: 1099px) {
+  .excel-chart-drill-dock {
+    position: static;
+    max-height: min(70vh, 420px);
+  }
+}
+
+.excel-chart-drill-dock-kicker {
+  margin: 0 0 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-fg, #64748b);
+}
+
+.excel-dashboard-chart-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+@media (min-width: 1400px) {
+  .excel-dashboard-workspace {
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  }
+
+  .excel-dashboard-chart-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.excel-dashboard-chart-row--list-features-wide {
+  grid-template-columns: 1fr;
+}
+
+.excel-dash-board-panels--compact {
+  gap: 0.75rem;
+}
+
+.excel-dash-panel-row--compact-kpi {
+  align-items: stretch;
+}
+
+.excel-dash-kpi-compact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  margin: 0.35rem 0 0.65rem;
+}
+
+.excel-dash-kpi-compact-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 5.5rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.excel-dash-kpi-compact-item--wide {
+  flex: 1 1 12rem;
+  min-width: min(100%, 14rem);
+}
+
+.excel-dash-kpi-compact-value {
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--brand-red);
+  line-height: 1.1;
+}
+
+.excel-dash-kpi-compact-value--sm {
+  font-size: 0.95rem;
+  font-weight: 800;
+  word-break: break-word;
+}
+
+.excel-dash-kpi-compact-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--page-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.excel-dash-details-more {
+  margin-top: 0.5rem;
+  font-size: 0.88rem;
+}
+
+.excel-dash-details-more > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--brand-red);
+}
+
+.excel-dash-filter-compact-all {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+}
+
+.excel-dash-card-sub--tight {
+  margin-bottom: 0.45rem;
+  font-size: 0.82rem;
+}
+
+.excel-dash-details-list-features {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.excel-dash-details-list-features-summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--page-fg);
+}
+
+.excel-list-features-details-body {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.excel-list-feature-mentor-pick {
+  padding: 0.55rem 0.75rem;
+}
+
+.excel-list-feature-mentor-pick-label {
+  margin: 0;
+}
+
+.excel-list-feature-universe-details {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.excel-list-feature-universe-summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+
+.excel-list-feature-coverage-hint {
+  font-weight: 500;
+}
+
+.pulse-excel-embedded-panel {
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.75rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px dashed rgba(227, 6, 19, 0.22);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.pulse-excel-embed-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pulse-excel-embed-details {
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  padding: 0.45rem 0.55rem;
+  background: rgba(248, 250, 252, 0.85);
+}
+
+.pulse-excel-embed-summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 0.88rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+}
+
+.excel-analytics-file-lang-check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.88rem;
+}
+
+.excel-dashboard-lang-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.excel-list-feature-universe-block {
+  margin: 0.75rem 0 1rem;
+}
+
+.excel-list-feature-universe-title,
+.excel-list-feature-chart-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--page-fg, #111827);
+}
+
+.excel-list-feature-universe {
+  margin: 0;
+  padding: 0.5rem 0.65rem 0.5rem 1.35rem;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.excel-list-feature-chart-block,
+.excel-list-feature-teacher-block {
+  margin-top: 1.15rem;
+}
+
+.excel-list-feature-teacher-block {
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--card-border);
+}
+
+.excel-dashboard-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: center;
+}
+
+.excel-dashboard-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 7rem;
+}
+
+.excel-dashboard-kpi-value {
+  font-size: 1.65rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: var(--brand-red);
+  line-height: 1.1;
+}
+
+.excel-dashboard-kpi-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--page-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.excel-dashboard-reset {
+  align-self: center;
+}
+
+.excel-dashboard-filter-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.excel-dashboard-table-section {
+  margin-top: 0.25rem;
+}
+
+.excel-dash-card {
+  padding: 1rem 1.1rem;
+}
+
+.excel-dash-card--wide {
+  width: 100%;
+}
+
+.excel-dash-card--in-row {
+  min-width: 0;
+}
+
+.excel-dash-card-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--page-fg);
+}
+
+.excel-dash-card-sub {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+}
+
+.excel-dash-pre {
+  max-height: min(70vh, 28rem);
+  overflow: auto;
+}
+
+.excel-dash-chart-tall {
+  min-height: 200px;
+}
+
+.excel-analytics-lead {
+  margin: 0 0 1rem;
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--page-fg);
+}
+
+.excel-analytics-post-load {
+  margin-top: 1rem;
+}
+
+.excel-analytics-automap-done {
+  margin: 0 0 0.75rem;
+}
+
+.excel-analytics-advanced-mapping {
+  border: 1px solid var(--brand-red-dim);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 1rem;
+  background: rgba(227, 6, 19, 0.03);
+}
+
+.excel-analytics-advanced-summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--page-fg);
+  list-style: none;
+}
+
+.excel-analytics-advanced-summary::-webkit-details-marker {
+  display: none;
+}
+
+.excel-analytics-advanced-body {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(227, 6, 19, 0.15);
+}
+
+.excel-analytics-auto-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.excel-analytics-auto-btn {
+  font-weight: 800;
+}
+
+.excel-analytics-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  color: var(--page-muted);
+  cursor: pointer;
+}
+
+.excel-analytics-role-summary {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--brand-red-dim);
+  background: rgba(227, 6, 19, 0.04);
+}
+
+.excel-analytics-role-summary-title {
+  font-weight: 800;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--page-muted);
+  margin-bottom: 0.5rem;
+}
+
+.excel-analytics-role-summary-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}

@@ -1,0 +1,10 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import VisitChecklistReportDashboard from './components/VisitChecklistReportDashboard';
+import seed from './lib/lessonVisitChecklist/defaultSeed.json';
+import type { LessonVisitChecklistConfig, LessonVisitDirectory, LessonVisitResponseRow } from './lib/lessonVisitChecklist/types';
+import './index.css';
+const directory: LessonVisitDirectory = { departments: [{id:'demo',name:'Демонстрационное МО'}], teachers: [{id:'demo-teacher',name:'Демонстрационный педагог',departmentId:'demo'}] };
+const responses: LessonVisitResponseRow[] = [{id:1,created_at:'2026-10-05',general:{teacher_id:'demo-teacher',visit_date:'2026-10-05',subject:'Демонстрационный предмет',class_name:'5А',visit_format:'Наблюдение'},answers:{'10.1':'высокий'}}];
+createRoot(document.getElementById('root')!).render(<React.StrictMode><BrowserRouter><main><p style={{padding:16,background:'#fff2cb'}}>Отдельная мастерская чек-листа · демонстрационные ответы · изменения не публикуются в Пульс</p><VisitChecklistReportDashboard responses={responses} checklist={seed as LessonVisitChecklistConfig} directory={directory} now={new Date('2026-10-06T12:00:00Z')} /></main></BrowserRouter></React.StrictMode>);

@@ -1,0 +1,110 @@
+.visit-checklist-section-presence__list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.visit-checklist-section-presence__section {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+}
+
+.visit-checklist-section-presence__header {
+  padding: 0.65rem 0.85rem;
+  line-height: 1.38;
+  color: #ffffff;
+}
+
+.visit-checklist-section-presence__header--present {
+  background: #dc2626;
+}
+
+.visit-checklist-section-presence__header--absent {
+  background: #94a3b8;
+}
+
+.visit-checklist-section-presence__header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.visit-checklist-section-presence__header-code {
+  font-size: 0.76rem;
+  opacity: 0.92;
+  font-weight: 600;
+}
+
+.visit-checklist-section-presence__header-status {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.visit-checklist-section-presence__header-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.visit-checklist-section-presence__body {
+  margin: 0;
+  padding: 0.55rem 0.85rem 0.65rem;
+  list-style: none;
+  display: grid;
+  gap: 0.15rem;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.visit-checklist-section-presence__item {
+  display: flex;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.38;
+}
+
+.visit-checklist-section-presence__item--marked {
+  font-weight: 600;
+}
+
+.visit-checklist-section-presence__mark {
+  flex-shrink: 0;
+  width: 1rem;
+}
+
+.visit-checklist-section-presence--pdf .visit-checklist-section-presence__list {
+  gap: 0.25rem;
+}
+
+.visit-checklist-section-presence--pdf .visit-checklist-section-presence__section {
+  border-radius: 6px;
+}
+
+.visit-checklist-section-presence--pdf .visit-checklist-section-presence__header {
+  padding: 0.4rem 0.55rem;
+}
+
+.visit-checklist-section-presence--pdf .visit-checklist-section-presence__header-code {
+  font-size: 0.72rem;
+}
+
+.visit-checklist-section-presence--pdf .visit-checklist-section-presence__header-status {
+  font-size: 0.72rem;
+}
+
+.visit-checklist-section-presence--pdf .visit-checklist-section-presence__header-title {
+  font-size: 0.82rem;
+}
+
+.visit-checklist-section-presence--pdf .visit-checklist-section-presence__body {
+  padding: 0.35rem 0.55rem 0.45rem;
+  gap: 0.1rem;
+}
+
+.visit-checklist-section-presence--pdf .visit-checklist-section-presence__item {
+  font-size: 0.72rem;
+}
