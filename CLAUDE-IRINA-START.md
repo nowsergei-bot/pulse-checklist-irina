@@ -7,6 +7,8 @@
 - Репозиторий: https://github.com/nowsergei-bot/pulse-checklist-irina
 - Единственная рабочая ветка: `codex/checklist-irina`.
 - Владелец: `nowsergei-bot`.
+- Живой сайт: https://statisticsprimakov2.website.yandexcloud.net
+- Раздел чек-листа: https://statisticsprimakov2.website.yandexcloud.net/cabinet/visit-checklist (вход через собственную школьную учётную запись Ирины).
 - Нужное право GitHub: collaborator с ролью Write, через собственный аккаунт Ирины.
 - Файлы с правками, разрешёнными для публикации: ключи `editable` в `isolation-manifest.json`, кроме SQL-миграций.
 - Облачную публикацию выполняет установленный процесс владельца с его служебной авторизацией. Claude Ирины не нужны ключи Yandex Cloud, GitLab, БД или доступ к остальным разделам Пульса.
