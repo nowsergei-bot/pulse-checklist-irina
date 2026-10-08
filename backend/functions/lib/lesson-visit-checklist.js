@@ -192,6 +192,30 @@ function buildTeacherUnitMap(staffRows, teachers) {
   return out;
 }
 
+const NEW_TEACHER_IDS_LIMIT = 500;
+
+/**
+ * Список «новых учителей» хранится как ID справочника анкеты (teacher_N), без ФИО.
+ * Возвращает отсортированный список известных ID без повторов; null, если вход не массив строк
+ * допустимой длины. Неизвестные ID отбрасываются.
+ */
+function sanitizeNewTeacherIds(value, teachers) {
+  if (!Array.isArray(value) || value.length > NEW_TEACHER_IDS_LIMIT) return null;
+  const known = new Set(
+    (Array.isArray(teachers) ? teachers : [])
+      .map((t) => (t && t.id != null ? String(t.id) : ''))
+      .filter(Boolean),
+  );
+  const out = new Set();
+  for (const raw of value) {
+    if (typeof raw !== 'string') return null;
+    const id = raw.trim();
+    if (!id || id.length > 64) return null;
+    if (known.has(id)) out.add(id);
+  }
+  return [...out].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+}
+
 module.exports = {
   VISIT_CHECKLIST_TITLE,
   VISIT_FORMAT_SELF_ANALYSIS,
@@ -202,6 +226,7 @@ module.exports = {
   loadSeedDirectory,
   resolvePublicLessonVisitDirectory,
   buildTeacherUnitMap,
+  sanitizeNewTeacherIds,
   visitChecklistDraftFromState,
   visitChecklistLatestScore,
   pickLatestSharedVisitChecklist,

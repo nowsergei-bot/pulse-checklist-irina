@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import {
   getLessonVisitProject,
   getVisitChecklistDashboard,
   listLessonVisitResponses,
+  saveNewTeacherIds,
   type VisitChecklistDashPayload,
 } from '../../api/visitChecklist';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
@@ -54,7 +55,12 @@ export default function VisitChecklistDirectorDashboardPage() {
     );
   const [liveDirectory, setLiveDirectory] =
     useState<LessonVisitDirectory | null>(null);
+  const [liveStaffUnits, setLiveStaffUnits] = useState<Record<string, string[]>>({});
+  const [newTeacherIds, setNewTeacherIds] = useState<string[]>([]);
+  const [canOpenAnalytics, setCanOpenAnalytics] = useState(false);
   const [liveReady, setLiveReady] = useState(false);
+  const [params] = useSearchParams();
+  const summaryScreen = params.get('screen') === 'summary';
 
   const projectId = dash?.project?.id;
   const shownTitle =
@@ -87,6 +93,7 @@ export default function VisitChecklistDirectorDashboardPage() {
         };
         const staffName = me.staff?.full_name || null;
         if (isVisitChecklistDirectorPerson(identity, staffName)) {
+          setCanOpenAnalytics(canSeeVisitChecklistAnalyticsNav(identity, staffName));
           setGate('director');
           return;
         }
@@ -156,6 +163,8 @@ export default function VisitChecklistDirectorDashboardPage() {
         setLiveResponses(rows);
         if (pack?.draft?.checklist) setLiveChecklist(pack.draft.checklist);
         setLiveDirectory(pack?.draft?.directory ?? null);
+        setLiveStaffUnits(pack?.staffUnits ?? {});
+        setNewTeacherIds(pack?.draft?.newTeacherIds ?? []);
         setLiveReady(true);
       })
       .catch((error) => {
@@ -206,11 +215,42 @@ export default function VisitChecklistDirectorDashboardPage() {
           Загружаем уроки…
         </section>
       ) : (
-        <VisitChecklistReportDashboard
-          responses={liveResponses}
-          checklist={liveChecklist}
-          directory={liveDirectory || defaultSeed.directory}
-        />
+        <>
+          <nav className="vcr-screens" aria-label="Экраны директора">
+            <Link
+              className="vcr-link"
+              aria-current={summaryScreen ? 'page' : undefined}
+              to="?screen=summary"
+            >
+              Сводка для директора
+            </Link>
+            <Link
+              className="vcr-link"
+              aria-current={summaryScreen ? undefined : 'page'}
+              to="."
+            >
+              Полная аналитика
+            </Link>
+          </nav>
+          <VisitChecklistReportDashboard
+            responses={liveResponses}
+            checklist={liveChecklist}
+            directory={liveDirectory || defaultSeed.directory}
+            staffUnits={liveStaffUnits}
+            directorScreen
+            newTeacherIds={newTeacherIds}
+            onSaveNewTeachers={
+              projectId
+                ? async (ids) => {
+                    const saved = await saveNewTeacherIds(projectId, ids);
+                    setNewTeacherIds(saved);
+                    return saved;
+                  }
+                : undefined
+            }
+            analyticsPath={canOpenAnalytics ? VISIT_CHECKLIST_ANALYTICS_PATH : null}
+          />
+        </>
       )}
     </div>
   );

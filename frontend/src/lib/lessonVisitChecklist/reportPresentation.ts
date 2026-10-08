@@ -12,6 +12,8 @@ import {
   mean,
   pairedSelf,
   reportPersonKey,
+  REPORT_START,
+  SECTION_NAMES,
   type DirectItem,
   type ReportVisit,
 } from "./visitChecklistReport.ts";
@@ -533,4 +535,367 @@ export function coverageUnits(
     if (!excluded.has(t.departmentId))
       for (const unit of staffUnits?.[t.id] || []) units.add(unit);
   return [...units].sort((a, b) => a.localeCompare(b, "ru"));
+}
+
+/* ---------- Сводка для директора ---------- */
+
+export type DirectorPeriod = "week" | "month" | "year";
+export const DIRECTOR_PERIODS: { id: DirectorPeriod; label: string }[] = [
+  { id: "week", label: "Неделя" },
+  { id: "month", label: "Месяц" },
+  { id: "year", label: "Учебный год" },
+];
+
+function shiftDate(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+function mondayOf(date: string): string {
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return shiftDate(date, -((day + 6) % 7));
+}
+
+/**
+ * Границы периода: неделя — последняя завершённая, месяц — последний завершённый календарный
+ * месяц (не раньше начала отчёта), год — с начала учебного года по сегодня.
+ * Для месяца, который целиком раньше начала отчёта, возвращает null.
+ */
+export function directorPeriodRange(
+  period: DirectorPeriod,
+  week: { start: string; end: string; today: string },
+): { from: string; to: string } | null {
+  if (period === "week") return { from: week.start, to: week.end };
+  if (period === "year") return { from: REPORT_START, to: week.today };
+  const firstOfThisMonth = `${week.today.slice(0, 7)}-01`;
+  const to = shiftDate(firstOfThisMonth, -1);
+  const from = `${to.slice(0, 7)}-01`;
+  if (to < REPORT_START) return null;
+  return { from: from < REPORT_START ? REPORT_START : from, to };
+}
+
+/** Недели (пн–вс), по которым стрелками показывается динамика итога. */
+export function directorWeeks(
+  period: DirectorPeriod,
+  range: { from: string; to: string },
+  week: { start: string },
+): { start: string; end: string }[] {
+  const weeks: { start: string; end: string }[] = [];
+  const first = period === "week" ? shiftDate(week.start, -21) : mondayOf(range.from);
+  const last = period === "week" ? week.start : mondayOf(range.to);
+  for (let start = first; start <= last; start = shiftDate(start, 7)) {
+    const end = shiftDate(start, 6);
+    if (end >= REPORT_START) weeks.push({ start, end });
+  }
+  return weeks;
+}
+
+/** Средний итог (учителя поровну) по каждой неделе; период обрезает крайние недели. */
+export function weeklyAverages(
+  visits: ReportVisit[],
+  weeks: { start: string; end: string }[],
+  clip?: { from: string; to: string },
+): { start: string; end: string; value: number | null }[] {
+  return weeks.map(({ start, end }) => {
+    const from = clip && clip.from > start ? clip.from : start;
+    const to = clip && clip.to < end ? clip.to : end;
+    return {
+      start,
+      end,
+      value: schoolAverage(visits.filter((v) => v.date >= from && v.date <= to)),
+    };
+  });
+}
+export function weeklyArrows(
+  series: { value: number | null }[],
+): string {
+  return series
+    .map((w) => (w.value == null ? "—" : displayScore(w.value)))
+    .join(" → ");
+}
+
+export type AttentionGroup = "A" | "B";
+export const ATTENTION_GROUP_NAMES: Record<AttentionGroup, string> = {
+  A: "Требуют внимания",
+  B: "Есть уроки ниже 70",
+};
+export function lessonsGenitive(count: number): string {
+  const last = count % 10,
+    two = count % 100;
+  return `${count} ${last === 1 && two !== 11 ? "урока" : "уроков"}`;
+}
+export function repeatText(fullLessons: number, below70: number): string {
+  return fullLessons <= 1
+    ? "единичный результат"
+    : `ниже порога ${below70} из ${lessonsGenitive(fullLessons)}`;
+}
+
+export type AttentionInfo = {
+  group: AttentionGroup;
+  average: number | null;
+  fullLessons: number;
+  below70: number;
+  repeat: string;
+};
+/**
+ * Учителя с полным уроком ниже 70 (это и есть «Нужна методическая поддержка») в двух группах.
+ * А: средний итог по полным урокам ниже 70 или хотя бы один полный урок ниже 50.
+ * Б: остальные. Сравнение точное, без округления. Сначала А, внутри по возрастанию среднего итога.
+ */
+export function attentionTeachers<
+  T extends { key: string; name: string; rows: ReportVisit[] },
+>(teachers: T[]): (T & AttentionInfo)[] {
+  const out: (T & AttentionInfo)[] = [];
+  for (const teacher of teachers) {
+    const percents = lessonObservations(teacher.rows)
+      .map((lesson) => scorePercent(lesson))
+      .filter((p): p is number => p != null);
+    const below70 = percents.filter((p) => p < 70).length;
+    if (!below70) continue;
+    const average = schoolAverage(teacher.rows);
+    const group: AttentionGroup =
+      (average != null && average < 70) || percents.some((p) => p < 50)
+        ? "A"
+        : "B";
+    out.push({
+      ...teacher,
+      group,
+      average,
+      fullLessons: percents.length,
+      below70,
+      repeat: repeatText(percents.length, below70),
+    });
+  }
+  return out.sort(
+    (a, b) =>
+      Number(a.group === "B") - Number(b.group === "B") ||
+      (a.average ?? Infinity) - (b.average ?? Infinity) ||
+      a.name.localeCompare(b.name, "ru"),
+  );
+}
+
+const meanOf = (values: (number | null)[]) => {
+  const own = values.filter((v): v is number => v != null);
+  return own.length ? own.reduce((n, v) => n + v, 0) / own.length : null;
+};
+
+export type BlockPercent = {
+  name: string;
+  percent: number | null;
+  /** Пункты блока оцениваются по минимальному уровню, итог блока занижен. */
+  understated: boolean;
+};
+/**
+ * % от максимума по 9 блокам. Для наблюдения: сумма баллов блока / сумма максимумов (без «не применимо»);
+ * внутри урока усредняется по наблюдениям, затем по урокам учителя, затем по учителям поровну.
+ * Учитываются только полные уроки.
+ */
+export function blockPercents(rows: ReportVisit[]): BlockPercent[] {
+  const lessons = new Map<string, ReportVisit[]>();
+  for (const row of rows) {
+    if (row.self) continue;
+    const key = row.pairKey || `unidentified:${row.id}`;
+    lessons.set(key, [...(lessons.get(key) || []), row]);
+  }
+  const perTeacher = new Map<string, (number | null)[][]>();
+  for (const group of lessons.values()) {
+    if (!group.every((v) => v.score.total != null)) continue;
+    const blocks = SECTION_NAMES.map((_, index) =>
+      meanOf(
+        group.map((v) => {
+          const items = v.score.items.filter(
+            (i) => i.code.startsWith(`${index + 1}.`) && !i.na && i.value != null,
+          );
+          const max = items.reduce((n, i) => n + i.max, 0);
+          return max ? (items.reduce((n, i) => n + i.value!, 0) / max) * 100 : null;
+        }),
+      ),
+    );
+    const key = group[0].teacherKey;
+    perTeacher.set(key, [...(perTeacher.get(key) || []), blocks]);
+  }
+  return SECTION_NAMES.map((name, index) => ({
+    name,
+    percent: meanOf(
+      [...perTeacher.values()].map((lessonBlocks) =>
+        meanOf(lessonBlocks.map((b) => b[index])),
+      ),
+    ),
+    understated: index === 4,
+  }));
+}
+
+export const GROWTH_EXCLUDED_CODES = ["3.5", "5.2", "5.3"];
+/** Пункты с несколькими вариантами ответа: пояснение без цитаты, только доля чек-листов ниже максимума. */
+const GROWTH_MULTI_CODES = ["3.8", "5.1", "9.1"];
+const GROWTH_PHRASES: Record<string, string> = {
+  "1.1|частично": "к уроку готовы лишь частично",
+  "1.1|не готов": "к уроку не готовы",
+  "2.1|учителем": "цели формулирует только учитель",
+  "2.1|совместно с обучающимися": "цели формулируются совместно, но не самими учениками",
+  "2.1|не сформулированы": "цели не сформулированы",
+  "2.2|нет": "цели не соответствуют теме урока",
+  "2.3|нет": "цели непонятны ученикам",
+  "3.1|нет": "содержание не соответствует целям и программе",
+  "3.2|структура": "структура урока не прослеживается",
+  "3.3|нет": "темп урока не подходит классу",
+  '3.6|фронтальные': "задания одинаковые для всех",
+  "4.1|не соответствует": "материал не соответствует уровню учеников",
+  "4.2|достаточный": "предметное содержание на достаточном, но не высоком уровне",
+  "4.2|требует": "владение предметным содержанием требует улучшения",
+  "6.2|вовлечены большинство": "вовлечено большинство класса, но не все",
+  "6.2|вовлечена только часть": "вовлечена только часть класса",
+  "6.2|массовое": "класс в целом пассивен",
+  "7.1|нет": "воспитательный потенциал урока не проявлен",
+  "8.2|среднее": "наглядные материалы не всегда уместны",
+  "8.2|низкое": "наглядные материалы неуместны",
+  "8.2|не использовались, что": "наглядные материалы не использованы, это снизило урок",
+  "9.3|атмосфера на уроке не создана": "рабочая атмосфера на уроке не создана",
+  "9.3|психологический комфорт отсутствует": "психологического комфорта нет",
+};
+const normalizedAnswer = (answer: string) =>
+  answer.trim().toLocaleLowerCase("ru").replace(/ё/g, "е");
+function growthPhrase(code: string, answer: string): string {
+  const text = normalizedAnswer(answer);
+  for (const [key, phrase] of Object.entries(GROWTH_PHRASES)) {
+    const [keyCode, prefix] = key.split("|");
+    if (keyCode === code && text.startsWith(normalizedAnswer(prefix))) return phrase;
+  }
+  return answer.length > 70 ? `«${answer.slice(0, 67).trim()}…»` : `«${answer}»`;
+}
+
+export type GrowthZone = {
+  code: string;
+  title: string;
+  percent: number;
+  lessons: number;
+  /** Одна строка пояснения по ответам; пустая, если ответов ниже максимума нет. */
+  note: string;
+};
+/**
+ * Пункты с самым низким средним % от максимума по сигнальным оценкам (как «Приоритеты»),
+ * без пунктов, которые пока оцениваются по минимальному уровню. Пояснение берётся из ответов
+ * наблюдателей: самый частый ответ с баллом ниже максимума и его доля среди оценённых чек-листов.
+ */
+export function growthZones(rows: ReportVisit[], count = 3): GrowthZone[] {
+  const lessons = lessonObservations(rows);
+  const observations = rows.filter((v) => !v.self);
+  const codes = new Set(lessons.flatMap((v) => v.score.items.map((i) => i.code)));
+  const zones: GrowthZone[] = [];
+  for (const code of codes) {
+    if (GROWTH_EXCLUDED_CODES.includes(code)) continue;
+    const eligible = lessons.flatMap((v) =>
+      signalItems(v.score.items.filter((i) => i.code === code)),
+    );
+    const percent = meanOf(eligible.map((i) => (i.value! / i.max) * 100));
+    if (percent == null) continue;
+    const title =
+      lessons[0].score.items.find((i) => i.code === code)?.title || code;
+    const scored = observations.flatMap((v) =>
+      v.score.items.filter(
+        (i) =>
+          i.code === code && !i.na && i.value != null && i.method !== "form_minimum",
+      ),
+    );
+    const counts = new Map<string, number>();
+    for (const item of scored)
+      if (item.value! < item.max && item.answer)
+        counts.set(item.answer, (counts.get(item.answer) || 0) + 1);
+    const top = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru"))[0];
+    const below = [...counts.values()].reduce((n, c) => n + c, 0);
+    zones.push({
+      code,
+      title: SHORT_TITLES[code] || title,
+      percent,
+      lessons: eligible.length,
+      note: !top
+        ? ""
+        : GROWTH_MULTI_CODES.includes(code)
+          ? `в ${Math.round((below / scored.length) * 100)}% чек-листов балл по пункту ниже максимума`
+          : `в ${Math.round((top[1] / scored.length) * 100)}% чек-листов: ${growthPhrase(code, top[0])}`,
+    });
+  }
+  return zones
+    .sort(
+      (a, b) =>
+        a.percent - b.percent ||
+        a.code.localeCompare(b.code, "ru", { numeric: true }),
+    )
+    .slice(0, count);
+}
+
+export type DepartmentRow = {
+  department: string;
+  teachers: number;
+  lessons: number;
+  average: number | null;
+  a: number;
+  b: number;
+};
+/** Кафедры от низкого среднего итога к высокому; учителя поровну, как в «Среднем итоге». */
+export function departmentRanking(
+  teachers: { key: string; department: string; rows: ReportVisit[] }[],
+  attention: { key: string; group: AttentionGroup }[],
+): DepartmentRow[] {
+  const groupByTeacher = new Map(attention.map((a) => [a.key, a.group]));
+  const byDepartment = new Map<string, typeof teachers>();
+  for (const teacher of teachers) {
+    if (!lessonObservations(teacher.rows).length) continue;
+    byDepartment.set(teacher.department, [
+      ...(byDepartment.get(teacher.department) || []),
+      teacher,
+    ]);
+  }
+  return [...byDepartment]
+    .map(([department, list]) => {
+      const rows = list.flatMap((t) => t.rows);
+      return {
+        department,
+        teachers: list.length,
+        lessons: lessonObservations(rows).length,
+        average: schoolAverage(rows),
+        a: list.filter((t) => groupByTeacher.get(t.key) === "A").length,
+        b: list.filter((t) => groupByTeacher.get(t.key) === "B").length,
+      };
+    })
+    .sort(
+      (x, y) =>
+        (x.average ?? Infinity) - (y.average ?? Infinity) ||
+        x.department.localeCompare(y.department, "ru"),
+    );
+}
+
+export type NewTeacherStats = {
+  configured: boolean;
+  total: number;
+  visited: number;
+  notVisited: CoverageRow[];
+  averageNew: number | null;
+  averageOthers: number | null;
+  below70: number;
+};
+/** Новые учителя задаются администратором списком ID справочника анкеты. */
+export function newTeacherStats(
+  teachers: { key: string; name: string; department: string; visits: ReportVisit[] }[],
+  directory: Pick<LessonVisitDirectory, "teachers">,
+  newTeacherIds: string[] | undefined,
+  rows: ReportVisit[],
+  attention: { key: string }[],
+  options: { from?: string | null; to?: string | null } = {},
+): NewTeacherStats {
+  const ids = new Set(newTeacherIds || []);
+  const listed = directory.teachers.filter((t) => ids.has(t.id));
+  const keys = new Set(listed.map((t) => reportPersonKey(t.name)));
+  const coverage = visitCoverage(teachers, { teachers: listed }, options);
+  const own = rows.filter((v) => keys.has(v.teacherKey));
+  const others = rows.filter((v) => !keys.has(v.teacherKey));
+  return {
+    configured: listed.length > 0,
+    total: coverage.total,
+    visited: coverage.visited,
+    notVisited: coverage.notVisited,
+    averageNew: schoolAverage(own),
+    averageOthers: schoolAverage(others),
+    below70: attention.filter((a) => keys.has(a.key)).length,
+  };
 }

@@ -8,6 +8,7 @@ const {
   resolvePublicLessonVisitDirectory,
   pickLatestSharedVisitChecklist,
   buildTeacherUnitMap,
+  sanitizeNewTeacherIds,
 } = require('./lib/lesson-visit-checklist');
 const { buildProjectGetPayload } = require('./lib/project-get-payload');
 const { resolveProjectOwner } = require('./lib/resolve-project-owner');
@@ -388,6 +389,33 @@ async function handleGetLessonVisitProject(pool, user, viaAdminKey, sessionUser,
   }
 }
 
+/**
+ * Узкий режим PUT: `{ patch: { newTeacherIds: [...] } }` меняет только draft.newTeacherIds.
+ * Допуск: владелец проекта / ключ API (как и при полной записи) либо тот, кто проходит
+ * canViewSharedVisitChecklistAnalytics, но только к своему или общему проекту (как чтение).
+ * Другие поля, название, updated_at и остальной черновик не затрагиваются.
+ */
+async function patchNewTeacherIds(pool, user, sessionUser, scope, pid, body) {
+  const patch = body.patch;
+  const keys = patch && typeof patch === 'object' && !Array.isArray(patch) ? Object.keys(patch) : [];
+  if (body.draft !== undefined || body.title !== undefined || keys.length !== 1 || keys[0] !== 'newTeacherIds') {
+    return json(400, { error: 'Bad request', message: 'Разрешено менять только newTeacherIds.' });
+  }
+  const check = await assertScope(pool, pid, scope, { readShared: isSharedVisitViewer(user, sessionUser) });
+  if (!check.ok) return json(check.code, { error: 'Not found' });
+  const r = await pool.query(`SELECT id, title, state_json FROM lesson_visit_projects WHERE id = $1`, [pid]);
+  if (!r.rows.length) return json(404, { error: 'Not found' });
+  const ids = sanitizeNewTeacherIds(patch.newTeacherIds, normalizeDraft(r.rows[0]).directory.teachers);
+  if (!ids) return json(400, { error: 'Bad request', message: 'newTeacherIds: нужен список ID учителей.' });
+  await pool.query(
+    `UPDATE lesson_visit_projects
+     SET state_json = jsonb_set(state_json, '{draft}', COALESCE(state_json->'draft', '{}'::jsonb) || jsonb_build_object('newTeacherIds', $2::jsonb), true)
+     WHERE id = $1`,
+    [pid, JSON.stringify(ids)],
+  );
+  return json(200, { ok: true, newTeacherIds: ids });
+}
+
 async function handlePutLessonVisitProject(pool, user, viaAdminKey, sessionUser, projectId, event) {
   const pid = Number(projectId);
   if (!Number.isFinite(pid)) return json(400, { error: 'Invalid id' });
@@ -395,10 +423,13 @@ async function handlePutLessonVisitProject(pool, user, viaAdminKey, sessionUser,
   if (denied) return denied;
   const scope = resolveProjectOwner(user, viaAdminKey, sessionUser);
   try {
+    const body = parseAllowedBody(event, ['title', 'draft', 'patch']);
+    if (body.patch !== undefined) {
+      return await patchNewTeacherIds(pool, user, sessionUser, scope, pid, body);
+    }
     const check = await assertScope(pool, pid, scope);
     if (!check.ok) return json(check.code, { error: 'Not found' });
 
-    const body = parseAllowedBody(event, ['title', 'draft']);
     const draft = body.draft && typeof body.draft === 'object' ? body.draft : null;
     if (!draft) return json(400, { error: 'draft required' });
 
@@ -629,7 +660,8 @@ async function handleGetPublicLessonVisitDirector(pool, tokenRaw) {
   try {
     const row = await loadProjectByDirectorToken(pool, tokenRaw);
     if (!row) return json(404, { error: 'Not found' });
-    const draft = normalizeDraft(row);
+    // Список новых учителей нужен только внутренней аналитике, по публичной ссылке его не отдаём.
+    const { newTeacherIds: _hidden, ...draft } = normalizeDraft(row);
     const responses = await listResponseRows(pool, row.id);
     return json(200, {
       project: { id: row.id, title: draft.title, updated_at: row.updated_at },

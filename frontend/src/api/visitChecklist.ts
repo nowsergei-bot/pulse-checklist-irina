@@ -80,6 +80,20 @@ export async function putLessonVisitProject(
   return { project: data.project, draft: data.draft };
 }
 
+/** Узкая запись: меняет только список «новых учителей» (ID справочника), остальной черновик не трогает. */
+export async function saveNewTeacherIds(projectId: number, newTeacherIds: string[]): Promise<string[]> {
+  const res = await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}`, {
+    method: 'PUT',
+    headers: adminHeaders(),
+    body: JSON.stringify({ patch: { newTeacherIds } }),
+  });
+  const data = await parseJson<{ ok?: boolean; newTeacherIds?: string[]; error?: string; message?: string }>(res);
+  if (res.status === 404 || res.status === 403)
+    throw new Error('Нет права сохранять список новых учителей. Обратитесь к владельцу проекта.');
+  if (!res.ok || !Array.isArray(data.newTeacherIds)) throw new Error(apiErrText(data, res.statusText));
+  return data.newTeacherIds;
+}
+
 export async function deleteLessonVisitProject(projectId: number): Promise<void> {
   const res = await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}`, {
     method: 'DELETE',

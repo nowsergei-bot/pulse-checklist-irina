@@ -15,13 +15,25 @@ import {
   ratingValue,
   scoreGroups,
   sortReportTeachers,
+  reportPersonKey,
   validLessonDate,
   type ReportVisit,
 } from "./visitChecklistReport.ts";
 import {
   UNIT_FILTER_NOT_DEFINED,
+  attentionTeachers,
+  blockPercents,
   coverageUnits,
+  departmentRanking,
+  directorPeriodRange,
+  directorWeeks,
+  growthZones,
+  lessonsGenitive,
+  newTeacherStats,
+  repeatText,
   visitCoverage,
+  weeklyArrows,
+  weeklyAverages,
 } from "./reportPresentation.ts";
 import type {
   LessonVisitChecklistConfig,
@@ -554,4 +566,274 @@ test("coverage lists units from the roster only", () => {
     "Подразделение B",
   ]);
   assert.deepEqual(coverageUnits(coverageDirectory, undefined), []);
+});
+
+/* ---------- Сводка для директора (обезличенные данные) ---------- */
+
+type Synthetic = {
+  id: number;
+  teacherKey: string;
+  date: string;
+  percent: number;
+  pairKey?: string;
+  full?: boolean;
+  fractions?: Record<string, number>;
+  answers?: Record<string, { answer: string; fraction: number }>;
+  na?: string[];
+};
+/** Наблюдение с заданной долей набранного по каждому пункту; 20 пунктов дают в сумме 100. */
+function synthetic(o: Synthetic): ReportVisit {
+  const items = Object.entries(DIRECT_MAXIMA).map(([code, max]) => {
+    const own = o.answers?.[code];
+    const fraction = own?.fraction ?? o.fractions?.[code] ?? o.percent / 100;
+    return {
+      code,
+      title: `Пункт ${code}`,
+      max,
+      value: o.na?.includes(code) ? null : max * fraction,
+      na: Boolean(o.na?.includes(code)),
+      reason: "",
+      answer: own?.answer ?? "",
+      sourceId: code,
+      optionIds: [],
+      ruleId: "",
+      version: "test",
+      status: "scored",
+      method: "form",
+    };
+  });
+  const max = items.filter((i) => !i.na).reduce((n, i) => n + i.max, 0);
+  const subtotal = items.reduce((n, i) => n + (i.value ?? 0), 0);
+  return {
+    id: o.id,
+    teacher: `Учитель ${o.teacherKey}`,
+    teacherKey: o.teacherKey,
+    department: "Кафедра A",
+    date: o.date,
+    subject: "",
+    className: "",
+    visitor: `Наблюдатель ${o.id}`,
+    format: "Наблюдение",
+    self: false,
+    rating: null,
+    ratingOriginal: "",
+    ratingMapped: "",
+    score: {
+      items,
+      subtotal,
+      max,
+      total: o.full === false ? null : subtotal,
+      missing: [],
+    },
+    feedback: "",
+    practice: "",
+    pairKey: o.pairKey ?? `lesson-${o.id}`,
+  } as unknown as ReportVisit;
+}
+const lessonsOf = (key: string, percents: number[], start = 1) =>
+  percents.map((percent, i) =>
+    synthetic({ id: start + i, teacherKey: key, date: "2026-09-15", percent }),
+  );
+const asTeacher = (key: string, rows: ReportVisit[], department = "Кафедра A") => ({
+  key,
+  name: `Учитель ${key}`,
+  department,
+  rows,
+});
+
+test("attention groups: A by average or by a lesson below 50, B otherwise, A+B is the support list", () => {
+  const teachers = [
+    asTeacher("t1", lessonsOf("t1", [80, 49.9], 10)), // урок ниже 50
+    asTeacher("t2", lessonsOf("t2", [69.9], 20)), // средний ниже 70
+    asTeacher("t3", lessonsOf("t3", [60, 90], 30)), // средний 75, урок ниже 70
+    asTeacher("t4", lessonsOf("t4", [70, 95], 40)), // ровно 70 не ниже 70
+    asTeacher("t5", lessonsOf("t5", [50, 100, 100], 50)), // ровно 50 не ниже 50
+    asTeacher("t6", lessonsOf("t6", [60, 80], 60)), // средний ровно 70 не ниже 70
+    asTeacher("t7", [synthetic({ id: 70, teacherKey: "t7", date: "2026-09-15", percent: 40, full: false })]),
+    asTeacher("t8", []),
+  ];
+  const result = attentionTeachers(teachers);
+  assert.deepEqual(
+    result.map((t) => [t.key, t.group]),
+    [
+      ["t1", "A"],
+      ["t2", "A"],
+      ["t6", "B"],
+      ["t3", "B"],
+      ["t5", "B"],
+    ],
+  );
+  const support = teachers
+    .filter((t) =>
+      lessonObservations(t.rows).some((v) => v.score.total != null && (v.score.total / v.score.max) * 100 < 70),
+    )
+    .map((t) => t.key)
+    .sort();
+  assert.deepEqual(result.map((t) => t.key).sort(), support);
+  assert.equal(result.some((t) => ["t4", "t7", "t8"].includes(t.key)), false);
+});
+
+test("attention repeatability wording", () => {
+  assert.equal(repeatText(1, 1), "единичный результат");
+  assert.equal(repeatText(2, 1), "ниже порога 1 из 2 уроков");
+  assert.equal(repeatText(21, 4), "ниже порога 4 из 21 урока");
+  assert.equal(repeatText(12, 3), "ниже порога 3 из 12 уроков");
+  assert.equal(lessonsGenitive(22), "22 уроков");
+  assert.equal(lessonsGenitive(11), "11 уроков");
+  const [one] = attentionTeachers([asTeacher("a", lessonsOf("a", [60], 1))]);
+  assert.equal(one.repeat, "единичный результат");
+  const [many] = attentionTeachers([asTeacher("b", lessonsOf("b", [60, 90, 65], 5))]);
+  assert.equal(many.repeat, "ниже порога 2 из 3 уроков");
+});
+
+test("director periods: week, last completed month, school year and weekly series", () => {
+  const week = { start: "2026-09-28", end: "2026-10-04", today: "2026-10-08" };
+  assert.deepEqual(directorPeriodRange("week", week), { from: "2026-09-28", to: "2026-10-04" });
+  assert.deepEqual(directorPeriodRange("month", week), { from: "2026-09-01", to: "2026-09-30" });
+  assert.deepEqual(directorPeriodRange("year", week), { from: "2026-09-01", to: "2026-10-08" });
+  assert.equal(directorPeriodRange("month", { ...week, today: "2026-09-20" }), null);
+  assert.deepEqual(
+    directorPeriodRange("month", { ...week, today: "2026-11-02" }),
+    { from: "2026-10-01", to: "2026-10-31" },
+  );
+  assert.deepEqual(
+    directorWeeks("week", { from: week.start, to: week.end }, week).map((w) => w.start),
+    ["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"],
+  );
+  const monthWeeks = directorWeeks("month", { from: "2026-09-01", to: "2026-09-30" }, week);
+  assert.deepEqual(monthWeeks.map((w) => w.start), ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"]);
+  const visits = [
+    synthetic({ id: 1, teacherKey: "a", date: "2026-09-02", percent: 60 }),
+    synthetic({ id: 2, teacherKey: "a", date: "2026-09-02", percent: 80 }),
+    synthetic({ id: 3, teacherKey: "b", date: "2026-09-02", percent: 70 }),
+    synthetic({ id: 4, teacherKey: "a", date: "2026-09-30", percent: 90 }),
+    synthetic({ id: 5, teacherKey: "a", date: "2026-10-01", percent: 10 }),
+  ];
+  const series = weeklyAverages(visits, monthWeeks, { from: "2026-09-01", to: "2026-09-30" });
+  assert.ok(Math.abs(series[0].value! - 70) < 1e-9); // учителя поровну: a=70, b=70
+  assert.equal(series[1].value, null);
+  assert.ok(Math.abs(series[4].value! - 90) < 1e-9); // 01.10 обрезано периодом
+  assert.equal(weeklyArrows(series), "70 → — → — → — → 90");
+  assert.equal(weeklyArrows([{ value: 69.4 }, { value: 72 }, { value: null }, { value: 75 }]), "69 → 72 → — → 75");
+});
+
+test("block percents: observations, then lessons, then teachers; n/a and preliminary lessons are skipped", () => {
+  const rows = [
+    // урок первого учителя: два наблюдения, блок 1 — 100% и 50% → 75%
+    synthetic({ id: 1, teacherKey: "a", date: "2026-09-15", percent: 80, pairKey: "L1", fractions: { "1.1": 1 } }),
+    synthetic({ id: 2, teacherKey: "a", date: "2026-09-15", percent: 80, pairKey: "L1", fractions: { "1.1": 0.5 } }),
+    // второй урок первого учителя — 25%
+    synthetic({ id: 3, teacherKey: "a", date: "2026-09-16", percent: 80, pairKey: "L2", fractions: { "1.1": 0.25 } }),
+    // второй учитель — 100%
+    synthetic({ id: 4, teacherKey: "b", date: "2026-09-16", percent: 80, fractions: { "1.1": 1 } }),
+    // предварительный урок не учитывается
+    synthetic({ id: 5, teacherKey: "b", date: "2026-09-17", percent: 0, full: false }),
+  ];
+  const blocks = blockPercents(rows);
+  assert.equal(blocks.length, 9);
+  // блок 1: пункты 1.1 (3 балла) и других нет; a: (75 + 25) / 2 = 50, b: 100 → (50 + 100) / 2
+  assert.ok(Math.abs(blocks[0].percent! - 75) < 1e-9);
+  assert.deepEqual(blocks.map((b) => b.understated), [false, false, false, false, true, false, false, false, false]);
+  const withNa = blockPercents([
+    synthetic({ id: 9, teacherKey: "c", date: "2026-09-15", percent: 50, na: ["3.8", "8.2"] }),
+  ]);
+  assert.ok(Math.abs(withNa[2].percent! - 50) < 1e-9); // «не применимо» не входит в максимум блока
+  assert.equal(withNa[7].percent, null); // в блоке не осталось применимых пунктов
+  assert.equal(blockPercents([]).every((b) => b.percent == null), true);
+});
+
+test("growth zones skip form-minimum items, take the three lowest and explain them from answers", () => {
+  const options = { "3.6": 'фронтальные задания "одно для всех"', "6.2": "Вовлечена только часть класса (сильные ученики, лидеры), большая часть остаётся пассивной" };
+  const make = (id: number, teacher: string, differentiated: boolean) =>
+    synthetic({
+      id,
+      teacherKey: teacher,
+      date: "2026-09-15",
+      percent: 90,
+      fractions: { "3.5": 0, "5.2": 0, "5.3": 0, "7.1": 0.3 },
+      answers: {
+        "3.6": differentiated
+          ? { answer: "дифференцированность заданий предусмотрена", fraction: 1 }
+          : { answer: options["3.6"], fraction: 0 },
+        "6.2": { answer: options["6.2"], fraction: 1 / 3 },
+      },
+    });
+  const rows = [make(1, "a", false), make(2, "b", false), make(3, "c", false), make(4, "d", true)];
+  const zones = growthZones(rows);
+  assert.equal(zones.length, 3);
+  assert.deepEqual(zones.map((z) => z.code), ["3.6", "7.1", "6.2"]);
+  assert.ok(zones.every((z) => !["3.5", "5.2", "5.3"].includes(z.code)));
+  assert.equal(zones[0].note, "в 75% чек-листов: задания одинаковые для всех");
+  assert.equal(zones[1].note, "");
+  assert.equal(zones[2].note, "в 100% чек-листов: вовлечена только часть класса");
+  assert.ok(zones[0].percent <= zones[1].percent);
+  assert.deepEqual(growthZones([]), []);
+  const multi = growthZones([
+    synthetic({
+      id: 20, teacherKey: "m", date: "2026-09-15", percent: 90,
+      answers: { "9.1": { answer: "общение уважительное; слушает ответы", fraction: 0.5 } },
+    }),
+    synthetic({ id: 21, teacherKey: "n", date: "2026-09-15", percent: 90 }),
+  ]).find((z) => z.code === "9.1");
+  assert.equal(multi?.note, "в 50% чек-листов балл по пункту ниже максимума");
+});
+
+test("department ranking goes from low to high average with A and B counts", () => {
+  const teachers = [
+    asTeacher("a", lessonsOf("a", [90], 1), "Кафедра A"),
+    asTeacher("b", lessonsOf("b", [60, 62], 5), "Кафедра B"),
+    asTeacher("c", lessonsOf("c", [75, 95], 9), "Кафедра B"),
+    asTeacher("d", [], "Кафедра C"),
+  ];
+  const attention = attentionTeachers(teachers);
+  const ranking = departmentRanking(teachers, attention);
+  assert.deepEqual(ranking.map((r) => r.department), ["Кафедра B", "Кафедра A"]);
+  assert.deepEqual(
+    ranking.map((r) => [r.teachers, r.lessons, r.a, r.b]),
+    [[2, 4, 1, 0], [1, 1, 0, 0]],
+  );
+  assert.ok(ranking[0].average! < ranking[1].average!);
+});
+
+test("new teachers: visited, averages, lessons below 70 and not visited come from the stored id list", () => {
+  const dir: LessonVisitDirectory = {
+    departments: [{ id: "d1", name: "Кафедра A" }, { id: "dept_admin", name: "Администрация" }],
+    teachers: [
+      { id: "n1", name: "Новый Первый", departmentId: "d1" },
+      { id: "n2", name: "Новый Второй", departmentId: "d1" },
+      { id: "n3", name: "Новый Третий", departmentId: "d1" },
+      { id: "o1", name: "Опытный Первый", departmentId: "d1" },
+      { id: "o2", name: "Опытный Второй", departmentId: "dept_admin" },
+    ],
+  };
+  const people = dir.teachers.map((t) => ({
+    key: reportPersonKey(t.name),
+    name: t.name,
+    department: "Кафедра A",
+  }));
+  const [n1, n2, n3, o1] = people;
+  const rowsFor = (p: { key: string }, percents: number[], start: number) =>
+    percents.map((percent, i) => synthetic({ id: start + i, teacherKey: p.key, date: "2026-09-15", percent }));
+  const withRows = [
+    { ...n1, rows: rowsFor(n1, [60, 90], 1) },
+    { ...n2, rows: rowsFor(n2, [80], 5) },
+    { ...n3, rows: [] as ReportVisit[] },
+    { ...o1, rows: rowsFor(o1, [90], 9) },
+  ];
+  const teachers = withRows.map((t) => ({ ...t, visits: t.rows }));
+  const rows = withRows.flatMap((t) => t.rows);
+  const attention = attentionTeachers(withRows);
+  const stats = newTeacherStats(teachers, dir, ["n1", "n2", "n3", "missing"], rows, attention, {
+    from: "2026-09-01",
+    to: "2026-09-30",
+  });
+  assert.equal(stats.configured, true);
+  assert.deepEqual([stats.total, stats.visited, stats.notVisited.length], [3, 2, 1]);
+  assert.equal(stats.notVisited[0].name, "Новый Третий");
+  assert.ok(Math.abs(stats.averageNew! - 77.5) < 1e-9);
+  assert.ok(Math.abs(stats.averageOthers! - 90) < 1e-9);
+  assert.equal(stats.below70, 1);
+  const empty = newTeacherStats(teachers, dir, undefined, rows, attention);
+  assert.equal(empty.configured, false);
+  assert.equal(empty.total, 0);
 });

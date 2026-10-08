@@ -79,6 +79,8 @@ export interface LessonVisitDraft {
   /** Связанный проект «Аналитика уроков» для PDF, срезов и ИИ */
   lessonAnalyticsProjectId?: number | null;
   lessonAnalyticsDirectorToken?: string | null;
+  /** ID учителей справочника (teacher_N), которых администратор отметил как новых. Без ФИО. */
+  newTeacherIds?: string[];
 }
 
 export type LessonVisitProjectRow = {

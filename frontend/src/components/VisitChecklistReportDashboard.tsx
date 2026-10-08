@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   LessonVisitChecklistConfig,
   LessonVisitDirectory,
@@ -36,9 +36,27 @@ import {
   teacherResultGroups,
   UNIT_FILTER_NOT_DEFINED,
   UNIT_NOT_DEFINED,
+  ATTENTION_GROUP_NAMES,
+  COVERAGE_EXCLUDED_DEPARTMENT_IDS,
+  DIRECTOR_PERIODS,
+  attentionTeachers,
+  blockPercents,
   coverageUnits,
+  departmentRanking,
+  directorPeriodRange,
+  directorWeeks,
+  growthZones,
+  newTeacherStats,
   visitCoverage,
+  weeklyArrows,
+  weeklyAverages,
+  type DirectorPeriod,
 } from "../lib/lessonVisitChecklist/reportPresentation";
+import {
+  VCD_PDF_HIDE_CLASS,
+  downloadVisitChecklistPdf,
+} from "../lib/lessonVisitChecklist/visitChecklistCloudPdf";
+import { PDF_CARD_KEEP_TOGETHER_CLASS } from "../lib/pdf/captureElementToPdfA4";
 import {
   getLessonVisitSelfLinks,
   saveLessonVisitSelfLink,
@@ -52,6 +70,14 @@ type Props = {
   directory: LessonVisitDirectory;
   /** ID учителя анкеты → подразделения из справочника сотрудников. Без него подразделения не показываются. */
   staffUnits?: Record<string, string[]>;
+  /** Страница директора включает экран «Сводка для директора» (?screen=summary). */
+  directorScreen?: boolean;
+  /** ID учителей справочника, отмеченных администратором как новые. */
+  newTeacherIds?: string[];
+  /** Узкое сохранение списка новых учителей; без него список только читается. */
+  onSaveNewTeachers?: (ids: string[]) => Promise<string[]>;
+  /** Адрес общей «Сводки» для ссылок из цифр; null, если у пользователя нет к ней доступа. */
+  analyticsPath?: string | null;
   now?: Date;
 };
 const dateText = (date: string) =>
@@ -216,12 +242,585 @@ function LevelChart({
   );
 }
 
+type DirectorProps = {
+  report: ReturnType<typeof withSelfAnalysisLinks>;
+  directory: LessonVisitDirectory;
+  staffUnits?: Record<string, string[]>;
+  newTeacherIds?: string[];
+  onSaveNewTeachers?: (ids: string[]) => Promise<string[]>;
+  analyticsPath?: string | null;
+};
+const generatedText = (date: Date) =>
+  new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+function PercentBar({
+  percent,
+  label,
+}: {
+  percent: number | null;
+  label: string;
+}) {
+  const index = levelIndex(percent);
+  return (
+    <div className="vcr-bar" role="img" aria-label={label}>
+      <div
+        className="vcr-bar__fill"
+        style={{
+          width: `${Math.max(0, Math.min(100, percent ?? 0))}%`,
+          backgroundColor: index >= 0 ? LEVEL_COLORS[index] : "#c8d3cf",
+        }}
+      />
+    </div>
+  );
+}
+function DirectorSummary({
+  report,
+  directory,
+  staffUnits,
+  newTeacherIds,
+  onSaveNewTeachers,
+  analyticsPath,
+}: DirectorProps) {
+  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const pdfRef = useRef<HTMLDivElement>(null);
+  const [generatedAt, setGeneratedAt] = useState(() => new Date());
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [savedIds, setSavedIds] = useState<string[] | null>(null);
+  const listedIds = savedIds ?? newTeacherIds;
+  const period: DirectorPeriod =
+    DIRECTOR_PERIODS.find((p) => p.id === params.get("directorPeriod"))?.id ??
+    "week";
+  const range = directorPeriodRange(period, report.week);
+  const data = useMemo(() => {
+    const rows = range
+      ? report.visits.filter((v) => v.date >= range.from && v.date <= range.to)
+      : [];
+    const teachers = report.teachers.map((t) => ({
+      ...t,
+      rows: rows.filter((v) => v.teacherKey === t.key),
+    }));
+    const attention = attentionTeachers(teachers);
+    const weeks = directorWeeks(
+      period,
+      range ?? { from: report.week.start, to: report.week.end },
+      report.week,
+    );
+    return {
+      rows,
+      lessons: lessonObservations(rows),
+      average: schoolAverage(rows),
+      series: weeklyAverages(report.visits, weeks, period === "week" ? undefined : range ?? undefined),
+      attention,
+      coverage: visitCoverage(report.teachers, directory, {
+        from: range?.from,
+        to: range?.to,
+        staffUnits,
+      }),
+      blocks: blockPercents(rows),
+      zones: growthZones(rows),
+      departments: departmentRanking(teachers, attention),
+      news: newTeacherStats(report.teachers, directory, listedIds, rows, attention, {
+        from: range?.from,
+        to: range?.to,
+      }),
+    };
+  }, [report, directory, staffUnits, listedIds, period, range?.from, range?.to]);
+  const groupA = data.attention.filter((t) => t.group === "A");
+  const groupB = data.attention.filter((t) => t.group === "B");
+  const href = (view: string) =>
+    analyticsPath && range
+      ? `${analyticsPath}?reportPeriod=custom&reportFrom=${range.from}&reportTo=${range.to}&reportView=${view}`
+      : null;
+  const linked = (view: string, children: React.ReactNode) => {
+    const to = href(view);
+    return to ? (
+      <Link className={`vcr-link ${VCD_PDF_HIDE_CLASS}`} to={to}>
+        {children}
+      </Link>
+    ) : (
+      <>{children}</>
+    );
+  };
+  const selectable = directory.teachers
+    .filter((t) => !COVERAGE_EXCLUDED_DEPARTMENT_IDS.includes(t.departmentId))
+    .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  const matching = selectable.filter(
+    (t) =>
+      !query ||
+      t.name.toLocaleLowerCase("ru").includes(query.toLocaleLowerCase("ru")),
+  );
+  const shown = matching.slice(0, 40);
+  const nameById = new Map(directory.teachers.map((t) => [t.id, t.name]));
+  async function downloadPdf() {
+    if (!pdfRef.current || !range) return;
+    setPdfBusy(true);
+    setPdfError("");
+    setGeneratedAt(new Date());
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 60));
+      await downloadVisitChecklistPdf(
+        pdfRef.current,
+        `Сводка_для_директора_${range.from}_${range.to}.pdf`,
+      );
+    } catch (error) {
+      setPdfError(
+        error instanceof Error ? error.message : "Не удалось сформировать PDF",
+      );
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+  async function exportDirectorExcel() {
+    if (!range) return;
+    setPdfError("");
+    try {
+      const XLSX = await import("xlsx");
+      const book = XLSX.utils.book_new();
+      const sheet = (name: string, rows: Record<string, unknown>[]) =>
+        XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows), name);
+      sheet("Сводка", [
+        { Показатель: "Период", Значение: `${dateText(range.from)} — ${dateText(range.to)}` },
+        { Показатель: "Средний итог гимназии", Значение: data.average },
+        { Показатель: "Итоги по неделям", Значение: weeklyArrows(data.series) },
+        { Показатель: "Посещено учителей", Значение: data.coverage.visited },
+        { Показатель: "Всего учителей в охвате", Значение: data.coverage.total },
+        { Показатель: "Посещено уроков", Значение: data.lessons.length },
+        { Показатель: "Наблюдений", Значение: data.rows.filter((v) => !v.self).length },
+        { Показатель: ATTENTION_GROUP_NAMES.A, Значение: groupA.length },
+        { Показатель: ATTENTION_GROUP_NAMES.B, Значение: groupB.length },
+      ]);
+      sheet(
+        "Блоки",
+        data.blocks.map((b) => ({ Блок: b.name, "% от максимума": b.percent, Занижен: b.understated ? "да" : "" })),
+      );
+      sheet(
+        "Кафедры",
+        data.departments.map((d) => ({
+          Кафедра: d.department,
+          Учителей: d.teachers,
+          Уроков: d.lessons,
+          "Средний итог": d.average,
+          [ATTENTION_GROUP_NAMES.A]: d.a,
+          [ATTENTION_GROUP_NAMES.B]: d.b,
+        })),
+      );
+      sheet(
+        "Зоны роста",
+        data.zones.map((z) => ({ Пункт: z.code, Название: z.title, "% от максимума": z.percent, Пояснение: z.note })),
+      );
+      sheet(
+        "Группы А и Б",
+        data.attention.map((t) => ({
+          Группа: ATTENTION_GROUP_NAMES[t.group],
+          Учитель: t.name,
+          Кафедра: t.department,
+          "Средний итог": t.average,
+          "Полных уроков": t.fullLessons,
+          "Ниже 70": t.below70,
+          Повторяемость: t.repeat,
+        })),
+      );
+      sheet("Новые учителя", [
+        { Показатель: "Список задан", Значение: news.configured ? "да" : "нет" },
+        { Показатель: "Посещено", Значение: news.visited },
+        { Показатель: "Всего", Значение: news.total },
+        { Показатель: "Средний итог новых", Значение: news.averageNew },
+        { Показатель: "Средний итог остальных", Значение: news.averageOthers },
+        { Показатель: "С уроками ниже 70", Значение: news.below70 },
+        { Показатель: "Не посещены", Значение: news.notVisited.map((t) => t.name).join(", ") },
+      ]);
+      XLSX.writeFile(book, `Сводка_для_директора_${range.from}_${range.to}.xlsx`);
+    } catch (error) {
+      setPdfError(error instanceof Error ? error.message : "Не удалось сформировать Excel");
+    }
+  }
+  async function saveNew() {
+    if (!onSaveNewTeachers) return;
+    setSaveBusy(true);
+    setSaveMessage("");
+    try {
+      setSavedIds(await onSaveNewTeachers(chosen));
+      setSaveMessage("Сохранено");
+      setEditing(false);
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error ? error.message : "Не удалось сохранить список",
+      );
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+  const keep = `vcr-panel ${PDF_CARD_KEEP_TOGETHER_CLASS}`;
+  const { news } = data;
+  return (
+    <div className="vcr-dashboard vcr-director" ref={pdfRef}>
+      <header className={`vcr-header ${PDF_CARD_KEEP_TOGETHER_CLASS}`}>
+        <div>
+          <span className="vcr-eyebrow">Кабинет директора</span>
+          <h2>Сводка для директора</h2>
+          <p>
+            {range
+              ? `${dateText(range.from)} — ${dateText(range.to)}`
+              : "Период ещё не завершён"}{" "}
+            · сформировано {generatedText(generatedAt)}
+          </p>
+        </div>
+        <div className={`vcr-director__controls ${VCD_PDF_HIDE_CLASS}`}>
+          <div className="vcr-segment" role="group" aria-label="Период">
+            {DIRECTOR_PERIODS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                aria-pressed={p.id === period}
+                onClick={() => {
+                  const next = new URLSearchParams(params);
+                  if (p.id === "week") next.delete("directorPeriod");
+                  else next.set("directorPeriod", p.id);
+                  setParams(next);
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button
+            className="btn"
+            type="button"
+            disabled={pdfBusy || !range}
+            onClick={() => void downloadPdf()}
+          >
+            {pdfBusy ? "Готовим PDF…" : "Скачать PDF"}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            disabled={!range}
+            onClick={() => void exportDirectorExcel()}
+          >
+            Скачать Excel
+          </button>
+        </div>
+      </header>
+      {pdfError && <p role="alert">{pdfError}</p>}
+      {!range ? (
+        <section className="vcr-panel">
+          <p className="vcr-empty">
+            Календарный месяц после начала учебного года ещё не завершён. Выберите «Неделя» или «Учебный год».
+          </p>
+        </section>
+      ) : (
+        <>
+          <div className="vcr-metrics">
+            <div className="vcr-metric">
+              <strong>
+                {data.average == null
+                  ? "Нет полных итогов"
+                  : `${displayScore(data.average)} из 100`}
+              </strong>
+              <span>Средний итог гимназии</span>
+              <Badge percent={data.average} />
+              <span className="vcr-arrows" title="Недели с понедельника">
+                {weeklyArrows(data.series)}
+              </span>
+              <small>
+                {data.series.map((w) => w.start.slice(8, 10) + "." + w.start.slice(5, 7)).join(" · ")}
+              </small>
+            </div>
+            <div className="vcr-metric">
+              <strong>
+                {data.coverage.visited} из {data.coverage.total}
+              </strong>
+              <span>Посещено учителей</span>
+              {linked("not_visited", "Кто не посещён →")}
+            </div>
+            <div className="vcr-metric">
+              <strong>{data.lessons.length}</strong>
+              <span>Посещено уроков</span>
+              {linked("lessons", "Все уроки →")}
+            </div>
+            <div className="vcr-metric">
+              <strong>{data.rows.filter((v) => !v.self).length}</strong>
+              <span>Наблюдений</span>
+            </div>
+            <div className="vcr-metric">
+              <strong>{groupA.length}</strong>
+              <span>Требуют внимания</span>
+              <span>
+                ещё {groupB.length}: отдельные уроки ниже 70
+              </span>
+              {linked("support", "Список →")}
+            </div>
+          </div>
+          <div className={PDF_CARD_KEEP_TOGETHER_CLASS}>
+            <LevelChart
+              title="Уроки по уровням"
+              rows={data.rows}
+              dates={`${dateText(range.from)} — ${dateText(range.to)}`}
+              onOpen={(label) => {
+                const to = href("lessons");
+                if (to) navigate(`${to}&reportLevel=${encodeURIComponent(label)}`);
+              }}
+            />
+          </div>
+          <section className={keep}>
+            <h3>Блоки чек-листа</h3>
+            <p className="vcr-note">% от максимума по гимназии, цвет по уровню</p>
+            <div className="vcr-bars">
+              {data.blocks.map((block) => (
+                <div className="vcr-bars__row" key={block.name}>
+                  <div className="vcr-bars__name">
+                    {block.name}
+                    {block.understated && <sup>*</sup>}
+                    {block.understated && (
+                      <small>
+                        * занижен пунктами, которые пока оцениваются по минимальному уровню
+                      </small>
+                    )}
+                  </div>
+                  <PercentBar
+                    percent={block.percent}
+                    label={`${block.name}: ${block.percent == null ? "нет данных" : displayScore(block.percent) + "%"}`}
+                  />
+                  <strong>
+                    {block.percent == null ? "—" : `${displayScore(block.percent)}%`}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className={keep}>
+            <h3>Кафедры</h3>
+            {data.departments.length ? (
+              <Table
+                headers={[
+                  "Кафедра",
+                  "Учителей",
+                  "Уроков",
+                  "Средний итог",
+                  ATTENTION_GROUP_NAMES.A,
+                  ATTENTION_GROUP_NAMES.B,
+                ]}
+              >
+                {data.departments.map((d) => (
+                  <tr key={d.department}>
+                    <th scope="row">{d.department}</th>
+                    <td>{d.teachers}</td>
+                    <td>{d.lessons}</td>
+                    <td>
+                      {d.average == null ? (
+                        "—"
+                      ) : (
+                        <>
+                          {displayScore(d.average)} из 100
+                          <Badge percent={d.average} />
+                        </>
+                      )}
+                    </td>
+                    <td>{d.a}</td>
+                    <td>{d.b}</td>
+                  </tr>
+                ))}
+              </Table>
+            ) : (
+              <Empty />
+            )}
+          </section>
+          <section className={keep}>
+            <h3>Главные зоны роста</h3>
+            {data.zones.length ? (
+              <div className="vcr-bars">
+                {data.zones.map((zone) => (
+                  <div className="vcr-bars__row" key={zone.code}>
+                    <div className="vcr-bars__name">
+                      {zone.code} {zone.title}
+                      {zone.note && <small>{zone.note}</small>}
+                    </div>
+                    <PercentBar
+                      percent={zone.percent}
+                      label={`${zone.code} ${zone.title}: ${displayScore(zone.percent)}%`}
+                    />
+                    <strong>{displayScore(zone.percent)}%</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty />
+            )}
+          </section>
+          <section className={keep}>
+            <h3>Требуют внимания: {groupA.length} учителей</h3>
+            {groupA.length ? (
+              <Table
+                headers={["Учитель", "Кафедра", "Средний итог", "Повторяемость"]}
+              >
+                {groupA.slice(0, 5).map((t) => (
+                  <tr key={t.key}>
+                    <td>{shortName(t.name)}</td>
+                    <td>{t.department}</td>
+                    <td>
+                      {t.average != null && (
+                        <>
+                          {displayScore(t.average)} из 100
+                          <Badge percent={t.average} />
+                        </>
+                      )}
+                    </td>
+                    <td>{t.repeat}</td>
+                  </tr>
+                ))}
+              </Table>
+            ) : (
+              <Empty />
+            )}
+            {linked(
+              "support",
+              `Все ${groupA.length} и ещё ${groupB.length} с отдельными уроками ниже 70 →`,
+            )}
+          </section>
+          <section className={keep}>
+            <h3>Новые учителя</h3>
+            {news.configured ? (
+              <>
+                <p>
+                  Посещено {news.visited} из {news.total}
+                </p>
+                <p>
+                  Средний итог новых:{" "}
+                  {news.averageNew == null ? (
+                    "нет полных итогов"
+                  ) : (
+                    <>
+                      {displayScore(news.averageNew)} из 100
+                      <Badge percent={news.averageNew} />
+                    </>
+                  )}
+                  {" · "}остальных:{" "}
+                  {news.averageOthers == null ? (
+                    "нет полных итогов"
+                  ) : (
+                    <>
+                      {displayScore(news.averageOthers)} из 100
+                      <Badge percent={news.averageOthers} />
+                    </>
+                  )}
+                </p>
+                <p>С уроками ниже 70: {news.below70}</p>
+                <p>
+                  Не посещены:{" "}
+                  {news.notVisited.length
+                    ? news.notVisited.map((t) => shortName(t.name)).join(", ")
+                    : "все посещены"}
+                </p>
+              </>
+            ) : (
+              <p className="vcr-empty">Список новых учителей не задан.</p>
+            )}
+            {onSaveNewTeachers && (
+              <div className={VCD_PDF_HIDE_CLASS}>
+                {!editing ? (
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      setChosen([...(listedIds || [])]);
+                      setSaveMessage("");
+                      setEditing(true);
+                    }}
+                  >
+                    Изменить список
+                  </button>
+                ) : (
+                  <div className="vcr-editor">
+                    <label>
+                      Поиск по ФИО{" "}
+                      <input
+                        type="search"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                    </label>
+                    <ul className="vcr-editor__list">
+                      {shown.map((t) => (
+                        <li key={t.id}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={chosen.includes(t.id)}
+                              onChange={(e) =>
+                                setChosen(
+                                  e.target.checked
+                                    ? [...chosen, t.id]
+                                    : chosen.filter((id) => id !== t.id),
+                                )
+                              }
+                            />{" "}
+                            {t.name}
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                    {matching.length > shown.length && (
+                      <small>Показаны первые 40, уточните поиск.</small>
+                    )}
+                    <p>
+                      Выбрано: {chosen.length}
+                      {chosen.length > 0 &&
+                        ` · ${chosen
+                          .map((id) => shortName(nameById.get(id) || ""))
+                          .filter(Boolean)
+                          .join(", ")}`}
+                    </p>
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={saveBusy}
+                      onClick={() => void saveNew()}
+                    >
+                      {saveBusy ? "Сохраняем…" : "Сохранить"}
+                    </button>{" "}
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={saveBusy}
+                      onClick={() => setEditing(false)}
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                )}
+                {saveMessage && <p role="status">{saveMessage}</p>}
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function VisitChecklistReportDashboard({
   responses,
   projectId,
   checklist,
   directory,
   staffUnits,
+  directorScreen,
+  newTeacherIds,
+  onSaveNewTeachers,
+  analyticsPath,
   now,
 }: Props) {
   const [params, setParams] = useSearchParams();
@@ -356,13 +955,8 @@ export default function VisitChecklistReportDashboard({
   const teacherResultRows = resultGroups.flatMap((group) =>
     group.rows.map((row) => ({ ...row, groupKey: group.key })),
   );
-  const support = teachers
-    .filter((t) =>
-      lessonObservations(t.rows).some(
-        (v) => scorePercent(v) != null && scorePercent(v)! < 70,
-      ),
-    )
-    .sort((a, b) => (a.average ?? Infinity) - (b.average ?? Infinity));
+  // Нужна методическая поддержка = «Требуют внимания» (А) + «Есть уроки ниже 70» (Б).
+  const support = attentionTeachers(teachers);
   const allLessonsForLinks = lessonObservations(report.visits);
   const selfMatches = selfMatchReport(report.visits);
   const unlinked = selfMatches
@@ -561,51 +1155,61 @@ export default function VisitChecklistReportDashboard({
         "Учитель",
         "Кафедра",
         "Средний итог",
+        "Повторяемость",
         "Уроки, требующие поддержки",
       ]}
     >
-      {list.map((t) => (
-        <tr key={t.key}>
-          <td>
-            <button
-              className="vcr-link"
-              onClick={() =>
-                update({ reportTeacher: t.key, reportLesson: null })
-              }
-            >
-              {shortName(t.name)}
-            </button>
-          </td>
-          <td>{t.department}</td>
-          <td>
-            {t.average != null && (
-              <>
-                {displayScore(t.average)} из 100
-                <Badge percent={t.average} />
-              </>
-            )}
-          </td>
-          <td>
-            {lessonObservations(t.rows)
-              .filter((v) => scorePercent(v) != null && scorePercent(v)! < 70)
-              .slice(0, 1)
-              .map((v) => (
-                <p key={v.id}>{lessonLink(v)}</p>
-              ))}
-            {lessonObservations(t.rows).filter(
-              (v) => scorePercent(v) != null && scorePercent(v)! < 70,
-            ).length > 1 && (
+      {list.map((t, index) => (
+        <Fragment key={t.key}>
+          {(index === 0 || list[index - 1].group !== t.group) && (
+            <tr className="vcr-group-row">
+              <th colSpan={5} scope="colgroup">
+                {ATTENTION_GROUP_NAMES[t.group]} ·{" "}
+                {support.filter((s) => s.group === t.group).length}
+              </th>
+            </tr>
+          )}
+          <tr>
+            <td>
               <button
                 className="vcr-link"
                 onClick={() =>
                   update({ reportTeacher: t.key, reportLesson: null })
                 }
               >
-                Все уроки учителя →
+                {shortName(t.name)}
               </button>
-            )}
-          </td>
-        </tr>
+            </td>
+            <td>{t.department}</td>
+            <td>
+              {t.average != null && (
+                <>
+                  {displayScore(t.average)} из 100
+                  <Badge percent={t.average} />
+                </>
+              )}
+            </td>
+            <td>{t.repeat}</td>
+            <td>
+              {lessonObservations(t.rows)
+                .filter((v) => scorePercent(v) != null && scorePercent(v)! < 70)
+                .slice(0, 1)
+                .map((v) => (
+                  <p key={v.id}>{lessonLink(v)}</p>
+                ))}
+              {t.below70 > 1 && (
+                <button
+                  className="vcr-link"
+                  onClick={() =>
+                    update({ reportTeacher: t.key, reportLesson: null })
+                  }
+                >
+                  Все уроки учителя →
+                </button>
+              )}
+            </td>
+          </tr>
+        </Fragment>
       ))}
     </Table>
   );
@@ -788,6 +1392,8 @@ export default function VisitChecklistReportDashboard({
           Учитель: t.name,
           Кафедра: t.department,
           Среднее: t.average,
+          Группа: ATTENTION_GROUP_NAMES[t.group],
+          Повторяемость: t.repeat,
         })),
       );
       sheet(
@@ -859,6 +1465,17 @@ export default function VisitChecklistReportDashboard({
       );
     }
   }
+  if (directorScreen && params.get("screen") === "summary")
+    return (
+      <DirectorSummary
+        report={report}
+        directory={directory}
+        staffUnits={staffUnits}
+        newTeacherIds={newTeacherIds}
+        onSaveNewTeachers={onSaveNewTeachers}
+        analyticsPath={analyticsPath}
+      />
+    );
   return (
     <div className="vcr-dashboard">
       <header className="vcr-header">
