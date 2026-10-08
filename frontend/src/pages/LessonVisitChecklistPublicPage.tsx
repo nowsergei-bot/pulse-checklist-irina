@@ -497,6 +497,9 @@ function GeneralFieldInput({
   invalid?: boolean;
   onChange: (patch: Record<string, string>) => void;
 }) {
+  const [manualSubject, setManualSubject] = useState(false);
+  const isCustomSubject = field.id === 'subject' && Boolean(value) && !field.options?.includes(value);
+  const showSubjectInput = field.id === 'subject' && (manualSubject || isCustomSubject);
   const personKind = isVisitChecklistPersonField(field);
   const chairDepartments = visitChecklistChairDepartments(directory);
   const teacherGroups = visitChecklistObservedTeacherGroups(directory);
@@ -546,19 +549,58 @@ function GeneralFieldInput({
           })}
         </div>
       ) : field.type === 'select' && field.options ? (
-        <select
-          className="field"
-          value={value}
-          required={field.required}
-          onChange={(e) => onChange({ [field.id]: e.target.value })}
-        >
-          <option value="">— выберите предмет —</option>
-          {field.options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
+        <>
+          <select
+            className="field"
+            value={value}
+            required={field.required}
+            aria-label={field.label}
+            onChange={(e) => {
+              setManualSubject(false);
+              onChange({ [field.id]: e.target.value });
+            }}
+          >
+            <option value="">— выберите предмет —</option>
+            {field.options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+            {isCustomSubject && <option value={value}>{value}</option>}
+          </select>
+          {field.id === 'subject' && (
+            <>
+              <button
+                type="button"
+                className="public-choice-btn"
+                style={{ marginTop: '0.5rem' }}
+                aria-expanded={showSubjectInput}
+                aria-controls="custom-subject"
+                onClick={() => {
+                  setManualSubject(!showSubjectInput);
+                  onChange({ [field.id]: '' });
+                }}
+              >
+                {showSubjectInput ? 'Выбрать из списка' : 'Добавить СВОЁ'}
+              </button>
+              {showSubjectInput && (
+                <input
+                  id="custom-subject"
+                  className="field"
+                  style={{ marginTop: '0.5rem' }}
+                  type="text"
+                  autoFocus
+                  aria-label="Свой предмет"
+                  placeholder="Введите название предмета"
+                  value={value}
+                  required={field.required}
+                  onChange={(e) => onChange({ [field.id]: e.target.value })}
+                  onBlur={() => onChange({ [field.id]: value.trim() })}
+                />
+              )}
+            </>
+          )}
+        </>
       ) : field.type === 'department' ? (
         <select
           className="field"
