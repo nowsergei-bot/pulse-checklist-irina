@@ -32,6 +32,7 @@ import {
   newTeacherStats,
   repeatText,
   visitCoverage,
+  niceAxis,
   weeklyArrows,
   weeklyAverages,
 } from "./reportPresentation.ts";
@@ -701,20 +702,35 @@ test("director periods: week, last completed month, school year and weekly serie
     ["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"],
   );
   const monthWeeks = directorWeeks("month", { from: "2026-09-01", to: "2026-09-30" }, week);
-  assert.deepEqual(monthWeeks.map((w) => w.start), ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"]);
+  // неделя, начавшаяся до 01.09, не показывается
+  assert.deepEqual(monthWeeks.map((w) => w.start), ["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"]);
   const visits = [
-    synthetic({ id: 1, teacherKey: "a", date: "2026-09-02", percent: 60 }),
-    synthetic({ id: 2, teacherKey: "a", date: "2026-09-02", percent: 80 }),
-    synthetic({ id: 3, teacherKey: "b", date: "2026-09-02", percent: 70 }),
+    synthetic({ id: 1, teacherKey: "a", date: "2026-09-08", percent: 60 }),
+    synthetic({ id: 2, teacherKey: "a", date: "2026-09-08", percent: 80 }),
+    synthetic({ id: 3, teacherKey: "b", date: "2026-09-08", percent: 70 }),
     synthetic({ id: 4, teacherKey: "a", date: "2026-09-30", percent: 90 }),
     synthetic({ id: 5, teacherKey: "a", date: "2026-10-01", percent: 10 }),
   ];
   const series = weeklyAverages(visits, monthWeeks, { from: "2026-09-01", to: "2026-09-30" });
   assert.ok(Math.abs(series[0].value! - 70) < 1e-9); // учителя поровну: a=70, b=70
   assert.equal(series[1].value, null);
-  assert.ok(Math.abs(series[4].value! - 90) < 1e-9); // 01.10 обрезано периодом
-  assert.equal(weeklyArrows(series), "70 → — → — → — → 90");
-  assert.equal(weeklyArrows([{ value: 69.4 }, { value: 72 }, { value: null }, { value: 75 }]), "69 → 72 → — → 75");
+  assert.ok(Math.abs(series[3].value! - 90) < 1e-9); // 01.10 обрезано периодом
+  assert.equal(weeklyArrows(series), "07.09: 70 → 14.09: нет данных → 21.09: нет данных → 28.09: 90");
+  assert.equal(
+    weeklyArrows([
+      { start: "2026-09-07", value: 72 },
+      { start: "2026-09-14", value: 69.9 },
+    ]),
+    "07.09: 72 → 14.09: 69,9",
+  );
+});
+
+test("chart axis uses round ticks", () => {
+  assert.deepEqual(niceAxis(38), { top: 40, ticks: [0, 10, 20, 30, 40] });
+  assert.deepEqual(niceAxis(3), { top: 3, ticks: [0, 1, 2, 3] });
+  assert.deepEqual(niceAxis(7), { top: 8, ticks: [0, 2, 4, 6, 8] });
+  assert.deepEqual(niceAxis(0), { top: 1, ticks: [0, 1] });
+  assert.deepEqual(niceAxis(112), { top: 125, ticks: [0, 25, 50, 75, 100, 125] });
 });
 
 test("block percents: observations, then lessons, then teachers; n/a and preliminary lessons are skipped", () => {
@@ -771,11 +787,11 @@ test("growth zones skip form-minimum items, take the three lowest and explain th
   const multi = growthZones([
     synthetic({
       id: 20, teacherKey: "m", date: "2026-09-15", percent: 90,
-      answers: { "9.1": { answer: "общение уважительное; слушает ответы", fraction: 0.5 } },
+      answers: { "9.1": { answer: "Общение строится в уважительном, доброжелательном и деловом тоне", fraction: 0.5 } },
     }),
     synthetic({ id: 21, teacherKey: "n", date: "2026-09-15", percent: 90 }),
   ]).find((z) => z.code === "9.1");
-  assert.equal(multi?.note, "в 50% чек-листов балл по пункту ниже максимума");
+  assert.equal(multi?.note, "чаще всего не отмечено: «учитель внимательно выслушивает ответы» (в 50% чек-листов)");
 });
 
 test("department ranking goes from low to high average with A and B counts", () => {

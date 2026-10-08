@@ -574,7 +574,7 @@ export function directorPeriodRange(
   return { from: from < REPORT_START ? REPORT_START : from, to };
 }
 
-/** Недели (пн–вс), по которым стрелками показывается динамика итога. */
+/** Недели (пн–вс), по которым стрелками показывается динамика итога; неделя, начавшаяся до начала отчёта, не показывается. */
 export function directorWeeks(
   period: DirectorPeriod,
   range: { from: string; to: string },
@@ -585,7 +585,7 @@ export function directorWeeks(
   const last = period === "week" ? week.start : mondayOf(range.to);
   for (let start = first; start <= last; start = shiftDate(start, 7)) {
     const end = shiftDate(start, 6);
-    if (end >= REPORT_START) weeks.push({ start, end });
+    if (start >= REPORT_START) weeks.push({ start, end });
   }
   return weeks;
 }
@@ -606,12 +606,31 @@ export function weeklyAverages(
     };
   });
 }
+/** «07.09: 72 → 14.09: 69,9»: пары «понедельник: итог» через стрелку. */
 export function weeklyArrows(
-  series: { value: number | null }[],
+  series: { start: string; value: number | null }[],
 ): string {
   return series
-    .map((w) => (w.value == null ? "—" : displayScore(w.value)))
+    .map(
+      (w) =>
+        `${w.start.slice(8, 10)}.${w.start.slice(5, 7)}: ${w.value == null ? "нет данных" : displayScore(w.value)}`,
+    )
     .join(" → ");
+}
+
+/** Круглые деления шкалы 0…top: шаг 1, 2, 5, 10, 20, 25, 50… не более пяти делений. */
+export function niceAxis(max: number): { top: number; ticks: number[] } {
+  const target = Math.max(1, Math.ceil(max));
+  let step = 1;
+  for (const base of [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000]) {
+    step = base;
+    if (Math.ceil(target / base) <= 5) break;
+  }
+  const count = Math.max(1, Math.ceil(target / step));
+  return {
+    top: count * step,
+    ticks: Array.from({ length: count + 1 }, (_, i) => i * step),
+  };
 }
 
 export type AttentionGroup = "A" | "B";
@@ -726,8 +745,25 @@ export function blockPercents(rows: ReportVisit[]): BlockPercent[] {
 }
 
 export const GROWTH_EXCLUDED_CODES = ["3.5", "5.2", "5.3"];
-/** Пункты с несколькими вариантами ответа: пояснение без цитаты, только доля чек-листов ниже максимума. */
-const GROWTH_MULTI_CODES = ["3.8", "5.1", "9.1"];
+/**
+ * Пункты с несколькими вариантами ответа: пояснение называет, какой решающий вариант
+ * чаще всего не отмечен в чек-листах с баллом ниже максимума.
+ */
+const GROWTH_MULTI_EXPECTED: Record<
+  string,
+  { id: string; prefix: string; text: string }[]
+> = {
+  "3.8": [
+    { id: "o3", prefix: "задание соответствует содержанию", text: "задание соответствует содержанию и целям урока" },
+  ],
+  "5.1": [
+    { id: "o3", prefix: "обратная связь конкретная", text: "обратная связь конкретная, развивающая" },
+  ],
+  "9.1": [
+    { id: "o1", prefix: "общение строится в уважительном", text: "общение уважительное, доброжелательное и деловое" },
+    { id: "o3", prefix: "учитель внимательно выслушивает", text: "учитель внимательно выслушивает ответы" },
+  ],
+};
 const GROWTH_PHRASES: Record<string, string> = {
   "1.1|частично": "к уроку готовы лишь частично",
   "1.1|не готов": "к уроку не готовы",
@@ -741,7 +777,7 @@ const GROWTH_PHRASES: Record<string, string> = {
   "3.3|нет": "темп урока не подходит классу",
   '3.6|фронтальные': "задания одинаковые для всех",
   "4.1|не соответствует": "материал не соответствует уровню учеников",
-  "4.2|достаточный": "предметное содержание на достаточном, но не высоком уровне",
+  "4.2|достаточный": "предметный уровень достаточный, но не высокий",
   "4.2|требует": "владение предметным содержанием требует улучшения",
   "6.2|вовлечены большинство": "вовлечено большинство класса, но не все",
   "6.2|вовлечена только часть": "вовлечена только часть класса",
@@ -749,7 +785,7 @@ const GROWTH_PHRASES: Record<string, string> = {
   "7.1|нет": "воспитательный потенциал урока не проявлен",
   "8.2|среднее": "наглядные материалы не всегда уместны",
   "8.2|низкое": "наглядные материалы неуместны",
-  "8.2|не использовались, что": "наглядные материалы не использованы, это снизило урок",
+  "8.2|не использовались, что": "наглядность не использована, хотя была нужна",
   "9.3|атмосфера на уроке не создана": "рабочая атмосфера на уроке не создана",
   "9.3|психологический комфорт отсутствует": "психологического комфорта нет",
 };
@@ -762,6 +798,29 @@ function growthPhrase(code: string, answer: string): string {
     if (keyCode === code && text.startsWith(normalizedAnswer(prefix))) return phrase;
   }
   return answer.length > 70 ? `«${answer.slice(0, 67).trim()}…»` : `«${answer}»`;
+}
+
+function multiGrowthNote(
+  code: string,
+  scored: { value: number | null; max: number; answer: string; optionIds: string[] }[],
+): string {
+  const picked = (item: (typeof scored)[number], option: { id: string; prefix: string }) =>
+    item.optionIds.includes(option.id) ||
+    item.answer
+      .split(";")
+      .some((part) => normalizedAnswer(part).startsWith(normalizedAnswer(option.prefix)));
+  const lacking = GROWTH_MULTI_EXPECTED[code]
+    .map((option) => ({
+      option,
+      count: scored.filter(
+        (i) =>
+          i.value! < i.max && (i.answer || i.optionIds.length) && !picked(i, option),
+      ).length,
+    }))
+    .sort((a, b) => b.count - a.count)[0];
+  return lacking && lacking.count > 0
+    ? `чаще всего не отмечено: «${lacking.option.text}» (в ${Math.round((lacking.count / scored.length) * 100)}% чек-листов)`
+    : "";
 }
 
 export type GrowthZone = {
@@ -802,7 +861,6 @@ export function growthZones(rows: ReportVisit[], count = 3): GrowthZone[] {
       if (item.value! < item.max && item.answer)
         counts.set(item.answer, (counts.get(item.answer) || 0) + 1);
     const top = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru"))[0];
-    const below = [...counts.values()].reduce((n, c) => n + c, 0);
     zones.push({
       code,
       title: SHORT_TITLES[code] || title,
@@ -810,8 +868,8 @@ export function growthZones(rows: ReportVisit[], count = 3): GrowthZone[] {
       lessons: eligible.length,
       note: !top
         ? ""
-        : GROWTH_MULTI_CODES.includes(code)
-          ? `в ${Math.round((below / scored.length) * 100)}% чек-листов балл по пункту ниже максимума`
+        : GROWTH_MULTI_EXPECTED[code]
+          ? multiGrowthNote(code, scored)
           : `в ${Math.round((top[1] / scored.length) * 100)}% чек-листов: ${growthPhrase(code, top[0])}`,
     });
   }

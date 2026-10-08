@@ -49,6 +49,7 @@ import {
   newTeacherStats,
   visitCoverage,
   weeklyArrows,
+  niceAxis,
   weeklyAverages,
   type DirectorPeriod,
 } from "../lib/lessonVisitChecklist/reportPresentation";
@@ -178,13 +179,12 @@ function LevelChart({
       (v) => v.score.total == null && levelIndex(preliminaryPercent(v)) === i,
     ).length,
   }));
-  const top = Math.max(1, ...series.map((s) => s.full + s.partial)),
+  const { top, ticks } = niceAxis(
+      Math.max(1, ...series.map((s) => s.full + s.partial)),
+    ),
     without = lessons.filter(
       (v) => levelIndex(scorePercent(v) ?? preliminaryPercent(v)) < 0,
     ).length;
-  const ticks = Array.from({ length: Math.min(top, 5) + 1 }, (_, i) =>
-    Math.round((top * i) / Math.min(top, 5)),
-  );
   return (
     <section className="vcr-panel">
       <h3>{title}</h3>
@@ -197,9 +197,13 @@ function LevelChart({
       >
         <div className="vcr-chart-axis">
           <small>Уроков</small>
-          {ticks.reverse().map((n) => (
-            <span key={n}>{n}</span>
-          ))}
+          <div className="vcr-chart-ticks">
+            {ticks.map((n) => (
+              <span key={n} style={{ bottom: `${(n / top) * 100}%` }}>
+                {n}
+              </span>
+            ))}
+          </div>
         </div>
         {series.map((s) => (
           <button
@@ -209,7 +213,7 @@ function LevelChart({
             aria-label={`${s.label}: ${s.full} полных и ${s.partial} предварительных уроков`}
           >
             <span>
-              {s.full} + {s.partial}
+              {s.partial > 0 ? `${s.full} + ${s.partial}` : s.full}
             </span>
             <div className="vcr-chart-track">
               <div className="vcr-chart-stack">
@@ -392,7 +396,7 @@ function DirectorSummary({
       const sheet = (name: string, rows: Record<string, unknown>[]) =>
         XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows), name);
       sheet("Сводка", [
-        { Показатель: "Период", Значение: `${dateText(range.from)} — ${dateText(range.to)}` },
+        { Показатель: "Период", Значение: `${dateText(range.from)}–${dateText(range.to)}` },
         { Показатель: "Средний итог гимназии", Значение: data.average },
         { Показатель: "Итоги по неделям", Значение: weeklyArrows(data.series) },
         { Показатель: "Посещено учителей", Значение: data.coverage.visited },
@@ -473,7 +477,7 @@ function DirectorSummary({
           <h2>Сводка для директора</h2>
           <p>
             {range
-              ? `${dateText(range.from)} — ${dateText(range.to)}`
+              ? `${dateText(range.from)}–${dateText(range.to)}`
               : "Период ещё не завершён"}{" "}
             · сформировано {generatedText(generatedAt)}
           </p>
@@ -497,7 +501,7 @@ function DirectorSummary({
             ))}
           </div>
           <button
-            className="btn"
+            className="vcr-action"
             type="button"
             disabled={pdfBusy || !range}
             onClick={() => void downloadPdf()}
@@ -505,7 +509,7 @@ function DirectorSummary({
             {pdfBusy ? "Готовим PDF…" : "Скачать PDF"}
           </button>
           <button
-            className="btn"
+            className="vcr-action"
             type="button"
             disabled={!range}
             onClick={() => void exportDirectorExcel()}
@@ -535,9 +539,6 @@ function DirectorSummary({
               <span className="vcr-arrows" title="Недели с понедельника">
                 {weeklyArrows(data.series)}
               </span>
-              <small>
-                {data.series.map((w) => w.start.slice(8, 10) + "." + w.start.slice(5, 7)).join(" · ")}
-              </small>
             </div>
             <div className="vcr-metric">
               <strong>
@@ -568,7 +569,7 @@ function DirectorSummary({
             <LevelChart
               title="Уроки по уровням"
               rows={data.rows}
-              dates={`${dateText(range.from)} — ${dateText(range.to)}`}
+              dates={`${dateText(range.from)}–${dateText(range.to)}`}
               onOpen={(label) => {
                 const to = href("lessons");
                 if (to) navigate(`${to}&reportLevel=${encodeURIComponent(label)}`);
@@ -595,7 +596,7 @@ function DirectorSummary({
                     label={`${block.name}: ${block.percent == null ? "нет данных" : displayScore(block.percent) + "%"}`}
                   />
                   <strong>
-                    {block.percent == null ? "—" : `${displayScore(block.percent)}%`}
+                    {block.percent == null ? "нет данных" : `${displayScore(block.percent)}%`}
                   </strong>
                 </div>
               ))}
@@ -621,7 +622,7 @@ function DirectorSummary({
                     <td>{d.lessons}</td>
                     <td>
                       {d.average == null ? (
-                        "—"
+                        "нет данных"
                       ) : (
                         <>
                           {displayScore(d.average)} из 100
@@ -732,7 +733,7 @@ function DirectorSummary({
               <div className={VCD_PDF_HIDE_CLASS}>
                 {!editing ? (
                   <button
-                    className="btn"
+                    className="vcr-action"
                     type="button"
                     onClick={() => {
                       setChosen([...(listedIds || [])]);
@@ -783,22 +784,24 @@ function DirectorSummary({
                           .filter(Boolean)
                           .join(", ")}`}
                     </p>
+                    <div className="vcr-editor__actions">
                     <button
-                      className="btn"
+                      className="vcr-action vcr-action--primary"
                       type="button"
                       disabled={saveBusy}
                       onClick={() => void saveNew()}
                     >
                       {saveBusy ? "Сохраняем…" : "Сохранить"}
-                    </button>{" "}
+                    </button>
                     <button
-                      className="btn"
+                      className="vcr-action"
                       type="button"
                       disabled={saveBusy}
                       onClick={() => setEditing(false)}
                     >
                       Отмена
                     </button>
+                    </div>
                   </div>
                 )}
                 {saveMessage && <p role="status">{saveMessage}</p>}
@@ -895,9 +898,11 @@ export default function VisitChecklistReportDashboard({
     size =
       params.get("reportSize") === "all"
         ? "all"
-        : params.get("reportSize") === "50"
-          ? 50
-          : 20;
+        : params.get("reportSize") === "100"
+          ? 100
+          : params.get("reportSize") === "50"
+            ? 50
+            : 20;
   const update = (values: Record<string, string | null>) => {
     const next = new URLSearchParams(currentParams.current);
     for (const [k, v] of Object.entries(values))
@@ -1355,7 +1360,8 @@ export default function VisitChecklistReportDashboard({
           >
             <option value="20">20</option>
             <option value="50">50</option>
-            <option value="all">Все</option>
+            <option value="100">100</option>
+            {size === "all" && <option value="all">Все</option>}
           </select>
         </label>
         <span>{total} строк</span>
@@ -1689,7 +1695,7 @@ export default function VisitChecklistReportDashboard({
               dates={
                 period === "all"
                   ? "За всё время"
-                  : `${dateText(from)} — ${dateText(to)}`
+                  : `${dateText(from)}–${dateText(to)}`
               }
               onOpen={(label) =>
                 update({ reportView: "lessons", reportLevel: label })
@@ -1698,7 +1704,7 @@ export default function VisitChecklistReportDashboard({
             <LevelChart
               title="Уроки по уровням: весь период"
               rows={scoped}
-              dates={`${dateText("2026-09-01")} — ${dateText(report.week.today)}`}
+              dates={`${dateText("2026-09-01")}–${dateText(report.week.today)}`}
               onOpen={(label) =>
                 update({
                   reportView: "lessons",

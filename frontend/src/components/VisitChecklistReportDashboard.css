@@ -328,9 +328,22 @@
 .vcr-chart-axis {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  height: 210px;
+  gap: 6px;
   font-size: 12px;
+}
+.vcr-chart-axis > small {
+  height: 18px;
+}
+.vcr-chart-ticks {
+  position: relative;
+  height: 180px;
+  min-width: 24px;
+}
+.vcr-chart-ticks span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+  line-height: 1;
 }
 .vcr-chart-column {
   display: flex;
@@ -428,6 +441,39 @@
 .vcr-segment button:focus-visible {
   outline: 3px solid #1766a4;
   outline-offset: -3px;
+}
+.vcr-action {
+  border: 1px solid var(--vcr-line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 14px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.vcr-action:hover:not(:disabled) {
+  background: #eef4f2;
+}
+.vcr-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.vcr-action:focus-visible {
+  outline: 3px solid #1766a4;
+  outline-offset: 2px;
+}
+.vcr-action--primary {
+  background: #203e3a;
+  border-color: #203e3a;
+  color: #fff;
+}
+.vcr-action--primary:hover:not(:disabled) {
+  background: #2c5550;
+}
+.vcr-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .vcr-arrows {
   font-weight: 650;
