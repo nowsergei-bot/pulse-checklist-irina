@@ -1,4 +1,3 @@
-import DepartmentAssignments from '../visitChecklistV3/DepartmentAssignments';
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
@@ -195,7 +194,6 @@ export default function VisitChecklistDirectorDashboardPage() {
           Посещения, оценки наблюдателей и самоанализ педагогов.
         </p>
       </header>
-      {projectId && (['admin','assistant_director'].includes(user?.role||'')||user?.permissions?.includes('*')||user?.permissions?.includes('users.manage')) && <details className="card glass-surface"><summary>Доступ к аналитике и настройки интерфейса</summary><DepartmentAssignments projectId={projectId} onChange={()=>{}}/></details>}
       {loadErr ? (
         <section className="card glass-surface" role="alert">
           {loadErr}

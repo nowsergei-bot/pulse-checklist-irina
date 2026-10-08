@@ -43,9 +43,6 @@ import "./VisitChecklistReportDashboard.css";
 
 type Props = {
   projectId?: number;
-  legacyConfirmations?: {selfId:number;lessonId:number;actorId?:number;confirmedAt?:string}[];
-  canConfirm?: boolean;
-  onLegacyConfirm?: (selfId:number,lessonId:number) => Promise<{selfId:number;lessonId:number;actorId?:number;confirmedAt?:string}[]>;
   responses: LessonVisitResponseRow[];
   checklist: LessonVisitChecklistConfig;
   directory: LessonVisitDirectory;
@@ -216,9 +213,6 @@ function LevelChart({
 export default function VisitChecklistReportDashboard({
   responses,
   projectId,
-  legacyConfirmations,
-  canConfirm = true,
-  onLegacyConfirm,
   checklist,
   directory,
   now,
@@ -230,18 +224,14 @@ export default function VisitChecklistReportDashboard({
   const [links, setLinks] = useState<SavedSelfLink[]>([]);
   const [linkError, setLinkError] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
-  const [linksReady, setLinksReady] = useState(false);
-  const legacyLinks: SavedSelfLink[] = useMemo(() => (legacyConfirmations || []).map(c => ({self_response_id:c.selfId,lesson_response_id:c.lessonId,method:"manual",confirmed_by:c.actorId,confirmed_at:c.confirmedAt})), [legacyConfirmations]);
   useEffect(() => {
     let active = true;
     setLinks([]);
-    setLinksReady(false);
     if (projectId)
       void getLessonVisitSelfLinks(projectId)
         .then((value) => {
           if (active) {
             setLinks(value);
-            setLinksReady(true);
             setLinkError("");
           }
         })
@@ -262,14 +252,11 @@ export default function VisitChecklistReportDashboard({
       | { mode: "automatic" }
       | { self_response_id: number; lesson_response_id: number },
   ) {
-    if (!projectId || !canConfirm) return;
+    if (!projectId) return;
     setLinkBusy(true);
     setLinkError("");
     try {
-      if (!linksReady && onLegacyConfirm && "self_response_id" in body) {
-        const value = await onLegacyConfirm(body.self_response_id, body.lesson_response_id);
-        setLinks(value.map(c => ({self_response_id:c.selfId,lesson_response_id:c.lessonId,method:"manual",confirmed_by:c.actorId,confirmed_at:c.confirmedAt})));
-      } else setLinks(await saveLessonVisitSelfLink(projectId, body));
+      setLinks(await saveLessonVisitSelfLink(projectId, body));
     } catch (error) {
       setLinkError(
         error instanceof Error ? error.message : "Не удалось сохранить связь",
@@ -282,10 +269,9 @@ export default function VisitChecklistReportDashboard({
     () => buildLessonReport(responses, checklist, directory, now),
     [responses, checklist, directory, now],
   );
-  const effectiveLinks = useMemo(() => [...legacyLinks.filter(l => !links.some(n => n.self_response_id === l.self_response_id)), ...links], [legacyLinks,links]);
   const report = useMemo(
-    () => withSelfAnalysisLinks(baseReport, effectiveLinks),
-    [baseReport, effectiveLinks],
+    () => withSelfAnalysisLinks(baseReport, links),
+    [baseReport, links],
   );
   const view = params.get("reportView") || "summary",
     teacher = params.get("reportTeacher"),
@@ -612,7 +598,7 @@ export default function VisitChecklistReportDashboard({
           </td>
           <td>
             {m.reason}
-            {projectId && canConfirm && (
+            {projectId && (
               <label>
                 Выбрать урок{" "}
                 <select
@@ -799,7 +785,7 @@ export default function VisitChecklistReportDashboard({
       );
       sheet(
         "Связи самоанализов",
-        effectiveLinks.map((l) => ({
+        links.map((l) => ({
           Самоанализ: l.self_response_id,
           Урок: l.lesson_response_id,
           Способ: l.method,
@@ -834,9 +820,9 @@ export default function VisitChecklistReportDashboard({
       </header>
       {exportError && <p role="alert">{exportError}</p>}
       {linkError && <p role="alert">{linkError}</p>}
-      {projectId && canConfirm && (view === "unlinked" || view === "summary") && !detail && (
+      {projectId && (view === "unlinked" || view === "summary") && !detail && (
         <button
-          disabled={linkBusy || !linksReady}
+          disabled={linkBusy}
           className="vcr-link"
           onClick={() => void saveLink({ mode: "automatic" })}
         >

@@ -521,15 +521,6 @@ export interface UnifiedSurveyDashboardBlock {
 }
 
 export interface UnifiedSurveyDashboardPayload {
-  lesson_interest?: {
-    source: string;
-    respondents: number;
-    summary: string;
-    recommendations: string[];
-    error?: string;
-    generated_at?: string;
-    themes: { label: string; positive: number; negative: number; positive_pct: number; negative_pct: number }[];
-  };
   source: string;
   llm_error?: string;
   dashboard: UnifiedSurveyDashboardBlock;

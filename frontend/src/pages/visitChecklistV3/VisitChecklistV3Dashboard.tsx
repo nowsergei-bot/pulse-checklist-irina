@@ -48,8 +48,8 @@ function LessonsTable({ rows, go }: { rows: Lesson[]; go: Go }) {
 function TeacherRowsTable({ rows, go }: { rows: Teacher[]; go: Go }) {
  const names=useContext(NamesContext);
  if (!rows.length) return <Empty />;
- return <Table headers={['Место', 'Учитель', 'Кафедра', 'Средний итог', 'Нужна методическая поддержка', 'Уроков', 'Наблюдений', 'Самоанализов', ...Object.values(names.blocks).slice(0,9)]}>
- {rows.map((row,i) => <tr key={`${row.id}:${row.result.policy}:${row.result.maximum}:${i}`}><td>{row.rank ?? '—'}</td><th scope="row"><button className="pv3-link" onClick={() => go({view:'teacher',teacher:row.id,lesson:null})}>{row.label}</button></th><td>{row.departments.join(', ')}</td><td><ResultCell result={row.result} go={go}/></td><td>{row.risk ? <button className="pv3-link" onClick={() => go({view:'teacher',teacher:row.id,teacher_tab:'lessons',lesson:null})}>Нужна методическая поддержка</button> : '—'}</td><td>{row.lesson_count}</td><td>{row.observation_count}</td><td>{row.self_count}</td>{Object.keys(names.blocks).slice(0,9).map(code => <td key={code}>{row.blocks.find(b => b.code === code) ? <CriterionCell row={row.blocks.find(b => b.code === code)!}/> : '—'}</td>)}</tr>)}
+ return <Table headers={['Место', 'Учитель', 'Кафедра', 'Средний итог', 'Группа риска', 'Уроков', 'Наблюдений', 'Самоанализов', ...Object.values(names.blocks).slice(0,9)]}>
+ {rows.map((row,i) => <tr key={`${row.id}:${row.result.policy}:${row.result.maximum}:${i}`}><td>{row.rank ?? '—'}</td><th scope="row"><button className="pv3-link" onClick={() => go({view:'teacher',teacher:row.id,lesson:null})}>{row.label}</button></th><td>{row.departments.join(', ')}</td><td><ResultCell result={row.result} go={go}/></td><td>{row.risk ? <button className="pv3-link" onClick={() => go({view:'teacher',teacher:row.id,teacher_tab:'lessons',lesson:null})}>Группа риска</button> : '—'}</td><td>{row.lesson_count}</td><td>{row.observation_count}</td><td>{row.self_count}</td>{Object.keys(names.blocks).slice(0,9).map(code => <td key={code}>{row.blocks.find(b => b.code === code) ? <CriterionCell row={row.blocks.find(b => b.code === code)!}/> : '—'}</td>)}</tr>)}
  </Table>;
 }
 function TeachersTable({ rows, go }: { rows: Teacher[]; go: Go }) {
@@ -100,7 +100,7 @@ function Summary({data,go}: {data:Dashboard;go:Go}) {
  </>;
 }
 function Departments({data,go}: {data:Dashboard;go:Go}) {
- return <Table headers={['Кафедра','Руководитель кафедры','Посещено учителей','Уроков','Наблюдений','Самоанализов','Средние по группам','Нужна методическая поддержка','Итог не сформирован']}>
+ return <Table headers={['Кафедра','Руководитель кафедры','Посещено учителей','Уроков','Наблюдений','Самоанализов','Средние по группам','Группа риска','Итог не сформирован']}>
  {data.departments.map(d=><tr key={d.id}><th scope="row"><button className="pv3-link" onClick={()=>go({view:'teachers',department:d.id,teacher:null,lesson:null})}>{d.label}</button></th><td>{d.leaders.join(', ') || 'Не назначен'}</td><td>{d.visited_teachers} из {d.total_teachers}</td><td>{d.lesson_count}</td><td>{d.observation_count}</td><td>{d.self_count}</td><td>{d.groups.map((r,i)=><p key={i}><ResultCell result={r}/></p>)}</td><td><button className="pv3-link" onClick={()=>go({view:'teachers',department:d.id,selection:'risk',teacher:null,lesson:null})}>{d.risk_count}</button></td><td>{d.incomplete_count}</td></tr>)}
  </Table>;
 }
