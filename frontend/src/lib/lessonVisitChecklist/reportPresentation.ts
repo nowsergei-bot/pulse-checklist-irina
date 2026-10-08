@@ -11,9 +11,11 @@ import {
   lessonObservations,
   mean,
   pairedSelf,
+  reportPersonKey,
   type DirectItem,
   type ReportVisit,
 } from "./visitChecklistReport.ts";
+import type { LessonVisitDirectory } from "./types.ts";
 
 export const LEVELS = [
   "Очень низкий",
@@ -434,4 +436,101 @@ export function selectReportRows(
         ((!filters.group || filters.group === "all") && matches(v))
       : ids.has(v.id),
   );
+}
+
+/** Кафедры справочника, которые не входят в охват посещений (администрация, учебная часть). */
+export const COVERAGE_EXCLUDED_DEPARTMENT_IDS = ["dept_admin", "dept_academic"];
+export const UNIT_NOT_DEFINED = "Подразделение не определено";
+export const UNIT_FILTER_NOT_DEFINED = "__none__";
+
+export type CoverageRow = {
+  key: string;
+  name: string;
+  department: string;
+  units: string[];
+  /** Посещения нет, но за период есть самоанализ. */
+  selfOnly: boolean;
+};
+export type VisitCoverage = {
+  visited: number;
+  total: number;
+  notVisited: CoverageRow[];
+};
+
+/**
+ * Охват посещений: учителя справочника проекта (без администрации и учебной части),
+ * у которых за период есть хотя бы одно наблюдение. Самоанализ посещением не считается.
+ * `staffUnits` (ID учителя анкеты → подразделения) может быть пустым: тогда фильтр по подразделению не действует.
+ */
+export function visitCoverage(
+  teachers: { key: string; name: string; department: string; visits: ReportVisit[] }[],
+  directory: Pick<LessonVisitDirectory, "teachers">,
+  options: {
+    from?: string | null;
+    to?: string | null;
+    department?: string;
+    unit?: string;
+    staffUnits?: Record<string, string[]>;
+  } = {},
+): VisitCoverage {
+  const excluded = new Set(COVERAGE_EXCLUDED_DEPARTMENT_IDS);
+  const unitsByKey = new Map<string, string[]>();
+  const rosterKeys = new Set<string>();
+  for (const t of directory.teachers) {
+    const key = reportPersonKey(t.name);
+    if (!key || excluded.has(t.departmentId)) continue;
+    rosterKeys.add(key);
+    unitsByKey.set(key, options.staffUnits?.[t.id] || []);
+  }
+  const inPeriod = (v: ReportVisit) =>
+    (!options.from || v.date >= options.from) &&
+    (!options.to || v.date <= options.to);
+  let visited = 0;
+  let total = 0;
+  const notVisited: CoverageRow[] = [];
+  for (const teacher of teachers) {
+    if (!rosterKeys.has(teacher.key)) continue;
+    if (options.department && teacher.department !== options.department)
+      continue;
+    const units = unitsByKey.get(teacher.key) || [];
+    if (options.unit) {
+      const match =
+        options.unit === UNIT_FILTER_NOT_DEFINED
+          ? units.length === 0
+          : units.includes(options.unit);
+      if (!match) continue;
+    }
+    total += 1;
+    const own = teacher.visits.filter(inPeriod);
+    if (own.some((v) => !v.self)) {
+      visited += 1;
+      continue;
+    }
+    notVisited.push({
+      key: teacher.key,
+      name: teacher.name,
+      department: teacher.department,
+      units,
+      selfOnly: own.some((v) => v.self),
+    });
+  }
+  notVisited.sort(
+    (a, b) =>
+      a.department.localeCompare(b.department, "ru") ||
+      a.name.localeCompare(b.name, "ru"),
+  );
+  return { visited, total, notVisited };
+}
+
+/** Все подразделения, найденные у учителей охвата (для выпадающего списка). */
+export function coverageUnits(
+  directory: Pick<LessonVisitDirectory, "teachers">,
+  staffUnits: Record<string, string[]> | undefined,
+): string[] {
+  const excluded = new Set(COVERAGE_EXCLUDED_DEPARTMENT_IDS);
+  const units = new Set<string>();
+  for (const t of directory.teachers)
+    if (!excluded.has(t.departmentId))
+      for (const unit of staffUnits?.[t.id] || []) units.add(unit);
+  return [...units].sort((a, b) => a.localeCompare(b, "ru"));
 }

@@ -9,6 +9,7 @@ const {
   ensureSubjectSelectFromSeed,
   normalizeSavedChecklist,
   resolvePublicLessonVisitDirectory,
+  buildTeacherUnitMap,
 } = require('./lesson-visit-checklist');
 
 test('displayVisitChecklistTitle strips 4.0 from user-visible names', () => {
@@ -131,4 +132,32 @@ test('pickLatestSharedVisitChecklist uses created_at then id, not updated_at', (
     created_at: '2026-09-07T00:00:00.000Z',
   });
   assert.equal(pickLatestSharedVisitChecklist([sameTimeLow, sameTimeHigh]).form_token, 'high');
+});
+
+test('buildTeacherUnitMap matches staff by normalized name and keeps every unit', () => {
+  const teachers = [
+    { id: 't1', name: 'Учитель Первый' },
+    { id: 't2', name: 'Учёный Второй' },
+    { id: 't3', name: 'Учитель Третий' },
+    { id: 't4', name: 'Учитель Четвёртый' },
+  ];
+  const staff = [
+    { full_name: '  учитель  первый ', department: 'Подразделение A' },
+    { full_name: 'Ученый Второй', department: 'Подразделение B' },
+    { full_name: 'Ученый Второй', department: 'Подразделение A' },
+    { full_name: 'Ученый Второй', department: 'Подразделение A' },
+    { full_name: 'Учитель Четвертый', department: '' },
+    { full_name: '', department: 'Подразделение C' },
+  ];
+  assert.deepEqual(buildTeacherUnitMap(staff, teachers), {
+    t1: ['Подразделение A'],
+    t2: ['Подразделение A', 'Подразделение B'],
+    t3: [],
+    t4: [],
+  });
+});
+
+test('buildTeacherUnitMap tolerates empty input', () => {
+  assert.deepEqual(buildTeacherUnitMap(null, null), {});
+  assert.deepEqual(buildTeacherUnitMap([], [{ id: 1, name: 'Учитель' }]), { 1: [] });
 });

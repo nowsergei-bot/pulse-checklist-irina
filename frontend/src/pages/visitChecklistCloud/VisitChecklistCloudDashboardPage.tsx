@@ -145,6 +145,7 @@ function LegacyVisitChecklistCloudDashboardPage() {
     defaultSeed as LessonVisitChecklistConfig,
   );
   const [liveDirectory, setLiveDirectory] = useState<LessonVisitDirectory | null>(null);
+  const [liveStaffUnits, setLiveStaffUnits] = useState<Record<string, string[]>>({});
   const [liveReady, setLiveReady] = useState(false);
   const dashPdfRef = useRef<HTMLDivElement>(null);
   const cardPdfRef = useRef<HTMLElement>(null);
@@ -186,6 +187,7 @@ function LegacyVisitChecklistCloudDashboardPage() {
       setLiveResponses(rows);
       if (pack?.draft?.checklist) setLiveChecklist(pack.draft.checklist);
       setLiveDirectory(pack?.draft?.directory ?? null);
+      setLiveStaffUnits(pack?.staffUnits ?? {});
       setLiveReady(true);
     }).catch((error) => {
       if (!cancelled) {
@@ -443,7 +445,7 @@ function LegacyVisitChecklistCloudDashboardPage() {
   return (
     <div className="page vcd-page mo-eng-dash-page">
       <div ref={dashPdfRef}>
-        {liveReady && !loading && !loadErr ? <VisitChecklistReportDashboard projectId={projectId} responses={liveResponses} checklist={liveChecklist} directory={liveDirectory || defaultSeed.directory} /> : null}
+        {liveReady && !loading && !loadErr ? <VisitChecklistReportDashboard projectId={projectId} responses={liveResponses} checklist={liveChecklist} directory={liveDirectory || defaultSeed.directory} staffUnits={liveStaffUnits} /> : null}
         <details className="card glass-surface" style={{ padding: '1rem' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Архивная аналитика и отчёты по прежней шкале</summary>
         <header className="mo-eng-dash-hero vcd-hero">

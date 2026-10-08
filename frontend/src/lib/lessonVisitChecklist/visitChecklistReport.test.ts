@@ -18,6 +18,11 @@ import {
   validLessonDate,
   type ReportVisit,
 } from "./visitChecklistReport.ts";
+import {
+  UNIT_FILTER_NOT_DEFINED,
+  coverageUnits,
+  visitCoverage,
+} from "./reportPresentation.ts";
 import type {
   LessonVisitChecklistConfig,
   LessonVisitDirectory,
@@ -444,3 +449,109 @@ test("A127/A131: confirmed links survive different dates without changing scores
  assert.equal(lessonObservations(report.visits).length, 1);
  assert.equal(JSON.stringify(sources), before);
  });
+
+const coverageDirectory: LessonVisitDirectory = {
+  departments: [
+    { id: "d1", name: "Кафедра A" },
+    { id: "d2", name: "Кафедра B" },
+    { id: "dept_admin", name: "Администрация" },
+  ],
+  teachers: [
+    { id: "t1", name: "Учитель Первый", departmentId: "d1" },
+    { id: "t2", name: "Учитель Второй", departmentId: "d1" },
+    { id: "t3", name: "Учитель Третий", departmentId: "d2" },
+    { id: "t4", name: "Учитель Четвёртый", departmentId: "d2" },
+    { id: "t5", name: "Учитель Пятый", departmentId: "d1" },
+    { id: "t6", name: "Сотрудник Шестой", departmentId: "dept_admin" },
+  ],
+};
+const staffUnits = {
+  t1: ["Подразделение A"],
+  t2: ["Подразделение A", "Подразделение B"],
+  t3: [],
+  t4: ["Подразделение A"],
+  t5: ["Подразделение B"],
+  t6: ["Подразделение A"],
+};
+function coverageReport() {
+  const visit = (id: number, teacher: string, date: string, self = false) => {
+    const source = row(id, date, self);
+    source.general.teacher_id = teacher;
+    return source;
+  };
+  return buildLessonReport(
+    [
+      visit(1, "t1", "2026-09-10"),
+      visit(2, "t2", "2026-09-11", true),
+      visit(3, "t3", "2026-10-02"),
+      visit(4, "t5", "2026-09-20"),
+      visit(5, "t5", "2026-09-21"),
+      visit(6, "t6", "2026-09-12"),
+    ],
+    seed,
+    coverageDirectory,
+    new Date("2026-10-06T12:00:00Z"),
+  );
+}
+const september = { from: "2026-09-01", to: "2026-09-30" };
+
+test("coverage counts roster teachers with an observation in the period", () => {
+  const report = coverageReport();
+  const result = visitCoverage(report.teachers, coverageDirectory, {
+    ...september,
+    staffUnits,
+  });
+  assert.equal(result.total, 5);
+  assert.equal(result.visited, 2);
+  assert.deepEqual(
+    result.notVisited.map((t) => [t.name, t.selfOnly]),
+    [
+      ["Учитель Второй", true],
+      ["Учитель Третий", false],
+      ["Учитель Четвёртый", false],
+    ].sort((a, b) => String(a[0]).localeCompare(String(b[0]), "ru")),
+  );
+  assert.equal(
+    result.notVisited.some((t) => t.name === "Сотрудник Шестой"),
+    false,
+  );
+});
+
+test("coverage without a period counts every dated observation", () => {
+  const report = coverageReport();
+  const result = visitCoverage(report.teachers, coverageDirectory, { staffUnits });
+  assert.equal(result.visited, 3);
+  assert.equal(result.total, 5);
+});
+
+test("coverage filters by unit, undefined unit and department", () => {
+  const report = coverageReport();
+  const base = { ...september, staffUnits };
+  const unitA = visitCoverage(report.teachers, coverageDirectory, {
+    ...base,
+    unit: "Подразделение A",
+  });
+  assert.deepEqual([unitA.visited, unitA.total], [1, 3]);
+  assert.deepEqual(
+    unitA.notVisited.map((t) => t.units),
+    [["Подразделение A", "Подразделение B"], ["Подразделение A"]],
+  );
+  const none = visitCoverage(report.teachers, coverageDirectory, {
+    ...base,
+    unit: UNIT_FILTER_NOT_DEFINED,
+  });
+  assert.deepEqual([none.visited, none.total, none.notVisited.length], [0, 1, 1]);
+  const department = visitCoverage(report.teachers, coverageDirectory, {
+    ...base,
+    department: "Кафедра B",
+  });
+  assert.deepEqual([department.visited, department.total], [0, 2]);
+});
+
+test("coverage lists units from the roster only", () => {
+  assert.deepEqual(coverageUnits(coverageDirectory, staffUnits), [
+    "Подразделение A",
+    "Подразделение B",
+  ]);
+  assert.deepEqual(coverageUnits(coverageDirectory, undefined), []);
+});

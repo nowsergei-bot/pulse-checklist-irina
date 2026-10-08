@@ -34,6 +34,10 @@ import {
   selectReportRows,
   shortName,
   teacherResultGroups,
+  UNIT_FILTER_NOT_DEFINED,
+  UNIT_NOT_DEFINED,
+  coverageUnits,
+  visitCoverage,
 } from "../lib/lessonVisitChecklist/reportPresentation";
 import {
   getLessonVisitSelfLinks,
@@ -46,6 +50,8 @@ type Props = {
   responses: LessonVisitResponseRow[];
   checklist: LessonVisitChecklistConfig;
   directory: LessonVisitDirectory;
+  /** ID учителя анкеты → подразделения из справочника сотрудников. Без него подразделения не показываются. */
+  staffUnits?: Record<string, string[]>;
   now?: Date;
 };
 const dateText = (date: string) =>
@@ -215,6 +221,7 @@ export default function VisitChecklistReportDashboard({
   projectId,
   checklist,
   directory,
+  staffUnits,
   now,
 }: Props) {
   const [params, setParams] = useSearchParams();
@@ -364,6 +371,21 @@ export default function VisitChecklistReportDashboard({
   const departments = [
     ...new Set(report.teachers.map((t) => t.department)),
   ].sort((a, b) => a.localeCompare(b, "ru"));
+  const unit = params.get("reportUnit") || "";
+  const unitOptions = coverageUnits(directory, staffUnits);
+  const showUnits = unitOptions.length > 0;
+  const coverage = visitCoverage(report.teachers, directory, {
+    from: period === "all" ? null : from,
+    to: period === "all" ? null : to,
+    department,
+    unit,
+    staffUnits,
+  });
+  const notVisited = coverage.notVisited.filter(
+    (t) =>
+      !search ||
+      t.name.toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru")),
+  );
   const criteria = checklist.sections
     .flatMap((s) => s.questions)
     .filter((q) =>
@@ -419,6 +441,7 @@ export default function VisitChecklistReportDashboard({
             support: "Нужна методическая поддержка",
             discrepancies: "Расхождения в оценках",
             unlinked: "Самоанализы без урока",
+            not_visited: "Не посещены за период",
             lessons: "Уроки",
           } as Record<string, string>
         )[view] || "Сводка";
@@ -634,6 +657,38 @@ export default function VisitChecklistReportDashboard({
       ))}
     </Table>
   );
+  const renderNotVisited = (list: typeof notVisited) => (
+    <>
+      <p>
+        Посещено {coverage.visited} из {coverage.total} · не посещены{" "}
+        {coverage.notVisited.length}
+      </p>
+      {list.length ? (
+        <Table
+          headers={[
+            "Учитель",
+            "Кафедра",
+            ...(showUnits ? ["Подразделение"] : []),
+          ]}
+        >
+          {list.map((t) => (
+            <tr key={t.key}>
+              <td>
+                {t.name}
+                {t.selfOnly && <small>есть самоанализ, посещения нет</small>}
+              </td>
+              <td>{t.department}</td>
+              {showUnits && (
+                <td>{t.units.length ? t.units.join(", ") : UNIT_NOT_DEFINED}</td>
+              )}
+            </tr>
+          ))}
+        </Table>
+      ) : (
+        <Empty />
+      )}
+    </>
+  );
   const total = detail
     ? 0
     : view === "teachers"
@@ -652,7 +707,9 @@ export default function VisitChecklistReportDashboard({
                   ? flags.length
                   : view === "unlinked"
                     ? unlinked.length
-                    : filteredLessons.length;
+                    : view === "not_visited"
+                      ? notVisited.length
+                      : filteredLessons.length;
   const pages = size === "all" ? 1 : Math.max(1, Math.ceil(total / size)),
     currentPage = Math.min(page, pages);
   const paged = <T,>(list: T[]) => pageRows(list, currentPage, size);
@@ -896,6 +953,23 @@ export default function VisitChecklistReportDashboard({
                 ))}
               </select>
             </label>
+            {showUnits && (
+              <label>
+                Подразделение{" "}
+                <select
+                  value={unit}
+                  onChange={(e) => update({ reportUnit: e.target.value })}
+                >
+                  <option value="">Все подразделения</option>
+                  {unitOptions.map((u) => (
+                    <option key={u}>{u}</option>
+                  ))}
+                  <option value={UNIT_FILTER_NOT_DEFINED}>
+                    {UNIT_NOT_DEFINED}
+                  </option>
+                </select>
+              </label>
+            )}
             <label>
               Итоги{" "}
               <select
@@ -949,6 +1023,22 @@ export default function VisitChecklistReportDashboard({
               <strong>{lessons.length}</strong>
               <span>Уникальных уроков</span>
             </div>
+            <button
+              type="button"
+              className="vcr-metric vcr-metric--link"
+              onClick={() =>
+                update({
+                  reportView: "not_visited",
+                  reportTeacher: null,
+                  reportLesson: null,
+                })
+              }
+            >
+              <strong>
+                {coverage.visited} из {coverage.total}
+              </strong>
+              <span>Посещено учителей</span>
+            </button>
             <div className="vcr-metric">
               <strong>{rows.filter((v) => !v.self).length}</strong>
               <span>Наблюдений</span>
@@ -1318,6 +1408,8 @@ export default function VisitChecklistReportDashboard({
             renderFlags(paged(flags))
           ) : view === "unlinked" ? (
             renderUnlinked(paged(unlinked))
+          ) : view === "not_visited" ? (
+            renderNotVisited(paged(notVisited))
           ) : (
             renderLessons(paged(filteredLessons))
           )}

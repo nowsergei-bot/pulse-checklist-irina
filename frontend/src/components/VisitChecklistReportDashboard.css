@@ -57,6 +57,16 @@
   font-size: 12px;
   color: #647771;
 }
+.vcr-metric--link {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vcr-metric--link:hover,
+.vcr-metric--link:focus-visible {
+  border-color: #50746a;
+}
 .vcr-panel {
   background: #fff;
   border: 1px solid var(--vcr-line);

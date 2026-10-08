@@ -43,16 +43,22 @@ export async function postLessonVisitProject(body: {
 
 export async function getLessonVisitProject(
   projectId: number,
-): Promise<{ project: LessonVisitProjectRow; draft: LessonVisitDraftSave }> {
+): Promise<{
+  project: LessonVisitProjectRow;
+  draft: LessonVisitDraftSave;
+  /** ID учителя анкеты → подразделения из справочника сотрудников (пусто = не определено). */
+  staffUnits: Record<string, string[]>;
+}> {
   const res = await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}`, { headers: adminHeaders() });
   const data = await parseJson<{
     project?: LessonVisitProjectRow;
     draft?: LessonVisitDraftSave;
+    staff_units?: Record<string, string[]>;
     error?: string;
     message?: string;
   }>(res);
   if (!res.ok || !data.project || !data.draft) throw new Error(apiErrText(data, res.statusText));
-  return { project: data.project, draft: data.draft };
+  return { project: data.project, draft: data.draft, staffUnits: data.staff_units || {} };
 }
 
 export async function putLessonVisitProject(

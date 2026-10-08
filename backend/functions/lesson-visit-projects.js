@@ -7,6 +7,7 @@ const {
   normalizeSavedChecklist,
   resolvePublicLessonVisitDirectory,
   pickLatestSharedVisitChecklist,
+  buildTeacherUnitMap,
 } = require('./lib/lesson-visit-checklist');
 const { buildProjectGetPayload } = require('./lib/project-get-payload');
 const { resolveProjectOwner } = require('./lib/resolve-project-owner');
@@ -303,6 +304,54 @@ async function handlePostLessonVisitProject(pool, user, viaAdminKey, sessionUser
   }
 }
 
+const STAFF_UNITS_TIMEOUT_MS = 3000;
+
+/** Один запрос к справочнику; на стороне БД ограничен по времени, чтобы не занимать соединение. */
+async function readStaffRows(pool) {
+  const sql = `SELECT full_name, department FROM job_description_staff WHERE COALESCE(archived, FALSE) = FALSE`;
+  if (typeof pool.connect !== 'function') return (await pool.query(sql)).rows;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN READ ONLY');
+    await client.query(`SET LOCAL statement_timeout = ${STAFF_UNITS_TIMEOUT_MS}`);
+    const r = await client.query(sql);
+    await client.query('COMMIT');
+    return r.rows;
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      /* соединение уже недоступно */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Подразделения из справочника сотрудников (только чтение, без архивных, один запрос).
+ * Только для аналитики. Сбой или задержка дольше 3 с не ломают ответ проекта: подразделений просто нет.
+ */
+async function loadTeacherUnits(pool, draft) {
+  const teachers = draft && draft.directory && Array.isArray(draft.directory.teachers) ? draft.directory.teachers : [];
+  if (!teachers.length) return {};
+  let timer;
+  try {
+    const work = readStaffRows(pool);
+    work.catch(() => {});
+    const limit = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'timeout' })), STAFF_UNITS_TIMEOUT_MS + 500);
+    });
+    return buildTeacherUnitMap(await Promise.race([work, limit]), teachers);
+  } catch (err) {
+    console.error('[lesson-visit-projects] teacher units unavailable', (err && err.code) || 'error');
+    return {};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function handleGetLessonVisitProject(pool, user, viaAdminKey, sessionUser, projectId) {
   const pid = Number(projectId);
   if (!Number.isFinite(pid)) return json(400, { error: 'Invalid id' });
@@ -324,9 +373,13 @@ async function handleGetLessonVisitProject(pool, user, viaAdminKey, sessionUser,
     const draft = normalizeDraft(row);
     const response_count = await countResponses(pool, pid);
     const presented = { ...row, title: draft.title };
+    // Подразделения отдаём только аналитике (сессия с правом на сводку или ключ API), не владельцу личного проекта.
+    const staff_units =
+      viaAdminKey || isSharedVisitViewer(user, sessionUser) ? await loadTeacherUnits(pool, draft) : {};
     return json(200, {
       ...buildProjectGetPayload(presented, draft),
       project: { ...buildProjectGetPayload(presented, draft).project, form_token: row.form_token, response_count },
+      staff_units,
     });
   } catch (err) {
     const mapped = schemaErrorResponse(err);

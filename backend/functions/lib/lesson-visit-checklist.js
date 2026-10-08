@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { normalizePersonName } = require('./english-assessment-match');
 
 const VISIT_CHECKLIST_TITLE = 'Чек-лист посещения урока';
 const VISIT_FORMAT_SELF_ANALYSIS = 'Самоанализ';
@@ -168,6 +169,29 @@ function pickLatestSharedVisitChecklist(rows) {
   return scored[0] ? scored[0].row : null;
 }
 
+/**
+ * Подразделения педагогов анкеты по справочнику сотрудников.
+ * Сопоставление по нормализованному ФИО; если записей несколько, собираются все подразделения.
+ * Возвращает { [teacherId]: string[] }, пустой массив значит «подразделение не определено».
+ */
+function buildTeacherUnitMap(staffRows, teachers) {
+  const byName = new Map();
+  for (const row of Array.isArray(staffRows) ? staffRows : []) {
+    const key = normalizePersonName(row && row.full_name);
+    if (!key) continue;
+    if (!byName.has(key)) byName.set(key, new Set());
+    const unit = String((row && row.department) || '').replace(/\s+/g, ' ').trim();
+    if (unit) byName.get(key).add(unit);
+  }
+  const out = {};
+  for (const teacher of Array.isArray(teachers) ? teachers : []) {
+    if (!teacher || teacher.id == null) continue;
+    const units = byName.get(normalizePersonName(teacher.name));
+    out[String(teacher.id)] = units ? [...units].sort((a, b) => a.localeCompare(b, 'ru')) : [];
+  }
+  return out;
+}
+
 module.exports = {
   VISIT_CHECKLIST_TITLE,
   VISIT_FORMAT_SELF_ANALYSIS,
@@ -177,6 +201,7 @@ module.exports = {
   normalizeSavedChecklist,
   loadSeedDirectory,
   resolvePublicLessonVisitDirectory,
+  buildTeacherUnitMap,
   visitChecklistDraftFromState,
   visitChecklistLatestScore,
   pickLatestSharedVisitChecklist,
