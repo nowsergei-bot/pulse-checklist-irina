@@ -30,6 +30,7 @@ import {
   visitChecklistAnalyticsNavPath,
 } from '../../lib/visitChecklistAnalyticsAccess';
 import { useIsAuthenticated } from '../../lib/isAuthenticated';
+import { isDirectorSummaryShown } from '../../lib/lessonVisitChecklist/reportPresentation';
 import VisitChecklistReportDashboard from '../../components/VisitChecklistReportDashboard';
 import '../visitChecklistCloud/visitChecklistCloud.css';
 import '../valuesSpace/valuesSpace.css';
@@ -57,10 +58,11 @@ export default function VisitChecklistDirectorDashboardPage() {
     useState<LessonVisitDirectory | null>(null);
   const [liveStaffUnits, setLiveStaffUnits] = useState<Record<string, string[]>>({});
   const [newTeacherIds, setNewTeacherIds] = useState<string[]>([]);
+  const [directorSummary, setDirectorSummary] = useState(false);
   const [canOpenAnalytics, setCanOpenAnalytics] = useState(false);
   const [liveReady, setLiveReady] = useState(false);
   const [params] = useSearchParams();
-  const summaryScreen = params.get('screen') === 'summary';
+  const summaryScreen = isDirectorSummaryShown(directorSummary, params.get('screen'));
 
   const projectId = dash?.project?.id;
   const shownTitle =
@@ -165,6 +167,7 @@ export default function VisitChecklistDirectorDashboardPage() {
         setLiveDirectory(pack?.draft?.directory ?? null);
         setLiveStaffUnits(pack?.staffUnits ?? {});
         setNewTeacherIds(pack?.draft?.newTeacherIds ?? []);
+        setDirectorSummary(pack?.directorSummary === true);
         setLiveReady(true);
       })
       .catch((error) => {
@@ -216,28 +219,30 @@ export default function VisitChecklistDirectorDashboardPage() {
         </section>
       ) : (
         <>
-          <nav className="vcr-screens" aria-label="Экраны директора">
-            <Link
-              className="vcr-link"
-              aria-current={summaryScreen ? 'page' : undefined}
-              to="?screen=summary"
-            >
-              Сводка для директора
-            </Link>
-            <Link
-              className="vcr-link"
-              aria-current={summaryScreen ? undefined : 'page'}
-              to="."
-            >
-              Полная аналитика
-            </Link>
-          </nav>
+          {directorSummary ? (
+            <nav className="vcr-screens" aria-label="Экраны директора">
+              <Link
+                className="vcr-link"
+                aria-current={summaryScreen ? 'page' : undefined}
+                to="?screen=summary"
+              >
+                Сводка для директора
+              </Link>
+              <Link
+                className="vcr-link"
+                aria-current={summaryScreen ? undefined : 'page'}
+                to="."
+              >
+                Полная аналитика
+              </Link>
+            </nav>
+          ) : null}
           <VisitChecklistReportDashboard
             responses={liveResponses}
             checklist={liveChecklist}
             directory={liveDirectory || defaultSeed.directory}
             staffUnits={liveStaffUnits}
-            directorScreen
+            directorScreen={directorSummary}
             newTeacherIds={newTeacherIds}
             onSaveNewTeachers={
               projectId

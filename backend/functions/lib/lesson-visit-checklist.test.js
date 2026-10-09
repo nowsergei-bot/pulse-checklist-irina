@@ -189,18 +189,28 @@ Module._load = function (request, ...rest) {
 const projects = require('../lesson-visit-projects');
 Module._load = originalLoad;
 
-function patchPool(ownerId) {
+const access = require('./visit-checklist-analytics-access');
+
+// Условные адреса: настоящие почты в тестах не используются.
+const DIRECTOR_MAIL = 'director.test@example.test';
+const OTHER_MAIL = 'other.test@example.test';
+
+function patchPool(ownerId, storedList) {
   const calls = [];
   const seedIds = loadSeedDirectory().teachers.slice(0, 3).map((t) => t.id);
+  const draft = { directory: { departments: [], teachers: [] } };
+  if (storedList) draft.newTeacherIds = storedList;
   return {
     calls,
     seedIds,
     async query(sql, args) {
       calls.push({ sql, args });
       if (sql.includes('SELECT id, user_id FROM lesson_visit_projects')) return { rows: [{ id: 7, user_id: ownerId }] };
-      if (sql.includes('SELECT id, title, state_json')) {
-        return { rows: [{ id: 7, title: 'T', state_json: { draft: { directory: { departments: [], teachers: [] } } } }] };
+      if (sql.includes('SELECT id, title, state_json, created_at')) {
+        return { rows: [{ id: 7, title: 'T', state_json: { draft }, form_token: 'f', director_share_token: 'd' }] };
       }
+      if (sql.includes('SELECT id, title, state_json')) return { rows: [{ id: 7, title: 'T', state_json: { draft } }] };
+      if (sql.includes('COUNT(*)')) return { rows: [{ c: 0 }] };
       if (sql.startsWith('UPDATE')) return { rows: [{ id: 7, form_token: 'f', director_share_token: 'd' }] };
       throw new Error(`unexpected sql: ${sql}`);
     },
@@ -208,13 +218,46 @@ function patchPool(ownerId) {
 }
 const writes = (pool) => pool.calls.filter((c) => c.sql.trimStart().startsWith('UPDATE'));
 const putBody = (value) => ({ body: JSON.stringify(value) });
-const analyst = { id: 12, permissions: ['pulse.analytics.all'] };
-const plainUser = { id: 13, permissions: [] };
+const director = { id: 12, email: DIRECTOR_MAIL.toUpperCase(), permissions: ['pulse.analytics.all'] };
+const analyst = { id: 14, email: OTHER_MAIL, permissions: ['pulse.analytics.all'] };
+const plainUser = { id: 13, email: 'plain.test@example.test', permissions: [] };
 
-test('patch.newTeacherIds: analyst may change only that field on a shared project', async () => {
+function withDirectorAccess(fn) {
+  return async () => {
+    access.DIRECTOR_SUMMARY_ACCESS.emails.push(DIRECTOR_MAIL);
+    try {
+      await fn();
+    } finally {
+      access.DIRECTOR_SUMMARY_ACCESS.emails.length = 0;
+    }
+  };
+}
+
+test('canUseDirectorSummary: by session email only, closed by default', () => {
+  const { canUseDirectorSummary, VISIT_CHECKLIST_ANALYTICS_PEOPLE } = access;
+  const listed = { personKeys: [], emails: ['Director.Test@Example.test'] };
+  assert.equal(canUseDirectorSummary({ email: DIRECTOR_MAIL }, listed), true);
+  assert.equal(canUseDirectorSummary({ email: `  ${DIRECTOR_MAIL.toUpperCase()} ` }, listed), true);
+  assert.equal(canUseDirectorSummary({ email: OTHER_MAIL }, listed), false);
+  assert.equal(canUseDirectorSummary(null, listed), false);
+  assert.equal(canUseDirectorSummary({}, listed), false);
+  assert.equal(canUseDirectorSummary({ email: '' }, { personKeys: [], emails: [''] }), false);
+  // право аналитики, ФИО и id доступа не дают
+  assert.equal(canUseDirectorSummary({ id: 12, permissions: ['*'], display_name: 'Director Test' }, listed), false);
+  // по умолчанию список пуст, экран закрыт для всех
+  assert.equal(canUseDirectorSummary({ email: DIRECTOR_MAIL, permissions: ['*'] }), false);
+  // ключ записи из файла даёт только её почты, не ФИО
+  const person = VISIT_CHECKLIST_ANALYTICS_PEOPLE[0];
+  const byKey = { personKeys: [person.key], emails: [] };
+  assert.equal(canUseDirectorSummary({ email: person.emails[0] }, byKey), true);
+  assert.equal(canUseDirectorSummary({ display_name: person.full_names[0] }, byKey), false);
+  assert.equal(canUseDirectorSummary({ email: VISIT_CHECKLIST_ANALYTICS_PEOPLE[1].emails[0] }, byKey), false);
+});
+
+test('patch.newTeacherIds: listed person may change only that field on a shared project', withDirectorAccess(async () => {
   const pool = patchPool(null);
   const ids = [pool.seedIds[1], pool.seedIds[0], pool.seedIds[0], 'not_a_teacher'];
-  const r = await projects.handlePutLessonVisitProject(pool, null, false, analyst, 7, putBody({ patch: { newTeacherIds: ids } }));
+  const r = await projects.handlePutLessonVisitProject(pool, null, false, director, 7, putBody({ patch: { newTeacherIds: ids } }));
   assert.equal(r.statusCode, 200);
   assert.deepEqual(JSON.parse(r.body).newTeacherIds, [pool.seedIds[0], pool.seedIds[1]].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })));
   const w = writes(pool);
@@ -222,32 +265,41 @@ test('patch.newTeacherIds: analyst may change only that field on a shared projec
   assert.match(w[0].sql, /jsonb_build_object\('newTeacherIds'/);
   assert.doesNotMatch(w[0].sql, /updated_at|title|form_token|user_id/);
   assert.equal(JSON.parse(w[0].args[1]).includes('not_a_teacher'), false);
-});
+}));
 
-test('patch.newTeacherIds: user without analytics rights and not the owner is refused', async () => {
-  const pool = patchPool(null);
-  const r = await projects.handlePutLessonVisitProject(pool, null, false, plainUser, 7, putBody({ patch: { newTeacherIds: [] } }));
-  assert.equal(r.statusCode, 404);
-  assert.equal(writes(pool).length, 0);
+test('patch.newTeacherIds: analyst, owner and plain user without the right get 403 and nothing is written', withDirectorAccess(async () => {
+  for (const [who, owner] of [[analyst, null], [plainUser, 13], [plainUser, null], [analyst, 14]]) {
+    const pool = patchPool(owner);
+    const r = await projects.handlePutLessonVisitProject(pool, null, false, who, 7, putBody({ patch: { newTeacherIds: [] } }));
+    assert.equal(r.statusCode, 403);
+    assert.equal(writes(pool).length, 0);
+  }
   const anonymous = await projects.handlePutLessonVisitProject(patchPool(null), null, false, null, 7, putBody({ patch: { newTeacherIds: [] } }));
   assert.equal(anonymous.statusCode, 403);
-});
+}));
 
-test('patch.newTeacherIds: analyst cannot patch a project owned by another user', async () => {
-  const pool = patchPool(99);
-  const r = await projects.handlePutLessonVisitProject(pool, null, false, analyst, 7, putBody({ patch: { newTeacherIds: [] } }));
-  assert.equal(r.statusCode, 404);
+test('patch.newTeacherIds: API key cannot save the list, even when a listed session is passed along', withDirectorAccess(async () => {
+  const keyed = patchPool(null);
+  assert.equal((await projects.handlePutLessonVisitProject(keyed, null, true, null, 7, putBody({ patch: { newTeacherIds: [] } }))).statusCode, 403);
+  assert.equal((await projects.handlePutLessonVisitProject(keyed, null, true, director, 7, putBody({ patch: { newTeacherIds: [] } }))).statusCode, 403);
+  assert.equal(writes(keyed).length, 0);
+}));
+
+test('patch.newTeacherIds: closed for everyone while the access list is empty', async () => {
+  const pool = patchPool(null);
+  const r = await projects.handlePutLessonVisitProject(pool, null, false, director, 7, putBody({ patch: { newTeacherIds: [] } }));
+  assert.equal(r.statusCode, 403);
   assert.equal(writes(pool).length, 0);
 });
 
-test('patch.newTeacherIds: owner and API key keep their existing right to write', async () => {
-  const owned = patchPool(13);
-  assert.equal((await projects.handlePutLessonVisitProject(owned, null, false, plainUser, 7, putBody({ patch: { newTeacherIds: [] } }))).statusCode, 200);
-  const keyed = patchPool(null);
-  assert.equal((await projects.handlePutLessonVisitProject(keyed, null, true, null, 7, putBody({ patch: { newTeacherIds: [] } }))).statusCode, 200);
-});
+test('patch.newTeacherIds: listed person cannot patch a project owned by another user', withDirectorAccess(async () => {
+  const pool = patchPool(99);
+  const r = await projects.handlePutLessonVisitProject(pool, null, false, director, 7, putBody({ patch: { newTeacherIds: [] } }));
+  assert.equal(r.statusCode, 404);
+  assert.equal(writes(pool).length, 0);
+}));
 
-test('patch mode accepts nothing but newTeacherIds', async () => {
+test('patch mode accepts nothing but newTeacherIds', withDirectorAccess(async () => {
   for (const body of [
     { patch: { newTeacherIds: [], title: 'x' } },
     { patch: { title: 'x' } },
@@ -259,11 +311,11 @@ test('patch mode accepts nothing but newTeacherIds', async () => {
     { patch: { newTeacherIds: [] }, title: 'x' },
   ]) {
     const pool = patchPool(null);
-    const r = await projects.handlePutLessonVisitProject(pool, null, false, analyst, 7, putBody(body));
+    const r = await projects.handlePutLessonVisitProject(pool, null, false, director, 7, putBody(body));
     assert.equal(r.statusCode, 400, JSON.stringify(body));
     assert.equal(writes(pool).length, 0);
   }
-});
+}));
 
 test('analytics rights alone still do not allow a full project write', async () => {
   const pool = patchPool(null);
@@ -271,3 +323,54 @@ test('analytics rights alone still do not allow a full project write', async () 
   assert.equal(r.statusCode, 404);
   assert.equal(writes(pool).length, 0);
 });
+
+test('full write keeps the stored list for everyone except the listed person', withDirectorAccess(async () => {
+  const draft = { title: 'x', newTeacherIds: ['teacher_1'] };
+  // владелец без права: список из тела отбрасывается, а в базе остаётся прежний
+  const owned = patchPool(13, ['teacher_2']);
+  const r = await projects.handlePutLessonVisitProject(owned, null, false, plainUser, 7, putBody({ draft }));
+  assert.equal(r.statusCode, 200);
+  assert.equal('newTeacherIds' in JSON.parse(r.body).draft, false);
+  const [w] = writes(owned);
+  assert.equal('newTeacherIds' in JSON.parse(w.args[2]).draft, false);
+  assert.match(w.sql, /state_json->'draft'->'newTeacherIds'/);
+  // ключ API ведёт себя так же
+  const keyed = patchPool(null);
+  await projects.handlePutLessonVisitProject(keyed, null, true, null, 7, putBody({ draft }));
+  assert.match(writes(keyed)[0].sql, /state_json->'draft'->'newTeacherIds'/);
+  // человек из списка пишет черновик как раньше
+  const own = patchPool(12);
+  const listed = await projects.handlePutLessonVisitProject(own, null, false, director, 7, putBody({ draft }));
+  assert.deepEqual(JSON.parse(listed.body).draft.newTeacherIds, ['teacher_1']);
+  assert.doesNotMatch(writes(own)[0].sql, /state_json->'draft'->'newTeacherIds'/);
+}));
+
+test('project GET: directorSummary flag is computed on the server and the list is hidden from others', withDirectorAccess(async () => {
+  const stored = ['teacher_1', 'teacher_2'];
+  const get = async (who, viaKey = false, owner = null) => {
+    const r = await projects.handleGetLessonVisitProject(patchPool(owner, stored), null, viaKey, who, 7);
+    assert.equal(r.statusCode, 200);
+    return JSON.parse(r.body);
+  };
+  const forDirector = await get(director);
+  assert.equal(forDirector.directorSummary, true);
+  assert.deepEqual(forDirector.draft.newTeacherIds, stored);
+  for (const [who, viaKey, owner] of [[analyst, false, null], [plainUser, false, 13], [null, true, null], [director, true, null]]) {
+    const body = await get(who, viaKey, owner);
+    assert.equal(body.directorSummary, false);
+    assert.equal('newTeacherIds' in body.draft, false);
+    assert.equal(JSON.stringify(body).includes('newTeacherIds'), false);
+  }
+}));
+
+test('project POST does not let an unlisted author set the list', withDirectorAccess(async () => {
+  const create = async (who) => {
+    const client = { async query(sql) { return sql.includes('INSERT INTO lesson_visit_projects') ? { rows: [{ id: 5, title: 'T', form_token: 'f', director_share_token: 'd' }] } : { rows: [{ id: 6, director_share_token: 'x' }] }; }, release() {} };
+    const pool = { connect: async () => client };
+    const r = await projects.handlePostLessonVisitProject(pool, null, false, who, putBody({ draft: { title: 'x', newTeacherIds: ['teacher_1'] } }));
+    assert.equal(r.statusCode, 201);
+    return JSON.parse(r.body).draft;
+  };
+  assert.equal('newTeacherIds' in (await create(analyst)), false);
+  assert.deepEqual((await create(director)).newTeacherIds, ['teacher_1']);
+}));

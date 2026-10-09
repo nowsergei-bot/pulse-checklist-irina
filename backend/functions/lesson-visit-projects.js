@@ -14,6 +14,7 @@ const { buildProjectGetPayload } = require('./lib/project-get-payload');
 const { resolveProjectOwner } = require('./lib/resolve-project-owner');
 const {
   canViewSharedVisitChecklistAnalytics,
+  canUseDirectorSummary,
   visitChecklistAnalyticsActor,
 } = require('./lib/visit-checklist-analytics-access');
 const { maybeNotifyKhoroshilovVisitChecklist } = require('./lib/khoroshilov-activity-notify');
@@ -81,6 +82,11 @@ function schemaErrorResponse(err) {
     });
   }
   return null;
+}
+
+/** Экран «Сводка для директора» и список новых учителей: только по почте серверной сессии, ключ API не подходит. */
+function isDirectorSummaryUser(viaAdminKey, user, sessionUser) {
+  return !viaAdminKey && canUseDirectorSummary(visitChecklistAnalyticsActor(user, sessionUser));
 }
 
 function isSharedVisitViewer(user, sessionUser) {
@@ -235,6 +241,7 @@ async function handlePostLessonVisitProject(pool, user, viaAdminKey, sessionUser
   const title = displayVisitChecklistTitle(
     String(body.title || (draftFromBody && draftFromBody.title) || VISIT_CHECKLIST_TITLE),
   ).slice(0, 500);
+  const directorSummary = isDirectorSummaryUser(viaAdminKey, user, sessionUser);
   const draft = draftFromBody
     ? {
         ...emptyDraft(title),
@@ -247,6 +254,7 @@ async function handlePostLessonVisitProject(pool, user, viaAdminKey, sessionUser
           : draftFromBody.checklist,
       }
     : emptyDraft(title);
+  if (!directorSummary) delete draft.newTeacherIds;
 
   const uidParam = scope.apiKey === true ? null : scope.userId;
   const formToken = randomUUID().replace(/-/g, '');
@@ -377,10 +385,16 @@ async function handleGetLessonVisitProject(pool, user, viaAdminKey, sessionUser,
     // Подразделения отдаём только аналитике (сессия с правом на сводку или ключ API), не владельцу личного проекта.
     const staff_units =
       viaAdminKey || isSharedVisitViewer(user, sessionUser) ? await loadTeacherUnits(pool, draft) : {};
+    // Признак считает сервер по сессии; список новых учителей получает только тот, кому открыт экран директора.
+    const directorSummary = isDirectorSummaryUser(viaAdminKey, user, sessionUser);
+    const { newTeacherIds: _hidden, ...draftWithoutList } = draft;
+    const visibleDraft = directorSummary ? draft : draftWithoutList;
+    const payload = buildProjectGetPayload(presented, visibleDraft);
     return json(200, {
-      ...buildProjectGetPayload(presented, draft),
-      project: { ...buildProjectGetPayload(presented, draft).project, form_token: row.form_token, response_count },
+      ...payload,
+      project: { ...payload.project, form_token: row.form_token, response_count },
       staff_units,
+      directorSummary,
     });
   } catch (err) {
     const mapped = schemaErrorResponse(err);
@@ -391,15 +405,18 @@ async function handleGetLessonVisitProject(pool, user, viaAdminKey, sessionUser,
 
 /**
  * Узкий режим PUT: `{ patch: { newTeacherIds: [...] } }` меняет только draft.newTeacherIds.
- * Допуск: владелец проекта / ключ API (как и при полной записи) либо тот, кто проходит
- * canViewSharedVisitChecklistAnalytics, но только к своему или общему проекту (как чтение).
+ * Допуск: только тот, кому открыт экран директора (по почте серверной сессии), и только к своему
+ * или общему проекту (как чтение). Ключ API, владелец без этого права и аналитики получают 403.
  * Другие поля, название, updated_at и остальной черновик не затрагиваются.
  */
-async function patchNewTeacherIds(pool, user, sessionUser, scope, pid, body) {
+async function patchNewTeacherIds(pool, user, viaAdminKey, sessionUser, scope, pid, body) {
   const patch = body.patch;
   const keys = patch && typeof patch === 'object' && !Array.isArray(patch) ? Object.keys(patch) : [];
   if (body.draft !== undefined || body.title !== undefined || keys.length !== 1 || keys[0] !== 'newTeacherIds') {
     return json(400, { error: 'Bad request', message: 'Разрешено менять только newTeacherIds.' });
+  }
+  if (!isDirectorSummaryUser(viaAdminKey, user, sessionUser)) {
+    return json(403, { error: 'Forbidden', message: 'Список новых учителей может менять только директор.' });
   }
   const check = await assertScope(pool, pid, scope, { readShared: isSharedVisitViewer(user, sessionUser) });
   if (!check.ok) return json(check.code, { error: 'Not found' });
@@ -416,6 +433,10 @@ async function patchNewTeacherIds(pool, user, sessionUser, scope, pid, body) {
   return json(200, { ok: true, newTeacherIds: ids });
 }
 
+/** Возвращает в записываемый черновик уже сохранённый newTeacherIds (если он там есть). */
+const KEEP_STORED_NEW_TEACHER_IDS = ` || CASE WHEN jsonb_typeof(state_json->'draft'->'newTeacherIds') = 'array'
+         THEN jsonb_build_object('newTeacherIds', state_json->'draft'->'newTeacherIds') ELSE '{}'::jsonb END`;
+
 async function handlePutLessonVisitProject(pool, user, viaAdminKey, sessionUser, projectId, event) {
   const pid = Number(projectId);
   if (!Number.isFinite(pid)) return json(400, { error: 'Invalid id' });
@@ -425,7 +446,7 @@ async function handlePutLessonVisitProject(pool, user, viaAdminKey, sessionUser,
   try {
     const body = parseAllowedBody(event, ['title', 'draft', 'patch']);
     if (body.patch !== undefined) {
-      return await patchNewTeacherIds(pool, user, sessionUser, scope, pid, body);
+      return await patchNewTeacherIds(pool, user, viaAdminKey, sessionUser, scope, pid, body);
     }
     const check = await assertScope(pool, pid, scope);
     if (!check.ok) return json(check.code, { error: 'Not found' });
@@ -437,8 +458,11 @@ async function handlePutLessonVisitProject(pool, user, viaAdminKey, sessionUser,
       body.title != null ? String(body.title).trim() : String(draft.title || ''),
     ).slice(0, 500);
 
+    // Сохранённый список новых учителей меняет только директор; при обычной записи он остаётся как был.
+    const keepStoredList = !isDirectorSummaryUser(viaAdminKey, user, sessionUser);
+    const { newTeacherIds: _incoming, ...draftWithoutList } = draft;
     const nextDraft = {
-      ...draft,
+      ...(keepStoredList ? draftWithoutList : draft),
       v: 1,
       title: displayVisitChecklistTitle(String(draft.title || title)).slice(0, 500),
       updatedAt: new Date().toISOString(),
@@ -453,7 +477,7 @@ async function handlePutLessonVisitProject(pool, user, viaAdminKey, sessionUser,
 
     const u = await pool.query(
       `UPDATE lesson_visit_projects
-       SET title = $2, state_json = jsonb_set(state_json, '{draft}', ($3::jsonb)->'draft', true), updated_at = NOW()
+       SET title = $2, state_json = jsonb_set(state_json, '{draft}', (($3::jsonb)->'draft'${keepStoredList ? KEEP_STORED_NEW_TEACHER_IDS : ''}), true), updated_at = NOW()
        WHERE id = $1 ${updScope}
        RETURNING id, form_token, director_share_token`,
       params,

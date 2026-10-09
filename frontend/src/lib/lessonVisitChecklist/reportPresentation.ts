@@ -770,6 +770,11 @@ export function blockPercents(rows: ReportVisit[]): BlockPercent[] {
  * В «Приоритеты», подсветку блоков и «Главные зоны роста» они не входят; на вкладке
  * «Критерии урока» их баллы остаются.
  */
+/** Экран «Сводка для директора» открыт, только если его разрешил сервер и в адресе выбран этот экран. */
+export function isDirectorSummaryShown(allowedByServer: boolean | undefined, screenParam: string | null): boolean {
+  return allowedByServer === true && screenParam === "summary";
+}
+
 export const FORM_BASELINE_CODES = ["3.5", "5.2", "5.3"];
 export const GROWTH_EXCLUDED_CODES = FORM_BASELINE_CODES;
 /**

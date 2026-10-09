@@ -47,6 +47,7 @@ import {
   departmentRanking,
   directorPeriodRange,
   directorWeeks,
+  isDirectorSummaryShown,
   growthZones,
   newTeacherStats,
   visitCoverage,
@@ -73,7 +74,7 @@ type Props = {
   directory: LessonVisitDirectory;
   /** ID учителя анкеты → подразделения из справочника сотрудников. Без него подразделения не показываются. */
   staffUnits?: Record<string, string[]>;
-  /** Страница директора включает экран «Сводка для директора» (?screen=summary). */
+  /** Сервер разрешил экран «Сводка для директора» (?screen=summary); без этого признака экран не открывается. */
   directorScreen?: boolean;
   /** ID учителей справочника, отмеченных администратором как новые. */
   newTeacherIds?: string[];
@@ -1471,7 +1472,7 @@ export default function VisitChecklistReportDashboard({
       );
     }
   }
-  if (directorScreen && params.get("screen") === "summary")
+  if (isDirectorSummaryShown(directorScreen, params.get("screen")))
     return (
       <DirectorSummary
         report={report}

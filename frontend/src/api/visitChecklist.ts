@@ -48,17 +48,25 @@ export async function getLessonVisitProject(
   draft: LessonVisitDraftSave;
   /** ID учителя анкеты → подразделения из справочника сотрудников (пусто = не определено). */
   staffUnits: Record<string, string[]>;
+  /** Сервер открыл этому пользователю экран «Сводка для директора» (по его сессии). */
+  directorSummary: boolean;
 }> {
   const res = await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}`, { headers: adminHeaders() });
   const data = await parseJson<{
     project?: LessonVisitProjectRow;
     draft?: LessonVisitDraftSave;
     staff_units?: Record<string, string[]>;
+    directorSummary?: boolean;
     error?: string;
     message?: string;
   }>(res);
   if (!res.ok || !data.project || !data.draft) throw new Error(apiErrText(data, res.statusText));
-  return { project: data.project, draft: data.draft, staffUnits: data.staff_units || {} };
+  return {
+    project: data.project,
+    draft: data.draft,
+    staffUnits: data.staff_units || {},
+    directorSummary: data.directorSummary === true,
+  };
 }
 
 export async function putLessonVisitProject(
@@ -89,7 +97,7 @@ export async function saveNewTeacherIds(projectId: number, newTeacherIds: string
   });
   const data = await parseJson<{ ok?: boolean; newTeacherIds?: string[]; error?: string; message?: string }>(res);
   if (res.status === 404 || res.status === 403)
-    throw new Error('Нет права сохранять список новых учителей. Обратитесь к владельцу проекта.');
+    throw new Error('Список новых учителей сохраняет только директор.');
   if (!res.ok || !Array.isArray(data.newTeacherIds)) throw new Error(apiErrText(data, res.statusText));
   return data.newTeacherIds;
 }

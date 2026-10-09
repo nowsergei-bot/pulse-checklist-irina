@@ -1,6 +1,6 @@
 'use strict';
 
-const { matchesAllowlistedIdentity } = require('./identity-allowlist');
+const { matchesAllowlistedIdentity, normalizeAllowlistEmail } = require('./identity-allowlist');
 
 /** Хорошилов, Майсурадзе, Новожилов, Зенькович, Костюкович — аналитика чек-листа. */
 const VISIT_CHECKLIST_ANALYTICS_PEOPLE = [
@@ -101,7 +101,29 @@ function visitChecklistAnalyticsActor(user, sessionUser) {
   return sessionUser || user || null;
 }
 
+/**
+ * Кому открыт экран «Сводка для директора» и сохранение списка новых учителей.
+ * personKeys: ключи записей из VISIT_CHECKLIST_ANALYTICS_PEOPLE (берутся только их почты, ФИО не используется).
+ * emails: отдельные служебные адреса. Пока список пуст, экран закрыт для всех.
+ */
+const DIRECTOR_SUMMARY_ACCESS = { personKeys: [], emails: [] };
+
+function directorSummaryEmails(access) {
+  const fromPeople = VISIT_CHECKLIST_ANALYTICS_PEOPLE
+    .filter((p) => access.personKeys.includes(p.key))
+    .flatMap((p) => p.emails);
+  return [...fromPeople, ...access.emails].map(normalizeAllowlistEmail).filter(Boolean);
+}
+
+/** Только по почте из серверной сессии; без сессии, по ФИО или по правам аналитики доступа нет. */
+function canUseDirectorSummary(sessionUser, access = DIRECTOR_SUMMARY_ACCESS) {
+  const email = normalizeAllowlistEmail(sessionUser?.email);
+  return Boolean(email) && directorSummaryEmails(access).includes(email);
+}
+
 module.exports = {
+  DIRECTOR_SUMMARY_ACCESS,
+  canUseDirectorSummary,
   VISIT_CHECKLIST_ANALYTICS_PEOPLE,
   findVisitChecklistAnalyticsPerson,
   canViewSharedVisitChecklistAnalytics,

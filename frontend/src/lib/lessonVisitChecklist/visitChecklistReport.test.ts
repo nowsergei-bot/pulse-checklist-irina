@@ -37,6 +37,7 @@ import {
   repeatText,
   visitCoverage,
   niceAxis,
+  isDirectorSummaryShown,
   weeklyArrows,
   weeklyAverages,
 } from "./reportPresentation.ts";
@@ -887,4 +888,13 @@ test("form-baseline items 3.5, 5.2, 5.3 stay out of priorities and block highlig
     { code: "2.1", percent: null, priority: null },
   ];
   assert.deepEqual(priorityCriteria(criteria).map((c) => c.code), ["7.1", "6.2"]);
+});
+
+test("director summary screen opens only when the server allows it and the address asks for it", () => {
+  assert.equal(isDirectorSummaryShown(true, "summary"), true);
+  assert.equal(isDirectorSummaryShown(true, null), false);
+  assert.equal(isDirectorSummaryShown(true, "other"), false);
+  // без признака сервера адрес ?screen=summary игнорируется
+  assert.equal(isDirectorSummaryShown(false, "summary"), false);
+  assert.equal(isDirectorSummaryShown(undefined, "summary"), false);
 });
