@@ -22,6 +22,10 @@ import {
 import {
   UNIT_FILTER_NOT_DEFINED,
   attentionTeachers,
+  attentionSignalItems,
+  blockAttentionPercent,
+  priorityCriteria,
+  signalItems,
   blockPercents,
   coverageUnits,
   departmentRanking,
@@ -852,4 +856,35 @@ test("new teachers: visited, averages, lessons below 70 and not visited come fro
   const empty = newTeacherStats(teachers, dir, undefined, rows, attention);
   assert.equal(empty.configured, false);
   assert.equal(empty.total, 0);
+});
+
+test("form-baseline items 3.5, 5.2, 5.3 stay out of priorities and block highlighting", () => {
+  // Один наблюдатель отметил «отсутствуют» (0, по форме), другой «присутствуют» (1, минимальный уровень).
+  const make = (id: number, value: number, method: string) => {
+    const visit = synthetic({ id, teacherKey: "a", date: "2026-09-15", percent: 100, pairKey: "L1" });
+    for (const code of ["3.5", "5.2"]) {
+      const item = visit.score.items.find((i) => i.code === code)!;
+      item.value = value;
+      item.method = method;
+    }
+    return visit;
+  };
+  const lesson = lessonObservations([make(1, 0, "form"), make(2, 1, "form_minimum")])[0];
+  // причина жалобы: минимум отбрасывается, остаётся «0 из 3»
+  assert.equal(signalItems(lesson.score.items).find((i) => i.code === "3.5")?.value, 0);
+  // правило: пункты по отметке формы не входят ни в приоритеты, ни в подсветку
+  assert.equal(attentionSignalItems(lesson.score.items).some((i) => ["3.5", "5.2", "5.3"].includes(i.code)), false);
+  const block5 = lesson.score.items.filter((i) => i.code.startsWith("5."));
+  assert.ok(Math.abs(blockAttentionPercent([block5])! - 100) < 1e-9); // 5.1 на максимуме
+  assert.equal(blockAttentionPercent([block5.filter((i) => i.code !== "5.1")]), null);
+  const criteria = [
+    { code: "3.5", percent: 0, priority: 0 },
+    { code: "5.2", percent: 0, priority: 0 },
+    { code: "5.3", percent: 10, priority: 1 },
+    { code: "7.1", percent: 40, priority: 1.2 },
+    { code: "6.2", percent: 20, priority: 1.8 },
+    { code: "4.1", percent: 80, priority: 3 },
+    { code: "2.1", percent: null, priority: null },
+  ];
+  assert.deepEqual(priorityCriteria(criteria).map((c) => c.code), ["7.1", "6.2"]);
 });

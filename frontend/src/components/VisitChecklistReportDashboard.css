@@ -282,8 +282,12 @@
   align-items: center;
   gap: 6px;
 }
+.vcr-contents {
+  gap: 10px 22px;
+}
 .vcr-contents a {
   color: #1766a4;
+  font-size: 17px;
 }
 .vcr-pagination button,
 .vcr-navigation button {

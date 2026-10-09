@@ -149,6 +149,27 @@ export function eligibleItem(item: DirectItem) {
 export function signalItems(items: DirectItem[]): DirectItem[] {
   return items.filter(eligibleItem).map(item => item.signalValue !== undefined ? {...item, value: item.signalValue} : item);
 }
+/** Сигнальные оценки для приоритетов и подсветки: без пунктов с баллом по отметке формы. */
+export function attentionSignalItems(items: DirectItem[]): DirectItem[] {
+  return signalItems(items).filter((i) => !FORM_BASELINE_CODES.includes(i.code));
+}
+/** «Приоритеты»: критерии со средним ниже 50% от максимума, от слабых к сильным. */
+export function priorityCriteria<
+  T extends { code: string; percent: number | null; priority: number | null },
+>(criteria: T[]): T[] {
+  return criteria
+    .filter(
+      (c) =>
+        !FORM_BASELINE_CODES.includes(c.code) && c.percent != null && c.percent < 50,
+    )
+    .sort((a, b) => a.priority! - b.priority!);
+}
+/** Подсветка блока: % от максимума по сигнальным оценкам уроков; null, если оценивать нечего. */
+export function blockAttentionPercent(blocks: DirectItem[][]): number | null {
+  const items = blocks.flatMap(attentionSignalItems);
+  const maximum = items.reduce((n, i) => n + i.max, 0);
+  return maximum ? (items.reduce((n, i) => n + i.value!, 0) / maximum) * 100 : null;
+}
 export function losses(visit: ReportVisit) {
   return signalItems(visit.score.items)
     .filter((i) => i.value! < i.max)
@@ -744,7 +765,13 @@ export function blockPercents(rows: ReportVisit[]): BlockPercent[] {
   }));
 }
 
-export const GROWTH_EXCLUDED_CODES = ["3.5", "5.2", "5.3"];
+/**
+ * Пункты, балл которых пока берётся по отметке формы (минимальный уровень): 3.5, 5.2, 5.3.
+ * В «Приоритеты», подсветку блоков и «Главные зоны роста» они не входят; на вкладке
+ * «Критерии урока» их баллы остаются.
+ */
+export const FORM_BASELINE_CODES = ["3.5", "5.2", "5.3"];
+export const GROWTH_EXCLUDED_CODES = FORM_BASELINE_CODES;
 /**
  * Пункты с несколькими вариантами ответа: пояснение называет, какой решающий вариант
  * чаще всего не отмечен в чек-листах с баллом ниже максимума.

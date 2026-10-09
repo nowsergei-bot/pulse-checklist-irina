@@ -24,6 +24,8 @@ import {
   displayScore,
   fullLessonCount,
   signalItems,
+  blockAttentionPercent,
+  priorityCriteria,
   itemText,
   levelIndex,
   losses,
@@ -1008,9 +1010,7 @@ export default function VisitChecklistReportDashboard({
         eligibleCount: eligible.length,
       };
     });
-  const priorities = criteria
-    .filter((c) => c.percent != null && c.percent < 50)
-    .sort((a, b) => a.priority! - b.priority!);
+  const priorities = priorityCriteria(criteria);
   const filteredLessons = lessons
     .filter(
       (v) =>
@@ -1737,16 +1737,7 @@ export default function VisitChecklistReportDashboard({
                       ),
                     );
                     const max = valid[0]?.reduce((n, i) => n + i.max, 0);
-                    const attentionItems = blocks.flatMap(signalItems);
-                    const attentionMaximum = attentionItems.reduce(
-                      (n, i) => n + i.max,
-                      0,
-                    );
-                    const attention = attentionMaximum
-                      ? (attentionItems.reduce((n, i) => n + i.value!, 0) /
-                          attentionMaximum) *
-                        100
-                      : null;
+                    const attention = blockAttentionPercent(blocks);
                     return (
                       <td
                         key={d}
