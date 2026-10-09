@@ -58,7 +58,7 @@ test('visitor groups keep only four surnames in Administration', () => {
   );
   const names = visitChecklistVisitorNames(directory);
   assert.equal(new Set(names).size, names.length);
-  assert.equal(names.length, 187);
+  assert.equal(names.length, 189);
 });
 
 test('former Administration people sit in their staff/JD subdivisions', () => {
@@ -133,7 +133,7 @@ test('visitor and teacher lists merge Campus 1+2 and drop UVP sections', () => {
 
 test('observed teachers exclude administration and academic office', () => {
   const chairs = visitChecklistObservedTeachers(directory);
-  assert.equal(chairs.length, 175);
+  assert.equal(chairs.length, 177);
   assert.equal(chairs.some((t) => t.departmentId === VISIT_ADMIN_DEPT_ID), false);
   assert.equal(chairs.some((t) => t.departmentId === VISIT_ACADEMIC_DEPT_ID), false);
   assert.deepEqual(
@@ -141,7 +141,7 @@ test('observed teachers exclude administration and academic office', () => {
     false,
   );
   const leadership = visitChecklistObservedTeachers(directory, 'dept_8');
-  assert.equal(leadership.length, 4);
+  assert.equal(leadership.length, 5);
   const groups = visitChecklistObservedTeacherGroups(directory);
   assert.ok(groups.some((g) => g.heading === 'Кафедра лидерства' && g.choices.includes('Круглова Галина Игоревна')));
   assert.equal(groups.some((g) => g.heading === 'Администрация'), false);

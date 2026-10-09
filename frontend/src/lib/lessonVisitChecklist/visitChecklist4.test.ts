@@ -124,15 +124,16 @@ test('directory follows Excel chairs plus JD leadership teachers', () => {
     ],
   );
   const leadership = teachers.filter((t) => t.departmentId === 'dept_8');
-  assert.deepEqual(
-    leadership.map((t) => t.name).sort((a, b) => a.localeCompare(b, 'ru')),
-    [
-      'Васенкова Елена Владимировна',
-      'Камышанова Анастасия Валерьевна',
-      'Клементьева Екатерина Сергеевна',
-      'Круглова Галина Игоревна',
-    ],
-  );
+  const leadershipNames = leadership.map((t) => t.name);
+  for (const name of [
+    'Васенкова Елена Владимировна',
+    'Камышанова Анастасия Валерьевна',
+    'Клементьева Екатерина Сергеевна',
+    'Круглова Галина Игоревна',
+  ]) {
+    assert.ok(leadershipNames.includes(name));
+  }
+  assert.equal(leadership.length, 5);
   const pe = new Set(teachers.filter((t) => t.departmentId === 'dept_6').map((t) => t.name));
   for (const name of leadership.map((t) => t.name)) {
     assert.equal(pe.has(name), false);
@@ -141,9 +142,9 @@ test('directory follows Excel chairs plus JD leadership teachers', () => {
   assert.equal(teachers.filter((t) => t.departmentId === 'dept_academic').length, 5);
   assert.equal(
     teachers.filter((t) => t.departmentId !== 'dept_admin' && t.departmentId !== 'dept_academic').length,
-    175,
+    177,
   );
-  assert.equal(teachers.length, 189);
+  assert.equal(teachers.length, 191);
   const ids = teachers.map((t) => t.id);
   assert.equal(new Set(ids).size, ids.length);
 });

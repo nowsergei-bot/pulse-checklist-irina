@@ -920,6 +920,11 @@
         "departmentId": "dept_1"
       },
       {
+        "id": "teacher_191",
+        "name": "Жукова Анна Игоревна",
+        "departmentId": "dept_8"
+      },
+      {
         "id": "teacher_59",
         "name": "Замятина Мария Михайловна",
         "departmentId": "dept_7"
@@ -1008,6 +1013,11 @@
         "id": "teacher_71",
         "name": "Князева Лидия Гунаровна",
         "departmentId": "dept_3"
+      },
+      {
+        "id": "teacher_192",
+        "name": "Колпаков Антон Владимирович",
+        "departmentId": "dept_4"
       },
       {
         "id": "teacher_180",

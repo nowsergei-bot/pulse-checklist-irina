@@ -898,3 +898,35 @@ test("director summary screen opens only when the server allows it and the addre
   assert.equal(isDirectorSummaryShown(false, "summary"), false);
   assert.equal(isDirectorSummaryShown(undefined, "summary"), false);
 });
+
+test("coverage over the real seed directory counts every listed teacher once", () => {
+  const full = JSON.parse(
+    readFileSync(new URL("./defaultSeed.json", import.meta.url), "utf8"),
+  ) as { directory: LessonVisitDirectory };
+  const { teachers } = full.directory;
+  const counted = teachers.filter(
+    (t) => t.departmentId !== "dept_admin" && t.departmentId !== "dept_academic",
+  );
+  assert.equal(counted.length, 177);
+  assert.equal(new Set(teachers.map((t) => t.id)).size, teachers.length);
+  const entry = (t: (typeof teachers)[number], visited: boolean) => ({
+    key: reportPersonKey(t.name),
+    name: t.name,
+    department: "Кафедра",
+    visits: visited
+      ? [synthetic({ id: 1, teacherKey: reportPersonKey(t.name), date: "2026-09-15", percent: 80 })]
+      : [],
+  });
+  assert.equal(new Set(counted.map((t) => reportPersonKey(t.name))).size, counted.length);
+  const none = visitCoverage(counted.map((t) => entry(t, false)), full.directory, {});
+  assert.equal(none.total, 177);
+  assert.equal(none.visited, 0);
+  assert.equal(none.notVisited.length, 177);
+  const one = visitCoverage(
+    counted.map((t, i) => entry(t, i === 0)),
+    full.directory,
+    {},
+  );
+  assert.equal(one.visited, 1);
+  assert.equal(one.notVisited.length, 176);
+});
