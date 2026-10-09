@@ -147,6 +147,8 @@ function LegacyVisitChecklistCloudDashboardPage() {
   const [liveDirectory, setLiveDirectory] = useState<LessonVisitDirectory | null>(null);
   const [liveStaffUnits, setLiveStaffUnits] = useState<Record<string, string[]>>({});
   const [liveReady, setLiveReady] = useState(false);
+  const [liveLoadErr, setLiveLoadErr] = useState<string | null>(null);
+  const [liveRetry, setLiveRetry] = useState(0);
   const dashPdfRef = useRef<HTMLDivElement>(null);
   const cardPdfRef = useRef<HTMLElement>(null);
 
@@ -179,6 +181,7 @@ function LegacyVisitChecklistCloudDashboardPage() {
     }
     let cancelled = false;
     setLiveReady(false);
+    setLiveLoadErr(null);
     void Promise.all([
       listLessonVisitResponses(projectId),
       getLessonVisitProject(projectId),
@@ -191,14 +194,14 @@ function LegacyVisitChecklistCloudDashboardPage() {
       setLiveReady(true);
     }).catch((error) => {
       if (!cancelled) {
-        setLoadErr(humanizeVisitChecklistCloudError(error, 'Не удалось загрузить ответы чеклиста'));
+        setLiveLoadErr(humanizeVisitChecklistCloudError(error, 'Не удалось загрузить ответы чеклиста'));
         setLiveReady(true);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, liveRetry]);
 
   const namedTeachers = useMemo(
     () =>
@@ -445,7 +448,16 @@ function LegacyVisitChecklistCloudDashboardPage() {
   return (
     <div className="page vcd-page mo-eng-dash-page">
       <div ref={dashPdfRef}>
-        {liveReady && !loading && !loadErr ? <VisitChecklistReportDashboard projectId={projectId} responses={liveResponses} checklist={liveChecklist} directory={liveDirectory || defaultSeed.directory} staffUnits={liveStaffUnits} /> : null}
+        {liveLoadErr ? (
+          <div className="card glass-surface" role="alert" style={{ padding: '1rem' }}>
+            <p>{liveLoadErr}</p>
+            <button type="button" onClick={() => setLiveRetry(value => value + 1)}>
+              Повторить загрузку сводки
+            </button>
+          </div>
+        ) : null}
+        {projectId && !liveReady ? <p role="status">Загружаем ответы для сводки…</p> : null}
+        {projectId && liveReady && !liveLoadErr ? <VisitChecklistReportDashboard projectId={projectId} responses={liveResponses} checklist={liveChecklist} directory={liveDirectory || defaultSeed.directory} staffUnits={liveStaffUnits} /> : null}
         <details className="card glass-surface" style={{ padding: '1rem' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Архивная аналитика и отчёты по прежней шкале</summary>
         <header className="mo-eng-dash-hero vcd-hero">
