@@ -251,7 +251,7 @@ test('canUseDirectorSummary: by session email only, closed by default', () => {
   // по умолчанию открыто только двум записям из файла, по их почте; чужая почта и права аналитики не помогают
   assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.personKeys, ['maisuradze', 'kostyukovich']);
   assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.emails, []);
-  assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.userIds, [52, 97]);
+  assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.userIds, [52, 97, 30]);
   assert.equal(canUseDirectorSummary({ id: 52 }), true);
   assert.equal(canUseDirectorSummary({ id: '52' }), true);
   assert.equal(canUseDirectorSummary({ id: 97 }), true);
@@ -415,7 +415,7 @@ test('project GET and PATCH with the default list: both listed accounts are open
     assert.equal(r.statusCode, 200);
     return JSON.parse(r.body);
   };
-  for (const id of [52, 97]) {
+  for (const id of [52, 97, 30]) {
     const body = await get({ id, email: OTHER_MAIL, permissions: ['pulse.analytics.all'] });
     assert.equal(body.directorSummary, true, String(id));
     assert.equal(body.viewerId, id);
