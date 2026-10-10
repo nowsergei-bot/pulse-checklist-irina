@@ -247,9 +247,11 @@ test('canUseDirectorSummary: by session email only, closed by default', () => {
   // по умолчанию открыто только двум записям из файла, по их почте; чужая почта и права аналитики не помогают
   assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.personKeys, ['maisuradze', 'kostyukovich']);
   assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.emails, []);
-  assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.userIds, [52]);
+  assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.userIds, [52, 97]);
   assert.equal(canUseDirectorSummary({ id: 52 }), true);
   assert.equal(canUseDirectorSummary({ id: '52' }), true);
+  assert.equal(canUseDirectorSummary({ id: 97 }), true);
+  assert.equal(canUseDirectorSummary({ id: 98, permissions: ['*'] }), false);
   assert.equal(canUseDirectorSummary({ id: 53, permissions: ['*'] }), false);
   assert.equal(canUseDirectorSummary({ email: DIRECTOR_MAIL, permissions: ['*'] }), false);
   const byEmail = (key) => VISIT_CHECKLIST_ANALYTICS_PEOPLE.find((p) => p.key === key).emails;
@@ -401,6 +403,31 @@ test('project GET: directorSummary flag is computed on the server and the list i
     assert.equal(JSON.stringify(body).includes('newTeacherIds'), false);
   }
 }));
+
+test('project GET and PATCH with the default list: both listed accounts are opened by number, others are not', async () => {
+  const get = async (who) => {
+    const r = await projects.handleGetLessonVisitProject(patchPool(null, ['teacher_1']), null, false, who, 7);
+    assert.equal(r.statusCode, 200);
+    return JSON.parse(r.body);
+  };
+  for (const id of [52, 97]) {
+    const body = await get({ id, email: OTHER_MAIL, permissions: ['pulse.analytics.all'] });
+    assert.equal(body.directorSummary, true, String(id));
+    assert.equal(body.viewerId, id);
+    assert.deepEqual(body.draft.newTeacherIds, ['teacher_1']);
+    const pool = patchPool(null);
+    const r = await projects.handlePutLessonVisitProject(pool, null, false, { id, permissions: ['pulse.analytics.all'] }, 7, putBody({ patch: { newTeacherIds: [] } }));
+    assert.equal(r.statusCode, 200, String(id));
+  }
+  for (const id of [51, 53, 96, 98]) {
+    const body = await get({ id, email: OTHER_MAIL, permissions: ['*', 'pulse.analytics.all', 'pulse.director.checklist'] });
+    assert.equal(body.directorSummary, false, String(id));
+    assert.equal(JSON.stringify(body).includes('newTeacherIds'), false);
+    const pool = patchPool(null);
+    const r = await projects.handlePutLessonVisitProject(pool, null, false, { id, permissions: ['*'] }, 7, putBody({ patch: { newTeacherIds: [] } }));
+    assert.equal(r.statusCode, 403, String(id));
+  }
+});
 
 test('project POST does not let an unlisted author set the list', withDirectorAccess(async () => {
   const create = async (who) => {

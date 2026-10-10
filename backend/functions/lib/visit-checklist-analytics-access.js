@@ -109,7 +109,7 @@ function visitChecklistAnalyticsActor(user, sessionUser) {
  * Если все списки пусты, экран закрыт для всех.
  * Сейчас: директор (maisuradze) и, временно на время настройки, Костюкович И.С. (kostyukovich); потом её ключ убирается.
  */
-const DIRECTOR_SUMMARY_ACCESS = { personKeys: ['maisuradze', 'kostyukovich'], emails: [], userIds: [52] };
+const DIRECTOR_SUMMARY_ACCESS = { personKeys: ['maisuradze', 'kostyukovich'], emails: [], userIds: [52, 97] };
 
 function directorSummaryEmails(access) {
   const fromPeople = VISIT_CHECKLIST_ANALYTICS_PEOPLE
