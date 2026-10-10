@@ -247,7 +247,10 @@ test('canUseDirectorSummary: by session email only, closed by default', () => {
   // по умолчанию открыто только двум записям из файла, по их почте; чужая почта и права аналитики не помогают
   assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.personKeys, ['maisuradze', 'kostyukovich']);
   assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.emails, []);
-  assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.userIds, []);
+  assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.userIds, [52]);
+  assert.equal(canUseDirectorSummary({ id: 52 }), true);
+  assert.equal(canUseDirectorSummary({ id: '52' }), true);
+  assert.equal(canUseDirectorSummary({ id: 53, permissions: ['*'] }), false);
   assert.equal(canUseDirectorSummary({ email: DIRECTOR_MAIL, permissions: ['*'] }), false);
   const byEmail = (key) => VISIT_CHECKLIST_ANALYTICS_PEOPLE.find((p) => p.key === key).emails;
   for (const key of ['maisuradze', 'kostyukovich']) {
