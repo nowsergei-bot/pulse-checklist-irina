@@ -1630,16 +1630,29 @@ export default function VisitChecklistReportDashboard({
         <>
           <nav className="vcr-contents" aria-label="Оглавление">
             <span className="vcr-contents__label">Перейти к разделу:</span>
-            {[
-              ["charts", "Диаграммы"],
-              ["attention", "Критерии, требующие внимания"],
-              ["priorities", "Зоны роста"],
-              ["support", "Нужна методическая поддержка"],
-              ["discrepancies", "Расхождения в оценках"],
-              ["unlinked", "Самоанализы без урока"],
-            ].map(([id, name]) => (
+            {(
+              [
+                ["charts", "Диаграммы", null],
+                ["attention", "Критерии, требующие внимания", SECTION_NAMES.length],
+                ["priorities", "Зоны роста", null],
+                ["support", "Нужна методическая поддержка", support.length],
+                [
+                  "discrepancies",
+                  "Расхождения в оценках",
+                  new Set(flags.map((f) => f.lesson.id)).size,
+                ],
+                ["unlinked", "Самоанализы без урока", unlinked.length],
+              ] as [string, string, number | null][]
+            ).map(([id, name, count]) => (
               <a key={id} href={`#vcr-${id}`}>
-                {name}
+                <span>{name}</span>
+                {count != null && (
+                  <span
+                    className={`vcr-contents__count${count === 0 ? " vcr-contents__count--zero" : id === "support" ? " vcr-contents__count--warn" : ""}`}
+                  >
+                    {count}
+                  </span>
+                )}
               </a>
             ))}
           </nav>
