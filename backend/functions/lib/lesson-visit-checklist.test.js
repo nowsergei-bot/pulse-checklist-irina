@@ -244,8 +244,27 @@ test('canUseDirectorSummary: by session email only, closed by default', () => {
   assert.equal(canUseDirectorSummary({ email: '' }, { personKeys: [], emails: [''] }), false);
   // право аналитики, ФИО и id доступа не дают
   assert.equal(canUseDirectorSummary({ id: 12, permissions: ['*'], display_name: 'Director Test' }, listed), false);
-  // по умолчанию список пуст, экран закрыт для всех
+  // по умолчанию открыто только двум записям из файла, по их почте; чужая почта и права аналитики не помогают
+  assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.personKeys, ['maisuradze', 'kostyukovich']);
+  assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.emails, []);
+  assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.userIds, []);
   assert.equal(canUseDirectorSummary({ email: DIRECTOR_MAIL, permissions: ['*'] }), false);
+  const byEmail = (key) => VISIT_CHECKLIST_ANALYTICS_PEOPLE.find((p) => p.key === key).emails;
+  for (const key of ['maisuradze', 'kostyukovich']) {
+    for (const email of byEmail(key)) assert.equal(canUseDirectorSummary({ email }), true, email);
+  }
+  for (const key of VISIT_CHECKLIST_ANALYTICS_PEOPLE.map((p) => p.key).filter((k) => !['maisuradze', 'kostyukovich'].includes(k))) {
+    for (const email of byEmail(key)) assert.equal(canUseDirectorSummary({ email, permissions: ['*'] }), false, key);
+  }
+  // номер учётной записи работает отдельно от почты и не путается с другими номерами
+  const byId = { personKeys: [], emails: [], userIds: [4242] };
+  assert.equal(canUseDirectorSummary({ id: 4242, email: OTHER_MAIL }, byId), true);
+  assert.equal(canUseDirectorSummary({ id: '4242' }, byId), true);
+  assert.equal(canUseDirectorSummary({ id: 4243, permissions: ['*'] }, byId), false);
+  assert.equal(canUseDirectorSummary({ id: null }, byId), false);
+  assert.equal(canUseDirectorSummary({ id: 4242 }, { personKeys: [], emails: [] }), false);
+  const names = VISIT_CHECKLIST_ANALYTICS_PEOPLE.find((p) => p.key === 'maisuradze').full_names;
+  assert.equal(canUseDirectorSummary({ display_name: names[0], permissions: ['*'] }), false);
   // ключ записи из файла даёт только её почты, не ФИО
   const person = VISIT_CHECKLIST_ANALYTICS_PEOPLE[0];
   const byKey = { personKeys: [person.key], emails: [] };
@@ -285,11 +304,25 @@ test('patch.newTeacherIds: API key cannot save the list, even when a listed sess
   assert.equal(writes(keyed).length, 0);
 }));
 
-test('patch.newTeacherIds: closed for everyone while the access list is empty', async () => {
+test('patch.newTeacherIds: closed for everyone when the access list is empty, and for a listed address that does not match', async () => {
+  const saved = access.DIRECTOR_SUMMARY_ACCESS.personKeys.splice(0);
+  try {
+    const pool = patchPool(null);
+    const r = await projects.handlePutLessonVisitProject(pool, null, false, director, 7, putBody({ patch: { newTeacherIds: [] } }));
+    assert.equal(r.statusCode, 403);
+    assert.equal(writes(pool).length, 0);
+  } finally {
+    access.DIRECTOR_SUMMARY_ACCESS.personKeys.push(...saved);
+  }
+});
+
+test('patch.newTeacherIds: a person listed by key passes with the address recorded in the access file', async () => {
+  const email = access.VISIT_CHECKLIST_ANALYTICS_PEOPLE.find((p) => p.key === 'maisuradze').emails[0];
   const pool = patchPool(null);
-  const r = await projects.handlePutLessonVisitProject(pool, null, false, director, 7, putBody({ patch: { newTeacherIds: [] } }));
-  assert.equal(r.statusCode, 403);
-  assert.equal(writes(pool).length, 0);
+  const r = await projects.handlePutLessonVisitProject(pool, null, false, { id: 30, email }, 7, putBody({ patch: { newTeacherIds: [] } }));
+  assert.equal(r.statusCode, 200);
+  const stranger = await projects.handlePutLessonVisitProject(patchPool(null), null, false, { id: 31, email: OTHER_MAIL, permissions: ['*'] }, 7, putBody({ patch: { newTeacherIds: [] } }));
+  assert.equal(stranger.statusCode, 403);
 });
 
 test('patch.newTeacherIds: listed person cannot patch a project owned by another user', withDirectorAccess(async () => {
@@ -355,6 +388,9 @@ test('project GET: directorSummary flag is computed on the server and the list i
   const forDirector = await get(director);
   assert.equal(forDirector.directorSummary, true);
   assert.deepEqual(forDirector.draft.newTeacherIds, stored);
+  // собственный номер учётной записи отдаётся человеку, ключу API нет
+  assert.equal(forDirector.viewerId, 12);
+  assert.equal((await get(director, true)).viewerId, null);
   for (const [who, viaKey, owner] of [[analyst, false, null], [plainUser, false, 13], [null, true, null], [director, true, null]]) {
     const body = await get(who, viaKey, owner);
     assert.equal(body.directorSummary, false);

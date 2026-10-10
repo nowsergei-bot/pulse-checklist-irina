@@ -149,20 +149,24 @@ export function eligibleItem(item: DirectItem) {
 export function signalItems(items: DirectItem[]): DirectItem[] {
   return items.filter(eligibleItem).map(item => item.signalValue !== undefined ? {...item, value: item.signalValue} : item);
 }
-/** Сигнальные оценки для приоритетов и подсветки: без пунктов с баллом по отметке формы. */
+/** Сигнальные оценки для зон роста и подсветки: без пунктов с баллом по отметке формы. */
 export function attentionSignalItems(items: DirectItem[]): DirectItem[] {
   return signalItems(items).filter((i) => !FORM_BASELINE_CODES.includes(i.code));
 }
-/** «Приоритеты»: критерии со средним ниже 50% от максимума, от слабых к сильным. */
-export function priorityCriteria<
-  T extends { code: string; percent: number | null; priority: number | null },
+/**
+ * «Зоны роста» на «Сводке»: все оценённые пункты от самого слабого среднего % от максимума к более сильным,
+ * без порога; на странице показываются первые пять. Пункты по отметке формы (3.5, 5.2, 5.3) не входят.
+ */
+export function growthCriteria<
+  T extends { code: string; percent: number | null },
 >(criteria: T[]): T[] {
   return criteria
-    .filter(
-      (c) =>
-        !FORM_BASELINE_CODES.includes(c.code) && c.percent != null && c.percent < 50,
-    )
-    .sort((a, b) => a.priority! - b.priority!);
+    .filter((c) => !FORM_BASELINE_CODES.includes(c.code) && c.percent != null)
+    .sort(
+      (a, b) =>
+        a.percent! - b.percent! ||
+        a.code.localeCompare(b.code, "ru", { numeric: true }),
+    );
 }
 /** Подсветка блока: % от максимума по сигнальным оценкам уроков; null, если оценивать нечего. */
 export function blockAttentionPercent(blocks: DirectItem[][]): number | null {
@@ -767,12 +771,17 @@ export function blockPercents(rows: ReportVisit[]): BlockPercent[] {
 
 /**
  * Пункты, балл которых пока берётся по отметке формы (минимальный уровень): 3.5, 5.2, 5.3.
- * В «Приоритеты», подсветку блоков и «Главные зоны роста» они не входят; на вкладке
+ * В «Зоны роста» на «Сводке», подсветку блоков и зоны роста на экране директора они не входят; на вкладке
  * «Критерии урока» их баллы остаются.
  */
 /** Экран «Сводка для директора» открыт, только если его разрешил сервер и в адресе выбран этот экран. */
 export function isDirectorSummaryShown(allowedByServer: boolean | undefined, screenParam: string | null): boolean {
   return allowedByServer === true && screenParam === "summary";
+}
+
+/** Адрес просит сводку директора, а сервер её этому пользователю не открыл: нужна короткая надпись, а не обычная страница. */
+export function isDirectorSummaryDenied(allowedByServer: boolean | undefined, screenParam: string | null): boolean {
+  return allowedByServer !== true && screenParam === "summary";
 }
 
 export const FORM_BASELINE_CODES = ["3.5", "5.2", "5.3"];
@@ -864,7 +873,7 @@ export type GrowthZone = {
   note: string;
 };
 /**
- * Пункты с самым низким средним % от максимума по сигнальным оценкам (как «Приоритеты»),
+ * Пункты с самым низким средним % от максимума по сигнальным оценкам (как блок «Зоны роста» на «Сводке»),
  * без пунктов, которые пока оцениваются по минимальному уровню. Пояснение берётся из ответов
  * наблюдателей: самый частый ответ с баллом ниже максимума и его доля среди оценённых чек-листов.
  */

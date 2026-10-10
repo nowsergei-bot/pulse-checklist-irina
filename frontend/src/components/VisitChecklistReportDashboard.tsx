@@ -25,7 +25,7 @@ import {
   fullLessonCount,
   signalItems,
   blockAttentionPercent,
-  priorityCriteria,
+  growthCriteria,
   itemText,
   levelIndex,
   losses,
@@ -544,7 +544,7 @@ function DirectorSummary({
               </span>
             </div>
             <div className="vcr-metric">
-              <strong>
+              <strong className="vcr-metric__nowrap">
                 {data.coverage.visited} из {data.coverage.total}
               </strong>
               <span>Посещено учителей</span>
@@ -643,7 +643,7 @@ function DirectorSummary({
             )}
           </section>
           <section className={keep}>
-            <h3>Главные зоны роста</h3>
+            <h3>Зоны роста</h3>
             {data.zones.length ? (
               <div className="vcr-bars">
                 {data.zones.map((zone) => (
@@ -1011,7 +1011,7 @@ export default function VisitChecklistReportDashboard({
         eligibleCount: eligible.length,
       };
     });
-  const priorities = priorityCriteria(criteria);
+  const priorities = growthCriteria(criteria);
   const filteredLessons = lessons
     .filter(
       (v) =>
@@ -1037,7 +1037,7 @@ export default function VisitChecklistReportDashboard({
             departments: "Кафедры",
             observers: "Наблюдатели",
             criteria: "Критерии урока",
-            priorities: "Приоритеты",
+            priorities: "Зоны роста",
             support: "Нужна методическая поддержка",
             discrepancies: "Расхождения в оценках",
             unlinked: "Самоанализы без урока",
@@ -1139,17 +1139,26 @@ export default function VisitChecklistReportDashboard({
     </Table>
   );
   const renderCriteria = (list: typeof criteria, priorityOnly = false) => (
-    <Table headers={["Пункт", "Средний балл", "Оценённых уроков"]}>
+    <Table
+      headers={
+        priorityOnly
+          ? ["Пункт", "Средний балл", "% от максимума", "Оценённых уроков"]
+          : ["Пункт", "Средний балл", "Оценённых уроков"]
+      }
+    >
       {list.map((c) => (
         <tr key={c.code}>
           <td>
-            {c.code} {c.title}
+            {c.code} {c.title.replace(/\.$/, "")}
           </td>
           <td>
             {(priorityOnly ? c.priority : c.value) == null
               ? "Не оценено"
               : `${(priorityOnly ? c.priority : c.value)!.toLocaleString("ru", { maximumFractionDigits: 2 })} из ${c.max}`}
           </td>
+          {priorityOnly && (
+            <td>{c.percent == null ? "Не оценено" : `${displayScore(c.percent)}%`}</td>
+          )}
           <td>{priorityOnly ? c.eligibleCount : c.count}</td>
         </tr>
       ))}
@@ -1620,10 +1629,11 @@ export default function VisitChecklistReportDashboard({
       {!detail && view === "summary" ? (
         <>
           <nav className="vcr-contents" aria-label="Оглавление">
+            <span className="vcr-contents__label">Перейти к разделу:</span>
             {[
               ["charts", "Диаграммы"],
               ["attention", "Критерии, требующие внимания"],
-              ["priorities", "Приоритеты"],
+              ["priorities", "Зоны роста"],
               ["support", "Нужна методическая поддержка"],
               ["discrepancies", "Расхождения в оценках"],
               ["unlinked", "Самоанализы без урока"],
@@ -1658,7 +1668,7 @@ export default function VisitChecklistReportDashboard({
                 })
               }
             >
-              <strong>
+              <strong className="vcr-metric__nowrap">
                 {coverage.visited} из {coverage.total}
               </strong>
               <span>Посещено учителей</span>
@@ -1759,13 +1769,19 @@ export default function VisitChecklistReportDashboard({
             </Table>
           </section>
           <section id="vcr-priorities" className="vcr-panel">
-            <h3>Приоритеты</h3>
+            <h3>Зоны роста</h3>
+            <p className="vcr-note">
+              пункты чек-листа с самым низким средним баллом по гимназии
+            </p>
             {priorities.length ? (
               renderCriteria(priorities.slice(0, 5), true)
             ) : (
               <Empty />
             )}
-            {fullList("priorities", priorities.length)}
+            {priorities.length > 5 && fullList("priorities", priorities.length)}
+            <small className="vcr-fine">
+              3.5, 5.2, 5.3 не учитываются, пока оцениваются по минимальному уровню
+            </small>
           </section>
           <section id="vcr-support" className="vcr-panel">
             <h3>Нужна методическая поддержка</h3>
@@ -2016,7 +2032,12 @@ export default function VisitChecklistReportDashboard({
           ) : view === "criteria" ? (
             renderCriteria(paged(criteria))
           ) : view === "priorities" ? (
-            renderCriteria(paged(priorities), true)
+            <>
+              {renderCriteria(paged(priorities), true)}
+              <small className="vcr-fine">
+                3.5, 5.2, 5.3 не учитываются, пока оцениваются по минимальному уровню
+              </small>
+            </>
           ) : view === "support" ? (
             renderSupport(paged(support))
           ) : view === "discrepancies" ? (

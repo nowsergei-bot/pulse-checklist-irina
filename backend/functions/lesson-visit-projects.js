@@ -395,6 +395,8 @@ async function handleGetLessonVisitProject(pool, user, viaAdminKey, sessionUser,
       project: { ...payload.project, form_token: row.form_token, response_count },
       staff_units,
       directorSummary,
+      // Собственный номер учётной записи человека: нужен, чтобы при закрытом экране его можно было назвать администратору.
+      viewerId: viaAdminKey ? null : visitChecklistAnalyticsActor(user, sessionUser)?.id ?? null,
     });
   } catch (err) {
     const mapped = schemaErrorResponse(err);

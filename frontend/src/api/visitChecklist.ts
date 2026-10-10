@@ -50,6 +50,8 @@ export async function getLessonVisitProject(
   staffUnits: Record<string, string[]>;
   /** Сервер открыл этому пользователю экран «Сводка для директора» (по его сессии). */
   directorSummary: boolean;
+  /** Номер учётной записи самого пользователя в Пульсе (для обращения за доступом). */
+  viewerId: number | null;
 }> {
   const res = await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}`, { headers: adminHeaders() });
   const data = await parseJson<{
@@ -57,6 +59,7 @@ export async function getLessonVisitProject(
     draft?: LessonVisitDraftSave;
     staff_units?: Record<string, string[]>;
     directorSummary?: boolean;
+    viewerId?: number | null;
     error?: string;
     message?: string;
   }>(res);
@@ -66,6 +69,7 @@ export async function getLessonVisitProject(
     draft: data.draft,
     staffUnits: data.staff_units || {},
     directorSummary: data.directorSummary === true,
+    viewerId: typeof data.viewerId === 'number' ? data.viewerId : null,
   };
 }
 

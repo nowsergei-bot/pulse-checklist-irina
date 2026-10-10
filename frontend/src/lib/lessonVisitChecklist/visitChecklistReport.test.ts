@@ -24,7 +24,7 @@ import {
   attentionTeachers,
   attentionSignalItems,
   blockAttentionPercent,
-  priorityCriteria,
+  growthCriteria,
   signalItems,
   blockPercents,
   coverageUnits,
@@ -38,6 +38,7 @@ import {
   visitCoverage,
   niceAxis,
   isDirectorSummaryShown,
+  isDirectorSummaryDenied,
   weeklyArrows,
   weeklyAverages,
 } from "./reportPresentation.ts";
@@ -859,7 +860,7 @@ test("new teachers: visited, averages, lessons below 70 and not visited come fro
   assert.equal(empty.total, 0);
 });
 
-test("form-baseline items 3.5, 5.2, 5.3 stay out of priorities and block highlighting", () => {
+test("form-baseline items 3.5, 5.2, 5.3 stay out of growth zones and block highlighting", () => {
   // Один наблюдатель отметил «отсутствуют» (0, по форме), другой «присутствуют» (1, минимальный уровень).
   const make = (id: number, value: number, method: string) => {
     const visit = synthetic({ id, teacherKey: "a", date: "2026-09-15", percent: 100, pairKey: "L1" });
@@ -873,7 +874,7 @@ test("form-baseline items 3.5, 5.2, 5.3 stay out of priorities and block highlig
   const lesson = lessonObservations([make(1, 0, "form"), make(2, 1, "form_minimum")])[0];
   // причина жалобы: минимум отбрасывается, остаётся «0 из 3»
   assert.equal(signalItems(lesson.score.items).find((i) => i.code === "3.5")?.value, 0);
-  // правило: пункты по отметке формы не входят ни в приоритеты, ни в подсветку
+  // правило: пункты по отметке формы не входят ни в зоны роста, ни в подсветку
   assert.equal(attentionSignalItems(lesson.score.items).some((i) => ["3.5", "5.2", "5.3"].includes(i.code)), false);
   const block5 = lesson.score.items.filter((i) => i.code.startsWith("5."));
   assert.ok(Math.abs(blockAttentionPercent([block5])! - 100) < 1e-9); // 5.1 на максимуме
@@ -887,7 +888,20 @@ test("form-baseline items 3.5, 5.2, 5.3 stay out of priorities and block highlig
     { code: "4.1", percent: 80, priority: 3 },
     { code: "2.1", percent: null, priority: null },
   ];
-  assert.deepEqual(priorityCriteria(criteria).map((c) => c.code), ["7.1", "6.2"]);
+  // без порога 50%, по возрастанию % от максимума, без пунктов по отметке формы и без неоценённых
+  assert.deepEqual(growthCriteria(criteria).map((c) => c.code), ["6.2", "7.1", "4.1"]);
+});
+
+test("growth zones table keeps the weakest first, ties by code, and has every evaluated item", () => {
+  const rows = [
+    { code: "10.1", percent: 50 },
+    { code: "9.1", percent: 50 },
+    { code: "1.1", percent: 100 },
+    { code: "3.5", percent: 0 },
+    { code: "2.1", percent: null },
+  ];
+  assert.deepEqual(growthCriteria(rows).map((c) => c.code), ["9.1", "10.1", "1.1"]);
+  assert.deepEqual(growthCriteria([]), []);
 });
 
 test("director summary screen opens only when the server allows it and the address asks for it", () => {
@@ -897,6 +911,12 @@ test("director summary screen opens only when the server allows it and the addre
   // без признака сервера адрес ?screen=summary игнорируется
   assert.equal(isDirectorSummaryShown(false, "summary"), false);
   assert.equal(isDirectorSummaryShown(undefined, "summary"), false);
+  // закрытый экран по адресу ?screen=summary даёт надпись, а открытый экран и другие адреса нет
+  assert.equal(isDirectorSummaryDenied(false, "summary"), true);
+  assert.equal(isDirectorSummaryDenied(undefined, "summary"), true);
+  assert.equal(isDirectorSummaryDenied(true, "summary"), false);
+  assert.equal(isDirectorSummaryDenied(false, null), false);
+  assert.equal(isDirectorSummaryDenied(false, "other"), false);
 });
 
 test("coverage over the real seed directory counts every listed teacher once", () => {

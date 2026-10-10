@@ -53,6 +53,10 @@
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
+.vcr-metric strong.vcr-metric__nowrap {
+  font-size: clamp(15px, 1.7vw, 25px);
+  white-space: nowrap;
+}
 .vcr-metric span {
   font-size: 12px;
   color: #647771;
@@ -283,11 +287,30 @@
   gap: 6px;
 }
 .vcr-contents {
-  gap: 10px 22px;
+  gap: 8px;
 }
-.vcr-contents a {
-  color: #1766a4;
-  font-size: 17px;
+.vcr-contents__label {
+  margin-right: 4px;
+  color: #6b7c77;
+  font-size: 13px;
+}
+.vcr-contents a,
+.vcr-contents a:visited,
+.vcr-contents a:active {
+  padding: 6px 13px;
+  border: 1px solid #d3e1dc;
+  border-radius: 999px;
+  background: #e8f0ed;
+  color: #203e3a;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+}
+.vcr-contents a:hover,
+.vcr-contents a:active {
+  border-color: #bdd1ca;
+  background: #d6e5df;
 }
 .vcr-pagination button,
 .vcr-navigation button {
@@ -401,7 +424,8 @@
   display: block;
 }
 .vcr-contents a:focus-visible {
-  outline: 3px solid #1766a4;
+  outline: 3px solid #397f75;
+  outline-offset: 2px;
 }
 @media (max-width: 700px) {
   .vcr-chart-grid {
@@ -487,6 +511,11 @@
 .vcr-note {
   margin: 0 0 12px;
   color: #647771;
+}
+.vcr-dashboard small.vcr-fine {
+  margin-top: 10px;
+  color: #647771;
+  font-size: 13px;
 }
 .vcr-bars {
   display: grid;

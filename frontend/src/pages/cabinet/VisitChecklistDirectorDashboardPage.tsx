@@ -30,7 +30,7 @@ import {
   visitChecklistAnalyticsNavPath,
 } from '../../lib/visitChecklistAnalyticsAccess';
 import { useIsAuthenticated } from '../../lib/isAuthenticated';
-import { isDirectorSummaryShown } from '../../lib/lessonVisitChecklist/reportPresentation';
+import { isDirectorSummaryDenied, isDirectorSummaryShown } from '../../lib/lessonVisitChecklist/reportPresentation';
 import VisitChecklistReportDashboard from '../../components/VisitChecklistReportDashboard';
 import '../visitChecklistCloud/visitChecklistCloud.css';
 import '../valuesSpace/valuesSpace.css';
@@ -59,6 +59,7 @@ export default function VisitChecklistDirectorDashboardPage() {
   const [liveStaffUnits, setLiveStaffUnits] = useState<Record<string, string[]>>({});
   const [newTeacherIds, setNewTeacherIds] = useState<string[]>([]);
   const [directorSummary, setDirectorSummary] = useState(false);
+  const [viewerId, setViewerId] = useState<number | null>(null);
   const [canOpenAnalytics, setCanOpenAnalytics] = useState(false);
   const [liveReady, setLiveReady] = useState(false);
   const [params] = useSearchParams();
@@ -168,6 +169,7 @@ export default function VisitChecklistDirectorDashboardPage() {
         setLiveStaffUnits(pack?.staffUnits ?? {});
         setNewTeacherIds(pack?.draft?.newTeacherIds ?? []);
         setDirectorSummary(pack?.directorSummary === true);
+        setViewerId(pack?.viewerId ?? null);
         setLiveReady(true);
       })
       .catch((error) => {
@@ -216,6 +218,18 @@ export default function VisitChecklistDirectorDashboardPage() {
           aria-busy="true"
         >
           Загружаем уроки…
+        </section>
+      ) : isDirectorSummaryDenied(directorSummary, params.get('screen')) ? (
+        <section className="card glass-surface" role="status">
+          <h2>Нет доступа к сводке для директора</h2>
+          {viewerId != null ? (
+            <p className="muted">Номер вашей учётной записи в Пульсе: {viewerId}</p>
+          ) : null}
+          <p>
+            <Link className="vcr-link" to=".">
+              Открыть полную аналитику
+            </Link>
+          </p>
         </section>
       ) : (
         <>
