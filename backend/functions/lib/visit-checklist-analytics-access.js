@@ -106,7 +106,8 @@ function visitChecklistAnalyticsActor(user, sessionUser) {
  * personKeys: ключи записей из VISIT_CHECKLIST_ANALYTICS_PEOPLE (берутся только их почты, ФИО не используется).
  * emails: отдельные служебные адреса (новых адресов не добавляем).
  * userIds: числовые номера учётных записей Пульса (внутренний номер, не личные данные).
- * Если все списки пусты, экран закрыт для всех.
+ * Кроме списков экран открыт администраторам с правом «*» (полный доступ). Право pulse.director.checklist и право аналитики экран не открывают.
+ * Если все списки пусты и права «*» нет, экран закрыт.
  * Сейчас: директор (maisuradze) и, временно на время настройки, Костюкович И.С. (kostyukovich); потом её ключ убирается.
  */
 const DIRECTOR_SUMMARY_ACCESS = { personKeys: ['maisuradze', 'kostyukovich'], emails: [], userIds: [52, 97] };
@@ -118,8 +119,9 @@ function directorSummaryEmails(access) {
   return [...fromPeople, ...access.emails].map(normalizeAllowlistEmail).filter(Boolean);
 }
 
-/** Только по номеру учётной записи или почте из серверной сессии; без сессии, по ФИО или по правам аналитики доступа нет. */
+/** Только по номеру учётной записи, почте или праву «*» из серверной сессии; без сессии, по ФИО или по правам аналитики доступа нет. */
 function canUseDirectorSummary(sessionUser, access = DIRECTOR_SUMMARY_ACCESS) {
+  if (Array.isArray(sessionUser?.permissions) && sessionUser.permissions.includes('*')) return true;
   const id = sessionUser?.id;
   if (id != null && Number.isFinite(Number(id)) && (access.userIds || []).map(Number).includes(Number(id))) return true;
   const email = normalizeAllowlistEmail(sessionUser?.email);

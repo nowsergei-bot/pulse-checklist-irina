@@ -243,7 +243,11 @@ test('canUseDirectorSummary: by session email only, closed by default', () => {
   assert.equal(canUseDirectorSummary({}, listed), false);
   assert.equal(canUseDirectorSummary({ email: '' }, { personKeys: [], emails: [''] }), false);
   // право аналитики, ФИО и id доступа не дают
-  assert.equal(canUseDirectorSummary({ id: 12, permissions: ['*'], display_name: 'Director Test' }, listed), false);
+  assert.equal(canUseDirectorSummary({ id: 12, permissions: ['pulse.analytics.all', 'pulse.director.checklist'], display_name: 'Director Test' }, listed), false);
+  // право «*» (полный доступ администратора) открывает экран и без списков
+  assert.equal(canUseDirectorSummary({ id: 12, permissions: ['*'] }, { personKeys: [], emails: [], userIds: [] }), true);
+  assert.equal(canUseDirectorSummary({ permissions: ['x', '*'] }, { personKeys: [], emails: [] }), true);
+  assert.equal(canUseDirectorSummary({ permissions: '*' }, { personKeys: [], emails: [] }), false);
   // по умолчанию открыто только двум записям из файла, по их почте; чужая почта и права аналитики не помогают
   assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.personKeys, ['maisuradze', 'kostyukovich']);
   assert.deepEqual(access.DIRECTOR_SUMMARY_ACCESS.emails, []);
@@ -251,25 +255,26 @@ test('canUseDirectorSummary: by session email only, closed by default', () => {
   assert.equal(canUseDirectorSummary({ id: 52 }), true);
   assert.equal(canUseDirectorSummary({ id: '52' }), true);
   assert.equal(canUseDirectorSummary({ id: 97 }), true);
-  assert.equal(canUseDirectorSummary({ id: 98, permissions: ['*'] }), false);
-  assert.equal(canUseDirectorSummary({ id: 53, permissions: ['*'] }), false);
-  assert.equal(canUseDirectorSummary({ email: DIRECTOR_MAIL, permissions: ['*'] }), false);
+  assert.equal(canUseDirectorSummary({ id: 98, permissions: ['pulse.analytics.all', 'pulse.director.checklist'] }), false);
+  assert.equal(canUseDirectorSummary({ id: 98, permissions: ['*'] }), true);
+  assert.equal(canUseDirectorSummary({ id: 53, permissions: ['pulse.director.checklist'] }), false);
+  assert.equal(canUseDirectorSummary({ email: DIRECTOR_MAIL, permissions: ['pulse.analytics.all', 'pulse.director.checklist'] }), false);
   const byEmail = (key) => VISIT_CHECKLIST_ANALYTICS_PEOPLE.find((p) => p.key === key).emails;
   for (const key of ['maisuradze', 'kostyukovich']) {
     for (const email of byEmail(key)) assert.equal(canUseDirectorSummary({ email }), true, email);
   }
   for (const key of VISIT_CHECKLIST_ANALYTICS_PEOPLE.map((p) => p.key).filter((k) => !['maisuradze', 'kostyukovich'].includes(k))) {
-    for (const email of byEmail(key)) assert.equal(canUseDirectorSummary({ email, permissions: ['*'] }), false, key);
+    for (const email of byEmail(key)) assert.equal(canUseDirectorSummary({ email, permissions: ['pulse.analytics.all', 'pulse.director.checklist'] }), false, key);
   }
   // номер учётной записи работает отдельно от почты и не путается с другими номерами
   const byId = { personKeys: [], emails: [], userIds: [4242] };
   assert.equal(canUseDirectorSummary({ id: 4242, email: OTHER_MAIL }, byId), true);
   assert.equal(canUseDirectorSummary({ id: '4242' }, byId), true);
-  assert.equal(canUseDirectorSummary({ id: 4243, permissions: ['*'] }, byId), false);
+  assert.equal(canUseDirectorSummary({ id: 4243, permissions: ['pulse.director.checklist'] }, byId), false);
   assert.equal(canUseDirectorSummary({ id: null }, byId), false);
   assert.equal(canUseDirectorSummary({ id: 4242 }, { personKeys: [], emails: [] }), false);
   const names = VISIT_CHECKLIST_ANALYTICS_PEOPLE.find((p) => p.key === 'maisuradze').full_names;
-  assert.equal(canUseDirectorSummary({ display_name: names[0], permissions: ['*'] }), false);
+  assert.equal(canUseDirectorSummary({ display_name: names[0], permissions: ['pulse.analytics.all', 'pulse.director.checklist'] }), false);
   // ключ записи из файла даёт только её почты, не ФИО
   const person = VISIT_CHECKLIST_ANALYTICS_PEOPLE[0];
   const byKey = { personKeys: [person.key], emails: [] };
@@ -326,7 +331,7 @@ test('patch.newTeacherIds: a person listed by key passes with the address record
   const pool = patchPool(null);
   const r = await projects.handlePutLessonVisitProject(pool, null, false, { id: 30, email }, 7, putBody({ patch: { newTeacherIds: [] } }));
   assert.equal(r.statusCode, 200);
-  const stranger = await projects.handlePutLessonVisitProject(patchPool(null), null, false, { id: 31, email: OTHER_MAIL, permissions: ['*'] }, 7, putBody({ patch: { newTeacherIds: [] } }));
+  const stranger = await projects.handlePutLessonVisitProject(patchPool(null), null, false, { id: 31, email: OTHER_MAIL, permissions: ['pulse.analytics.all', 'pulse.director.checklist'] }, 7, putBody({ patch: { newTeacherIds: [] } }));
   assert.equal(stranger.statusCode, 403);
 });
 
@@ -420,13 +425,22 @@ test('project GET and PATCH with the default list: both listed accounts are open
     assert.equal(r.statusCode, 200, String(id));
   }
   for (const id of [51, 53, 96, 98]) {
-    const body = await get({ id, email: OTHER_MAIL, permissions: ['*', 'pulse.analytics.all', 'pulse.director.checklist'] });
+    const body = await get({ id, email: OTHER_MAIL, permissions: ['pulse.analytics.all', 'pulse.director.checklist'] });
     assert.equal(body.directorSummary, false, String(id));
     assert.equal(JSON.stringify(body).includes('newTeacherIds'), false);
     const pool = patchPool(null);
-    const r = await projects.handlePutLessonVisitProject(pool, null, false, { id, permissions: ['*'] }, 7, putBody({ patch: { newTeacherIds: [] } }));
+    const r = await projects.handlePutLessonVisitProject(pool, null, false, { id, permissions: ['pulse.analytics.all', 'pulse.director.checklist'] }, 7, putBody({ patch: { newTeacherIds: [] } }));
     assert.equal(r.statusCode, 403, String(id));
   }
+  // администратор с правом «*» не из списка: экран и сохранение открыты, ключ API по-прежнему нет
+  const admin = { id: 77, email: OTHER_MAIL, permissions: ['*'] };
+  const adminBody = await get(admin);
+  assert.equal(adminBody.directorSummary, true);
+  assert.deepEqual(adminBody.draft.newTeacherIds, ['teacher_1']);
+  const adminPool = patchPool(null);
+  assert.equal((await projects.handlePutLessonVisitProject(adminPool, null, false, admin, 7, putBody({ patch: { newTeacherIds: [] } }))).statusCode, 200);
+  const viaKey = await projects.handleGetLessonVisitProject(patchPool(null, ['teacher_1']), null, true, admin, 7);
+  assert.equal(JSON.parse(viaKey.body).directorSummary, false);
 });
 
 test('project POST does not let an unlisted author set the list', withDirectorAccess(async () => {
