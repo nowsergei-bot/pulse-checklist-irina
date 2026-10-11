@@ -26,8 +26,10 @@ import {
   signalItems,
   blockAttentionPercent,
   growthCriteria,
+  itemScoreText,
   itemText,
   levelIndex,
+  pluralRu,
   losses,
   pageRows,
   preliminaryPercent,
@@ -115,14 +117,16 @@ function Badge({
 function ScoreLevel({
   text,
   percent,
+  preliminary = false,
 }: {
   text: string;
   percent: number | null;
+  preliminary?: boolean;
 }) {
   return (
     <span className="vcr-scorecell">
       <span className="vcr-scorecell__value">{text}</span>
-      <Badge percent={percent} />
+      <Badge percent={percent} preliminary={preliminary} />
     </span>
   );
 }
@@ -138,15 +142,13 @@ function Score({ visit }: { visit: ReportVisit }) {
     return <span>Итог не сформирован</span>;
   return (
     <>
-      <strong>
-        {displayScore(value, maximum)} из {maximum}
-      </strong>
-      {!full && <small>Предварительно</small>}
-      {visit.score.mixedApplicability && <small>Разная применимость</small>}
-      <Badge
+      <ScoreLevel
+        text={`${displayScore(value, maximum)} из ${maximum}`}
         percent={scorePercent(visit) ?? preliminaryPercent(visit)}
         preliminary={!full}
       />
+      {!full && <small>Предварительно</small>}
+      {visit.score.mixedApplicability && <small>Разная применимость</small>}
     </>
   );
 }
@@ -1135,6 +1137,15 @@ export default function VisitChecklistReportDashboard({
     rows: rows.filter((v) => !v.self && v.visitor === name),
   }));
   const detail = Boolean(teacher || lessonId);
+  const needsSupport = lessons.some(
+    (v) => scorePercent(v) != null && scorePercent(v)! < 70,
+  );
+  const needsPreliminarySupport = lessons.some(
+    (v) =>
+      v.score.total == null &&
+      preliminaryPercent(v) != null &&
+      preliminaryPercent(v)! < 70,
+  );
   const heading = selectedLesson
     ? lessonText(selectedLesson)
     : teacher
@@ -1171,8 +1182,17 @@ export default function VisitChecklistReportDashboard({
       {lessonText(v)}
     </button>
   );
-  const renderLessons = (visits: ReportVisit[]) => (
-    <Table headers={["Урок", "Кафедра", "Наблюдатель", "Итог", "Самоанализ"]}>
+  const renderLessons = (visits: ReportVisit[], itemCode = "") => (
+    <Table
+      headers={[
+        "Урок",
+        "Кафедра",
+        "Наблюдатель",
+        ...(itemCode ? [`Балл по пункту ${itemCode}`] : []),
+        "Итог",
+        "Самоанализ",
+      ]}
+    >
       {visits.map((v) => {
         const self = pairedSelf(v, report.visits);
         const candidates = selfMatches.some(
@@ -1183,6 +1203,7 @@ export default function VisitChecklistReportDashboard({
             <td>{lessonLink(v)}</td>
             <td>{v.department}</td>
             <td>{shortName(v.visitor)}</td>
+            {itemCode && <td>{itemScoreText(v, itemCode)}</td>}
             <td>
               <Score visit={v} />
             </td>
@@ -1309,10 +1330,10 @@ export default function VisitChecklistReportDashboard({
             <td>{t.department}</td>
             <td>
               {t.average != null && (
-                <>
-                  {displayScore(t.average)} из 100
-                  <Badge percent={t.average} />
-                </>
+                <ScoreLevel
+                  text={`${displayScore(t.average)} из 100`}
+                  percent={t.average}
+                />
               )}
             </td>
             <td>{t.repeat}</td>
@@ -1485,7 +1506,9 @@ export default function VisitChecklistReportDashboard({
             {size === "all" && <option value="all">Все</option>}
           </select>
         </label>
-        <span>{total} строк</span>
+        <span>
+          {total} {pluralRu(total, ["строка", "строки", "строк"])}
+        </span>
       </div>
     ) : null;
   async function exportExcel() {
@@ -1606,18 +1629,37 @@ export default function VisitChecklistReportDashboard({
   return (
     <div className="vcr-dashboard">
       <header className="vcr-header">
-        <h2>{heading}</h2>
-        <button className="btn" onClick={() => void exportExcel()}>
-          Скачать Excel · все строки
-        </button>
-        {detail && (
+        <div className="vcr-header__title">
+          <h2>{heading}</h2>
+          {detail && needsSupport && (
+            <span className="vcr-chip vcr-chip--support">
+              Нужна методическая поддержка
+            </span>
+          )}
+          {detail && needsPreliminarySupport && (
+            <span className="vcr-chip vcr-chip--preliminary">
+              Предварительно: нужна поддержка
+            </span>
+          )}
+        </div>
+        <div className="vcr-header__actions">
           <button
-            className="btn"
-            onClick={() => update({ reportTeacher: null, reportLesson: null })}
+            type="button"
+            className="vcr-action vcr-action--primary"
+            onClick={() => void exportExcel()}
           >
-            ← К списку
+            Скачать Excel · все строки
           </button>
-        )}
+          {detail && (
+            <button
+              type="button"
+              className="vcr-action"
+              onClick={() => update({ reportTeacher: null, reportLesson: null })}
+            >
+              ← К списку
+            </button>
+          )}
+        </div>
       </header>
       {exportError && <p role="alert">{exportError}</p>}
       {linkError && <p role="alert">{linkError}</p>}
@@ -1945,19 +1987,10 @@ export default function VisitChecklistReportDashboard({
               {renderFlags(flags)}
             </section>
           )}
-          {lessons.some(
-            (v) => scorePercent(v) != null && scorePercent(v)! < 70,
-          ) && <p>Нужна методическая поддержка</p>}
-          {lessons.some(
-            (v) =>
-              v.score.total == null &&
-              preliminaryPercent(v) != null &&
-              preliminaryPercent(v)! < 70,
-          ) && <p>Предварительно: нужна поддержка</p>}
           <section className="vcr-panel">
             <h3>Исходные ответы</h3>
             {rows.map((v) => (
-              <details key={v.id}>
+              <details key={v.id} open={lessons.length <= 1}>
                 <summary>
                   {v.self ? "Самоанализ" : shortName(v.visitor)} ·{" "}
                   {dateText(v.date)} · {v.subject}
@@ -2033,14 +2066,11 @@ export default function VisitChecklistReportDashboard({
                             {row.value == null ? (
                               "—"
                             ) : (
-                              <>
-                                {displayScore(row.value, row.maximum)} из{" "}
-                                {row.maximum}
-                                <Badge
-                                  percent={row.percent}
-                                  preliminary={group.preliminary}
-                                />
-                              </>
+                              <ScoreLevel
+                                text={`${displayScore(row.value, row.maximum)} из ${row.maximum}`}
+                                percent={row.percent}
+                                preliminary={group.preliminary}
+                              />
                             )}
                           </td>
                           <td>
@@ -2081,10 +2111,10 @@ export default function VisitChecklistReportDashboard({
                       {average == null ? (
                         "—"
                       ) : (
-                        <>
-                          {displayScore(average)} из 100
-                          <Badge percent={average} />
-                        </>
+                        <ScoreLevel
+                          text={`${displayScore(average)} из 100`}
+                          percent={average}
+                        />
                       )}
                     </td>
                   </tr>
@@ -2189,7 +2219,7 @@ export default function VisitChecklistReportDashboard({
                   </button>
                 </p>
               )}
-              {renderLessons(paged(filteredLessons))}
+              {renderLessons(paged(filteredLessons), criterionCode)}
             </>
           )}
           {pagination}

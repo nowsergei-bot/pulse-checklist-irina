@@ -35,6 +35,7 @@ import {
   GROWTH_CLARIFY_PERCENT,
   GROWTH_CLARIFY_TEXT,
   lessonsWithLowItem,
+  itemScoreText,
   weeklyLines,
   lessonsGenitive,
   newTeacherStats,
@@ -749,6 +750,13 @@ test("lessons with a low score on an item: only lessons where it is scored below
   const list = lessonsWithLowItem(lessonObservations(rows), "7.1");
   // полный балл и «не применимо» не входят; сначала самый низкий балл, при равенстве более свежая дата
   assert.deepEqual(list.map((v) => v.id), [3, 4, 2]);
+  // столбец «Балл по пункту»: «значение из максимума», в порядке списка значения растут
+  const item = (v: (typeof list)[number]) => v.score.items.find((i) => i.code === "7.1")!;
+  const n = (x: number) => x.toLocaleString("ru", { maximumFractionDigits: 2 });
+  assert.equal(itemScoreText(list[0], "7.1"), `${n(item(list[0]).value!)} из ${n(item(list[0]).max)}`);
+  const shares = list.map((v) => item(v).value! / item(v).max);
+  assert.deepEqual(shares, [...shares].sort((a, b) => a - b));
+  assert.equal(itemScoreText(list[0], "9.9"), "—");
   assert.deepEqual(lessonsWithLowItem(lessonObservations(rows), "9.9"), []);
   assert.deepEqual(lessonsWithLowItem([], "7.1"), []);
 });

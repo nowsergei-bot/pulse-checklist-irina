@@ -14,6 +14,7 @@ import {
   levelIndex,
   losses,
   pageRows,
+  pluralRu,
   schoolAverage,
   shortName,
   teacherResultGroups,
@@ -275,4 +276,23 @@ test("A114/A115/A122: observer minima are excluded before signal averages in eit
   assert.equal(losses(lesson)[0].value,0);
  }
  assert.deepEqual(signalItems(lessonObservations([minimum])[0].score.items),[]);
+});
+
+test("pluralRu: 1 строка, 2 строки, 9 строк, 11 строк, 61 строка", () => {
+  const f: [string, string, string] = ["строка", "строки", "строк"];
+  const word = (n: number) => pluralRu(n, f);
+  assert.equal(word(1), "строка");
+  assert.equal(word(2), "строки");
+  assert.equal(word(4), "строки");
+  assert.equal(word(5), "строк");
+  assert.equal(word(9), "строк");
+  assert.equal(word(11), "строк");
+  assert.equal(word(12), "строк");
+  assert.equal(word(14), "строк");
+  assert.equal(word(21), "строка");
+  assert.equal(word(22), "строки");
+  assert.equal(word(61), "строка");
+  assert.equal(word(100), "строк");
+  assert.equal(word(111), "строк");
+  assert.equal(word(0), "строк");
 });

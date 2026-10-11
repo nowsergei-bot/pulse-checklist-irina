@@ -796,3 +796,47 @@
   display: block;
   font-size: 13px;
 }
+
+/* Шапка карточки: заголовок с плашками поддержки и кнопки действий в общем стиле */
+.vcr-header__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+.vcr-header__title h2 {
+  margin: 8px 0;
+}
+.vcr-header__actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.vcr-header__actions .vcr-action {
+  white-space: nowrap;
+}
+.vcr-header__actions .vcr-action {
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.vcr-chip {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.vcr-chip--support {
+  background: #fde7e7;
+  color: #b42318;
+}
+.vcr-chip--preliminary {
+  background: #fdf1d6;
+  color: #7a5200;
+}

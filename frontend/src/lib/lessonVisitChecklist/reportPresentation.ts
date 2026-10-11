@@ -377,7 +377,7 @@ export function teacherResultGroups(
             : key === "unfinished"
               ? "Итог не сформирован"
               : key === "unvisited"
-                ? "Уроки не посещены"
+                ? "Учителя без посещений"
                 : `Предварительные итоги · ${maximum} баллов оценённой части · пункты ${key.split(":")[2]}`;
       if (!groups.has(key)) groups.set(key, { title, preliminary, rows: [] });
       groups.get(key)!.rows.push({
@@ -954,6 +954,23 @@ export function growthZones(rows: ReportVisit[], count = 3): GrowthZone[] {
  * Уроки, где пункт набран не полностью (оценён и балл ниже максимума): куда ведёт строка «Зон роста».
  * Сначала самый низкий % от максимума по пункту, затем более свежая дата. Пункты по отметке формы не учитываются.
  */
+/** Балл урока по пункту для столбца «Балл по пункту»: «1 из 3»; пусто, если пункт не оценён. */
+export function itemScoreText(v: ReportVisit, code: string): string {
+  const item = signalItems(v.score.items.filter((i) => i.code === code))[0];
+  if (!item || item.value == null) return "—";
+  const n = (x: number) => x.toLocaleString("ru", { maximumFractionDigits: 2 });
+  return `${n(item.value)} из ${n(item.max)}`;
+}
+/** Склонение по числу: pluralRu(1, ["строка", "строки", "строк"]) → «строка», 2 → «строки», 11 → «строк», 61 → «строка». */
+export function pluralRu(n: number, forms: [string, string, string]): string {
+  const abs = Math.abs(Math.trunc(n));
+  const last = abs % 10;
+  const tens = abs % 100;
+  if (tens >= 11 && tens <= 14) return forms[2];
+  if (last === 1) return forms[0];
+  if (last >= 2 && last <= 4) return forms[1];
+  return forms[2];
+}
 export function lessonsWithLowItem(lessons: ReportVisit[], code: string): ReportVisit[] {
   const share = (v: ReportVisit) => {
     const item = signalItems(v.score.items.filter((i) => i.code === code))[0];
