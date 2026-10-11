@@ -10,6 +10,7 @@ import {
   discrepancies,
   displayScore,
   fullLessonCount,
+  LEVELS,
   levelIndex,
   losses,
   pageRows,
@@ -54,6 +55,38 @@ test("A103/A117/A135: formatting does not cross exact level boundaries", () => {
   assert.deepEqual([39.999, 40, 50, 70, 85].map(levelIndex), [0, 1, 2, 3, 4]);
   assert.equal(shortName("Иванова Анна Ивановна"), "Иванова А.И.");
   assert.equal(shortName("Иванова Анна Ивановна; Петров Пётр Петрович"), "Иванова А.И. / Петров П.П.");
+});
+test("short names keep the part in brackets whole", () => {
+  assert.equal(shortName("Иванова (Петрова) Анна Сергеевна"), "Иванова (Петрова) А.С.");
+  assert.equal(shortName("Иванова  (Петрова-Сидорова)  Анна  Сергеевна"), "Иванова (Петрова-Сидорова) А.С.");
+  assert.equal(shortName("Иванова (Петрова Сидорова) Анна Сергеевна"), "Иванова (Петрова Сидорова) А.С.");
+  assert.equal(shortName("Иванова Анна Сергеевна (Петрова)"), "Иванова (Петрова) А.С.");
+  assert.equal(shortName("Иванова (Петрова)"), "Иванова (Петрова)");
+  assert.equal(shortName("Иванова Анна"), "Иванова А.");
+  assert.equal(shortName("Иванова"), "Иванова");
+  assert.equal(shortName(""), "Наблюдатель не указан");
+});
+test("number and level always come from the exact value: 69.7 is Средний, never 70", () => {
+  const level = (exact: number) => LEVELS[levelIndex(exact)];
+  const shown = (exact: number) => `${displayScore(exact)} ${level(exact)}`;
+  // перед границей уровня: одна цифра после запятой, округление вниз, уровень нижний
+  assert.equal(shown(69.7), "69,7 Средний");
+  assert.equal(shown(69.96), "69,9 Средний");
+  assert.equal(shown(69.99999), "69,9 Средний");
+  assert.equal(shown(84.96), "84,9 Высокий");
+  assert.equal(shown(49.99), "49,9 Низкий");
+  assert.equal(shown(39.95), "39,9 Очень низкий");
+  // на границе и дальше от неё: целое число, уровень верхний
+  assert.equal(shown(70), "70 Высокий");
+  assert.equal(shown(70.2), "70 Высокий");
+  assert.equal(shown(85), "85 Очень высокий");
+  assert.equal(shown(40), "40 Низкий");
+  // далеко от границы округление обычное и уровень не меняется
+  assert.equal(shown(69.4), "69 Средний");
+  assert.equal(shown(78.17), "78 Высокий");
+  // для итога с меньшим максимумом правило то же, в долях максимума
+  assert.equal(displayScore(62.9, 90), "62,9");
+  assert.equal(displayScore(63, 90), "63");
 });
 test("A109/A110: all definitive homework combinations, including o1 and o2", () => {
   const options = [

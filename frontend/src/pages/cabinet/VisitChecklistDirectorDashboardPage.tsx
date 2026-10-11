@@ -236,14 +236,14 @@ export default function VisitChecklistDirectorDashboardPage() {
           {directorSummary ? (
             <nav className="vcr-screens" aria-label="Экраны директора">
               <Link
-                className="vcr-link"
+                className="vcr-screen"
                 aria-current={summaryScreen ? 'page' : undefined}
                 to="?screen=summary"
               >
                 Сводка для директора
               </Link>
               <Link
-                className="vcr-link"
+                className="vcr-screen"
                 aria-current={summaryScreen ? undefined : 'page'}
                 to="."
               >

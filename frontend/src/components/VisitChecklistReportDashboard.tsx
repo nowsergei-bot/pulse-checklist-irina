@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   LessonVisitChecklistConfig,
   LessonVisitDirectory,
@@ -52,6 +52,8 @@ import {
   newTeacherStats,
   visitCoverage,
   weeklyArrows,
+  weeklyLines,
+  lessonsWithLowItem,
   niceAxis,
   weeklyAverages,
   type DirectorPeriod,
@@ -109,6 +111,21 @@ function Badge({
     </span>
   );
 }
+/** Число и плашка уровня в одну строку с промежутком; на узком месте плашка переносится целиком под число. */
+function ScoreLevel({
+  text,
+  percent,
+}: {
+  text: string;
+  percent: number | null;
+}) {
+  return (
+    <span className="vcr-scorecell">
+      <span className="vcr-scorecell__value">{text}</span>
+      <Badge percent={percent} />
+    </span>
+  );
+}
 function Score({ visit }: { visit: ReportVisit }) {
   const full = visit.score.total != null,
     value = visit.score.total ?? visit.score.subtotal;
@@ -139,13 +156,16 @@ function Empty() {
 function Table({
   headers,
   children,
+  stack = false,
 }: {
   headers: string[];
   children: React.ReactNode;
+  /** На узком экране каждая строка превращается в карточку «подпись: значение» (в ячейках нужен data-label). */
+  stack?: boolean;
 }) {
   return (
     <div className="vcr-table-scroll" tabIndex={0}>
-      <table>
+      <table className={stack ? "vcr-stack" : undefined}>
         <thead>
           <tr>
             {headers.map((h) => (
@@ -296,6 +316,7 @@ function DirectorSummary({
 }: DirectorProps) {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const pdfRef = useRef<HTMLDivElement>(null);
   const [generatedAt, setGeneratedAt] = useState(() => new Date());
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -351,6 +372,38 @@ function DirectorSummary({
     analyticsPath && range
       ? `${analyticsPath}?reportPeriod=custom&reportFrom=${range.from}&reportTo=${range.to}&reportView=${view}`
       : null;
+  /**
+   * Куда ведёт строка: подробности в полной аналитике за тот же период. Без права на отдельную страницу аналитики
+   * открывается полная аналитика этой же страницы (адрес без ?screen=summary).
+   */
+  const detailTo = (extra: Record<string, string>) => {
+    if (!range) return null;
+    const query = new URLSearchParams({
+      reportPeriod: "custom",
+      reportFrom: range.from,
+      reportTo: range.to,
+      ...extra,
+    });
+    return `${analyticsPath ?? pathname}?${query.toString()}`;
+  };
+  /** Строка целиком кликабельна (подсветка при наведении); ссылка внутри нужна для клавиатуры и открытия в новой вкладке. */
+  const clickable = (to: string | null) =>
+    to
+      ? {
+          className: "vcr-row-link",
+          onClick: (e: React.MouseEvent) => {
+            if (!(e.target as HTMLElement).closest("a,button")) navigate(to);
+          },
+        }
+      : {};
+  const rowName = (to: string | null, children: React.ReactNode) =>
+    to ? (
+      <Link className="vcr-rowlink" to={to}>
+        {children}
+      </Link>
+    ) : (
+      <>{children}</>
+    );
   const linked = (view: string, children: React.ReactNode) => {
     const to = href(view);
     return to ? (
@@ -426,7 +479,7 @@ function DirectorSummary({
       );
       sheet(
         "Зоны роста",
-        data.zones.map((z) => ({ Пункт: z.code, Название: z.title, "% от максимума": z.percent, Пояснение: z.note })),
+        data.zones.map((z) => ({ Пункт: z.code, Название: z.title, "% от максимума": z.percent, Пояснение: [z.note, z.noteExtra].filter(Boolean).join(". ") })),
       );
       sheet(
         "Группы А и Б",
@@ -540,7 +593,11 @@ function DirectorSummary({
               <span>Средний итог гимназии</span>
               <Badge percent={data.average} />
               <span className="vcr-arrows" title="Недели с понедельника">
-                {weeklyArrows(data.series)}
+                {weeklyLines(data.series).map((line) => (
+                  <span className="vcr-arrows__week" key={line}>
+                    {line}
+                  </span>
+                ))}
               </span>
             </div>
             <div className="vcr-metric">
@@ -609,6 +666,7 @@ function DirectorSummary({
             <h3>Кафедры</h3>
             {data.departments.length ? (
               <Table
+                stack
                 headers={[
                   "Кафедра",
                   "Учителей",
@@ -618,25 +676,33 @@ function DirectorSummary({
                   ATTENTION_GROUP_NAMES.B,
                 ]}
               >
-                {data.departments.map((d) => (
-                  <tr key={d.department}>
-                    <th scope="row">{d.department}</th>
-                    <td>{d.teachers}</td>
-                    <td>{d.lessons}</td>
-                    <td>
-                      {d.average == null ? (
-                        "нет данных"
-                      ) : (
-                        <>
-                          {displayScore(d.average)} из 100
-                          <Badge percent={d.average} />
-                        </>
-                      )}
-                    </td>
-                    <td>{d.a}</td>
-                    <td>{d.b}</td>
-                  </tr>
-                ))}
+                {data.departments.map((d) => {
+                  const to = detailTo({
+                    reportView: "teachers",
+                    reportDepartment: d.department,
+                  });
+                  return (
+                    <tr key={d.department} {...clickable(to)}>
+                      <th scope="row" className="vcr-stack__title">
+                        {rowName(to, d.department)}
+                      </th>
+                      <td data-label="Учителей">{d.teachers}</td>
+                      <td data-label="Уроков">{d.lessons}</td>
+                      <td data-label="Средний итог">
+                        {d.average == null ? (
+                          "нет данных"
+                        ) : (
+                          <ScoreLevel
+                            text={`${displayScore(d.average)} из 100`}
+                            percent={d.average}
+                          />
+                        )}
+                      </td>
+                      <td data-label={ATTENTION_GROUP_NAMES.A}>{d.a || "—"}</td>
+                      <td data-label={ATTENTION_GROUP_NAMES.B}>{d.b || "—"}</td>
+                    </tr>
+                  );
+                })}
               </Table>
             ) : (
               <Empty />
@@ -646,11 +712,27 @@ function DirectorSummary({
             <h3>Зоны роста</h3>
             {data.zones.length ? (
               <div className="vcr-bars">
-                {data.zones.map((zone) => (
-                  <div className="vcr-bars__row" key={zone.code}>
+                {data.zones.map((zone) => {
+                  const to = detailTo({
+                    reportView: "lessons",
+                    reportCriterion: zone.code,
+                  });
+                  return (
+                  <div
+                    className={`vcr-bars__row${to ? " vcr-bars__row--link" : ""}`}
+                    key={zone.code}
+                    {...(to
+                      ? {
+                          onClick: (e: React.MouseEvent) => {
+                            if (!(e.target as HTMLElement).closest("a")) navigate(to);
+                          },
+                        }
+                      : {})}
+                  >
                     <div className="vcr-bars__name">
-                      {zone.code} {zone.title}
+                      {rowName(to, `${zone.code} ${zone.title}`)}
                       {zone.note && <small>{zone.note}</small>}
+                      {zone.noteExtra && <small>{zone.noteExtra}</small>}
                     </div>
                     <PercentBar
                       percent={zone.percent}
@@ -658,7 +740,8 @@ function DirectorSummary({
                     />
                     <strong>{displayScore(zone.percent)}%</strong>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <Empty />
@@ -668,23 +751,38 @@ function DirectorSummary({
             <h3>Требуют внимания: {groupA.length} учителей</h3>
             {groupA.length ? (
               <Table
+                stack
                 headers={["Учитель", "Кафедра", "Средний итог", "Повторяемость"]}
               >
-                {groupA.slice(0, 5).map((t) => (
-                  <tr key={t.key}>
-                    <td>{shortName(t.name)}</td>
-                    <td>{t.department}</td>
-                    <td>
-                      {t.average != null && (
-                        <>
-                          {displayScore(t.average)} из 100
-                          <Badge percent={t.average} />
-                        </>
-                      )}
-                    </td>
-                    <td>{t.repeat}</td>
-                  </tr>
-                ))}
+                {groupA.slice(0, 5).map((t) => {
+                  // Единичный результат: сразу полный чек-лист этого урока; несколько уроков: карточка учителя.
+                  const only =
+                    t.fullLessons <= 1
+                      ? lessonObservations(t.rows).find((v) => scorePercent(v) != null)
+                      : undefined;
+                  const to = detailTo(
+                    only
+                      ? { reportLesson: String(only.id) }
+                      : { reportTeacher: t.key },
+                  );
+                  return (
+                    <tr key={t.key} {...clickable(to)}>
+                      <td className="vcr-stack__title">
+                        {rowName(to, shortName(t.name))}
+                      </td>
+                      <td data-label="Кафедра">{t.department}</td>
+                      <td data-label="Средний итог">
+                        {t.average != null && (
+                          <ScoreLevel
+                            text={`${displayScore(t.average)} из 100`}
+                            percent={t.average}
+                          />
+                        )}
+                      </td>
+                      <td data-label="Повторяемость">{t.repeat}</td>
+                    </tr>
+                  );
+                })}
               </Table>
             ) : (
               <Empty />
@@ -706,19 +804,21 @@ function DirectorSummary({
                   {news.averageNew == null ? (
                     "нет полных итогов"
                   ) : (
-                    <>
-                      {displayScore(news.averageNew)} из 100
-                      <Badge percent={news.averageNew} />
-                    </>
+                    <ScoreLevel
+                      text={`${displayScore(news.averageNew)} из 100`}
+                      percent={news.averageNew}
+                    />
                   )}
-                  {" · "}остальных:{" "}
+                </p>
+                <p>
+                  Средний итог остальных:{" "}
                   {news.averageOthers == null ? (
                     "нет полных итогов"
                   ) : (
-                    <>
-                      {displayScore(news.averageOthers)} из 100
-                      <Badge percent={news.averageOthers} />
-                    </>
+                    <ScoreLevel
+                      text={`${displayScore(news.averageOthers)} из 100`}
+                      percent={news.averageOthers}
+                    />
                   )}
                 </p>
                 <p>С уроками ниже 70: {news.below70}</p>
@@ -893,7 +993,8 @@ export default function VisitChecklistReportDashboard({
     to = params.get("reportTo") || report.week.end;
   const department = params.get("reportDepartment") || "",
     search = params.get("reportSearch") || "",
-    level = params.get("reportLevel") || "";
+    level = params.get("reportLevel") || "",
+    criterionCode = params.get("reportCriterion") || "";
   const page = Math.max(
       1,
       Number.parseInt(params.get("reportPage") || "1", 10) || 1,
@@ -1012,13 +1113,21 @@ export default function VisitChecklistReportDashboard({
       };
     });
   const priorities = growthCriteria(criteria);
-  const filteredLessons = lessons
-    .filter(
+  // Переход из «Зон роста» сводки директора: уроки, где пункт набран не полностью, сначала самые слабые.
+  const criterionQuestion = criterionCode
+    ? checklist.sections
+        .flatMap((s) => s.questions)
+        .find((q) => q.code === criterionCode)
+    : undefined;
+  const byLevel = (list: ReportVisit[]) =>
+    list.filter(
       (v) =>
         !level ||
         LEVELS[levelIndex(scorePercent(v) ?? preliminaryPercent(v))] === level,
-    )
-    .sort((a, b) => b.date.localeCompare(a.date));
+    );
+  const filteredLessons = criterionCode
+    ? byLevel(lessonsWithLowItem(lessons, criterionCode))
+    : byLevel(lessons).sort((a, b) => b.date.localeCompare(a.date));
   const observers = [
     ...new Set(rows.filter((v) => !v.self).map((v) => v.visitor)),
   ].map((name) => ({
@@ -1030,7 +1139,9 @@ export default function VisitChecklistReportDashboard({
     ? lessonText(selectedLesson)
     : teacher
       ? teachers.find((t) => t.key === teacher)?.name || "Карточка учителя"
-      : (
+      : view === "lessons" && criterionCode
+        ? `Уроки с низким баллом по пункту ${criterionCode}`
+        : (
           {
             summary: "Сводка",
             teachers: "Результаты учителей",
@@ -1532,7 +1643,9 @@ export default function VisitChecklistReportDashboard({
               <button
                 key={id}
                 aria-current={view === id ? "page" : undefined}
-                onClick={() => update({ reportView: id, reportLevel: null })}
+                onClick={() =>
+                  update({ reportView: id, reportLevel: null, reportCriterion: null })
+                }
               >
                 {name}
               </button>
@@ -2060,7 +2173,24 @@ export default function VisitChecklistReportDashboard({
           ) : view === "not_visited" ? (
             renderNotVisited(paged(notVisited))
           ) : (
-            renderLessons(paged(filteredLessons))
+            <>
+              {criterionCode && (
+                <p className="vcr-note">
+                  Пункт {criterionCode}
+                  {criterionQuestion
+                    ? ` «${criterionQuestion.text.replace(/\.$/, "")}»`
+                    : ""}
+                  : уроки, где пункт набран не полностью, сначала самые слабые.{" "}
+                  <button
+                    className="vcr-link"
+                    onClick={() => update({ reportCriterion: null })}
+                  >
+                    Показать все уроки
+                  </button>
+                </p>
+              )}
+              {renderLessons(paged(filteredLessons))}
+            </>
           )}
           {pagination}
         </>

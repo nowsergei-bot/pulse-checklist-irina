@@ -32,6 +32,10 @@ import {
   directorPeriodRange,
   directorWeeks,
   growthZones,
+  GROWTH_CLARIFY_PERCENT,
+  GROWTH_CLARIFY_TEXT,
+  lessonsWithLowItem,
+  weeklyLines,
   lessonsGenitive,
   newTeacherStats,
   repeatText,
@@ -729,6 +733,24 @@ test("director periods: week, last completed month, school year and weekly serie
     ]),
     "07.09: 72 → 14.09: 69,9",
   );
+  // в интерфейсе по одной неделе на строку
+  assert.deepEqual(weeklyLines(series), ["07.09: 70", "14.09: нет данных", "21.09: нет данных", "28.09: 90"]);
+  assert.deepEqual(weeklyLines([]), []);
+});
+
+test("lessons with a low score on an item: only lessons where it is scored below maximum, weakest first", () => {
+  const rows = [
+    synthetic({ id: 1, teacherKey: "a", date: "2026-09-10", percent: 90, fractions: { "7.1": 1 } }),
+    synthetic({ id: 2, teacherKey: "b", date: "2026-09-11", percent: 90, fractions: { "7.1": 0.6 } }),
+    synthetic({ id: 3, teacherKey: "c", date: "2026-09-12", percent: 90, fractions: { "7.1": 0.3 } }),
+    synthetic({ id: 4, teacherKey: "d", date: "2026-09-13", percent: 90, fractions: { "7.1": 0.6 } }),
+    synthetic({ id: 5, teacherKey: "e", date: "2026-09-14", percent: 90, na: ["7.1"] }),
+  ];
+  const list = lessonsWithLowItem(lessonObservations(rows), "7.1");
+  // полный балл и «не применимо» не входят; сначала самый низкий балл, при равенстве более свежая дата
+  assert.deepEqual(list.map((v) => v.id), [3, 4, 2]);
+  assert.deepEqual(lessonsWithLowItem(lessonObservations(rows), "9.9"), []);
+  assert.deepEqual(lessonsWithLowItem([], "7.1"), []);
 });
 
 test("chart axis uses round ticks", () => {
@@ -785,9 +807,12 @@ test("growth zones skip form-minimum items, take the three lowest and explain th
   assert.equal(zones.length, 3);
   assert.deepEqual(zones.map((z) => z.code), ["3.6", "7.1", "6.2"]);
   assert.ok(zones.every((z) => !["3.5", "5.2", "5.3"].includes(z.code)));
-  assert.equal(zones[0].note, "в 75% чек-листов: задания одинаковые для всех");
+  assert.equal(zones[0].note, "в 75% чек-листов выбрано: «задания одинаковые для всех»");
+  assert.equal(zones[0].noteExtra, ""); // у пункта с выбором варианта второй строки нет даже при доле выше порога
   assert.equal(zones[1].note, "");
-  assert.equal(zones[2].note, "в 100% чек-листов: вовлечена только часть класса");
+  assert.equal(zones[1].noteExtra, "");
+  assert.equal(zones[2].note, "в 100% чек-листов выбрано: «вовлечена только часть класса»");
+  assert.equal(zones[2].noteExtra, "");
   assert.ok(zones[0].percent <= zones[1].percent);
   assert.deepEqual(growthZones([]), []);
   const multi = growthZones([
@@ -797,7 +822,21 @@ test("growth zones skip form-minimum items, take the three lowest and explain th
     }),
     synthetic({ id: 21, teacherKey: "n", date: "2026-09-15", percent: 90 }),
   ]).find((z) => z.code === "9.1");
-  assert.equal(multi?.note, "чаще всего не отмечено: «учитель внимательно выслушивает ответы» (в 50% чек-листов)");
+  assert.equal(multi?.note, "в 50% чек-листов не отмечено: «учитель внимательно выслушивает ответы»");
+  // доля 50% и выше: вторая строка про возможный пропуск отметки
+  assert.equal(multi?.noteExtra, GROWTH_CLARIFY_TEXT);
+  const rare = growthZones([
+    synthetic({
+      id: 30, teacherKey: "p", date: "2026-09-15", percent: 90,
+      answers: { "9.1": { answer: "Общение строится в уважительном, доброжелательном и деловом тоне", fraction: 0.5 } },
+    }),
+    synthetic({ id: 31, teacherKey: "q", date: "2026-09-15", percent: 90 }),
+    synthetic({ id: 32, teacherKey: "r", date: "2026-09-15", percent: 90 }),
+  ]).find((z) => z.code === "9.1");
+  // не отмечено в одном из трёх чек-листов (33%): строка есть, второй строки нет
+  assert.equal(rare?.note, "в 33% чек-листов не отмечено: «учитель внимательно выслушивает ответы»");
+  assert.equal(rare?.noteExtra, "");
+  assert.equal(GROWTH_CLARIFY_PERCENT, 50);
 });
 
 test("department ranking goes from low to high average with A and B counts", () => {

@@ -61,15 +61,21 @@ export const SHORT_TITLES: Record<string, string> = {
   "9.1": "Характер педагогического общения",
   "9.3": "Психологический климат",
 };
+/**
+ * «Фамилия Имя Отчество» → «Фамилия И.О.». Часть в скобках (прежняя фамилия) сохраняется целиком:
+ * «Иванова (Петрова) Анна Сергеевна» → «Иванова (Петрова) А.С.».
+ */
 export function shortName(name: string): string {
   if (name.includes(";")) return name.split(";").map(part => shortName(part.trim())).join(" / ");
-  const words = name.trim().split(/\s+/);
-  return words.length > 1
-    ? `${words[0]} ${words
-        .slice(1)
-        .map((w) => `${w[0]}.`)
-        .join("")}`
-    : name || "Наблюдатель не указан";
+  const tokens = name.trim().match(/\([^)]*\)?|[^\s(]+/g) ?? [];
+  const brackets = tokens.filter((t) => t.startsWith("("));
+  const words = tokens.filter((t) => !t.startsWith("("));
+  if (words.length + brackets.length < 2) return name.trim() || "Наблюдатель не указан";
+  const initials = words
+    .slice(1)
+    .map((w) => `${w[0]}.`)
+    .join("");
+  return [words[0], ...brackets, initials].filter(Boolean).join(" ");
 }
 function exactPercent(visit: ReportVisit): Fraction | null {
   if (visit.score.total != null && visit.score.max > 0)
@@ -124,7 +130,7 @@ export function displayScore(value: number, maximum = 100) {
     levelIndex((rounded / maximum) * 100) ===
       levelIndex((value / maximum) * 100)
       ? rounded
-      : Math.floor(value * 10) / 10,
+      : Math.floor(value * 10 + 1e-9) / 10,
   ).replace(".", ",");
 }
 /** Equal teacher weights, retaining each full lesson's own available maximum. */
@@ -631,16 +637,20 @@ export function weeklyAverages(
     };
   });
 }
-/** «07.09: 72 → 14.09: 69,9»: пары «понедельник: итог» через стрелку. */
+/** По одной неделе на строку: «07.09: 69», «14.09: 72», «21.09: нет данных». */
+export function weeklyLines(
+  series: { start: string; value: number | null }[],
+): string[] {
+  return series.map(
+    (w) =>
+      `${w.start.slice(8, 10)}.${w.start.slice(5, 7)}: ${w.value == null ? "нет данных" : displayScore(w.value)}`,
+  );
+}
+/** «07.09: 72 → 14.09: 69,9»: пары «понедельник: итог» через стрелку (для Excel). */
 export function weeklyArrows(
   series: { start: string; value: number | null }[],
 ): string {
-  return series
-    .map(
-      (w) =>
-        `${w.start.slice(8, 10)}.${w.start.slice(5, 7)}: ${w.value == null ? "нет данных" : displayScore(w.value)}`,
-    )
-    .join(" → ");
+  return weeklyLines(series).join(" → ");
 }
 
 /** Круглые деления шкалы 0…top: шаг 1, 2, 5, 10, 20, 25, 50… не более пяти делений. */
@@ -838,13 +848,20 @@ function growthPhrase(code: string, answer: string): string {
     const [keyCode, prefix] = key.split("|");
     if (keyCode === code && text.startsWith(normalizedAnswer(prefix))) return phrase;
   }
-  return answer.length > 70 ? `«${answer.slice(0, 67).trim()}…»` : `«${answer}»`;
+  return answer.length > 70 ? `${answer.slice(0, 67).trim()}…` : answer;
 }
 
+/**
+ * Порог (%), с которого пояснение к пункту с отметками получает вторую строку «Нужно уточнить отдельно…»:
+ * если не отмечено в половине чек-листов и чаще, это может быть пропуск отметки при заполнении, а не слабая практика.
+ */
+export const GROWTH_CLARIFY_PERCENT = 50;
+export const GROWTH_CLARIFY_TEXT =
+  "Нужно уточнить отдельно: возможно, наблюдатели пропускают эту отметку при заполнении";
 function multiGrowthNote(
   code: string,
   scored: { value: number | null; max: number; answer: string; optionIds: string[] }[],
-): string {
+): { note: string; extra: string } {
   const picked = (item: (typeof scored)[number], option: { id: string; prefix: string }) =>
     item.optionIds.includes(option.id) ||
     item.answer
@@ -859,9 +876,12 @@ function multiGrowthNote(
       ).length,
     }))
     .sort((a, b) => b.count - a.count)[0];
-  return lacking && lacking.count > 0
-    ? `чаще всего не отмечено: «${lacking.option.text}» (в ${Math.round((lacking.count / scored.length) * 100)}% чек-листов)`
-    : "";
+  if (!lacking || lacking.count <= 0) return { note: "", extra: "" };
+  const percent = Math.round((lacking.count / scored.length) * 100);
+  return {
+    note: `в ${percent}% чек-листов не отмечено: «${lacking.option.text}»`,
+    extra: percent >= GROWTH_CLARIFY_PERCENT ? GROWTH_CLARIFY_TEXT : "",
+  };
 }
 
 export type GrowthZone = {
@@ -869,8 +889,10 @@ export type GrowthZone = {
   title: string;
   percent: number;
   lessons: number;
-  /** Одна строка пояснения по ответам; пустая, если ответов ниже максимума нет. */
+  /** Первая строка пояснения по ответам; пустая, если ответов ниже максимума нет. */
   note: string;
+  /** Вторая строка («Нужно уточнить отдельно…») только для пунктов с отметками при доле не меньше порога. */
+  noteExtra: string;
 };
 /**
  * Пункты с самым низким средним % от максимума по сигнальным оценкам (как блок «Зоны роста» на «Сводке»),
@@ -902,16 +924,21 @@ export function growthZones(rows: ReportVisit[], count = 3): GrowthZone[] {
       if (item.value! < item.max && item.answer)
         counts.set(item.answer, (counts.get(item.answer) || 0) + 1);
     const top = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru"))[0];
+    const text = !top
+      ? { note: "", extra: "" }
+      : GROWTH_MULTI_EXPECTED[code]
+        ? multiGrowthNote(code, scored)
+        : {
+            note: `в ${Math.round((top[1] / scored.length) * 100)}% чек-листов выбрано: «${growthPhrase(code, top[0])}»`,
+            extra: "",
+          };
     zones.push({
       code,
       title: SHORT_TITLES[code] || title,
       percent,
       lessons: eligible.length,
-      note: !top
-        ? ""
-        : GROWTH_MULTI_EXPECTED[code]
-          ? multiGrowthNote(code, scored)
-          : `в ${Math.round((top[1] / scored.length) * 100)}% чек-листов: ${growthPhrase(code, top[0])}`,
+      note: text.note,
+      noteExtra: text.extra,
     });
   }
   return zones
@@ -921,6 +948,20 @@ export function growthZones(rows: ReportVisit[], count = 3): GrowthZone[] {
         a.code.localeCompare(b.code, "ru", { numeric: true }),
     )
     .slice(0, count);
+}
+
+/**
+ * Уроки, где пункт набран не полностью (оценён и балл ниже максимума): куда ведёт строка «Зон роста».
+ * Сначала самый низкий % от максимума по пункту, затем более свежая дата. Пункты по отметке формы не учитываются.
+ */
+export function lessonsWithLowItem(lessons: ReportVisit[], code: string): ReportVisit[] {
+  const share = (v: ReportVisit) => {
+    const item = signalItems(v.score.items.filter((i) => i.code === code))[0];
+    return item && item.value! < item.max ? item.value! / item.max : null;
+  };
+  return lessons
+    .filter((v) => share(v) != null)
+    .sort((a, b) => share(a)! - share(b)! || b.date.localeCompare(a.date) || a.id - b.id);
 }
 
 export type DepartmentRow = {

@@ -606,13 +606,193 @@
     order: 3;
   }
 }
+/* Переключатель «Сводка для директора | Полная аналитика» в стиле кнопок оглавления */
 .vcr-screens {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
-  margin: 16px 0 0;
+  gap: 10px;
+  margin: 16px 0;
 }
-.vcr-screens a[aria-current="page"] {
-  font-weight: 700;
+.vcr-screens a.vcr-screen,
+.vcr-screens a.vcr-screen:link,
+.vcr-screens a.vcr-screen:visited,
+.vcr-screens a.vcr-screen:hover,
+.vcr-screens a.vcr-screen:active,
+.vcr-screens a.vcr-screen:focus {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 8px 18px;
+  border: 1px solid #cfdcd6;
+  border-radius: 999px;
+  background: #edf3f0;
+  color: #203e3a;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+}
+.vcr-screens a.vcr-screen:hover,
+.vcr-screens a.vcr-screen:active {
+  border-color: #b5c9c1;
+  background: #dde9e4;
+}
+.vcr-screens a.vcr-screen[aria-current="page"],
+.vcr-screens a.vcr-screen[aria-current="page"]:hover {
+  border-color: #203e3a;
+  background: #203e3a;
+  color: #fff;
+}
+.vcr-screens a.vcr-screen:focus-visible {
+  outline: 3px solid #397f75;
+  outline-offset: 2px;
+}
+
+/* Число и плашка уровня: на одной линии по высоте, с промежутком; плашка не налезает на число */
+.vcr-scorecell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  vertical-align: middle;
+}
+.vcr-scorecell__value {
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.vcr-scorecell .vcr-level {
+  margin: 0;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* Таблицы сводки директора помещаются в карточку целиком, текст в ячейках переносится */
+.vcr-director .vcr-table-scroll {
+  max-height: none;
+  overflow: visible;
+  margin-top: 12px;
+}
+.vcr-director .vcr-table-scroll thead th {
+  position: static;
+}
+.vcr-director table {
+  min-width: 0;
+  table-layout: auto;
+  font-size: 13px;
+}
+.vcr-director th,
+.vcr-director td {
+  padding: 10px 12px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  vertical-align: middle;
+}
+.vcr-director td {
+  min-width: 0;
+}
+.vcr-director td small {
+  white-space: normal;
+}
+@media (max-width: 650px) {
+  /* Узкий экран: строка таблицы становится карточкой «подпись: значение», ничего не обрезается и не рвётся посреди слова */
+  .vcr-director table.vcr-stack,
+  .vcr-director table.vcr-stack tbody,
+  .vcr-director table.vcr-stack tr,
+  .vcr-director table.vcr-stack th,
+  .vcr-director table.vcr-stack td {
+    display: block;
+    width: auto;
+  }
+  .vcr-director table.vcr-stack thead {
+    display: none;
+  }
+  .vcr-director table.vcr-stack tr {
+    margin: 0 0 10px;
+    padding: 6px 12px;
+    border: 1px solid var(--vcr-line);
+    border-radius: 10px;
+    background: #fff;
+  }
+  .vcr-director table.vcr-stack th,
+  .vcr-director table.vcr-stack td {
+    padding: 6px 0;
+    border: 0;
+    background: transparent;
+    font-size: 13px;
+    overflow-wrap: break-word;
+  }
+  .vcr-director table.vcr-stack .vcr-stack__title {
+    padding-bottom: 4px;
+    font-size: 14px;
+    font-weight: 650;
+  }
+  .vcr-director table.vcr-stack td[data-label] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 4px 12px;
+  }
+  .vcr-director table.vcr-stack td[data-label]::before {
+    content: attr(data-label);
+    color: #647771;
+    font-size: 12px;
+  }
+  .vcr-director .vcr-row-link:hover > *,
+  .vcr-director .vcr-row-link:focus-within > * {
+    background: transparent;
+  }
+  .vcr-director table.vcr-stack tr.vcr-row-link:hover {
+    background: #eaf3ef;
+  }
+}
+
+/* Кликабельные строки: подсветка при наведении и ссылка в первой ячейке */
+.vcr-row-link {
+  cursor: pointer;
+}
+.vcr-row-link:hover > *,
+.vcr-row-link:focus-within > * {
+  background: #eaf3ef;
+}
+.vcr-dashboard a.vcr-rowlink,
+.vcr-dashboard a.vcr-rowlink:link,
+.vcr-dashboard a.vcr-rowlink:visited,
+.vcr-dashboard a.vcr-rowlink:hover,
+.vcr-dashboard a.vcr-rowlink:active {
+  color: #203e3a;
+  font-weight: 650;
+  text-decoration: none;
+}
+.vcr-dashboard a.vcr-rowlink:hover {
   text-decoration: underline;
+  text-decoration-color: #accac1;
+  text-underline-offset: 3px;
+}
+.vcr-dashboard a.vcr-rowlink:focus-visible {
+  outline: 3px solid #397f75;
+  outline-offset: 2px;
+}
+.vcr-bars__row--link {
+  margin: 0 -8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.vcr-bars__row--link:hover,
+.vcr-bars__row--link:focus-within {
+  background: #eaf3ef;
+}
+.vcr-bars__name small {
+  display: block;
+}
+.vcr-arrows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vcr-arrows__week {
+  display: block;
+  font-size: 13px;
 }
