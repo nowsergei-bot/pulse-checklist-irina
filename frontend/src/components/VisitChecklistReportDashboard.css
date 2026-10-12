@@ -866,3 +866,35 @@
   max-height: none;
   overflow: visible;
 }
+
+/* Компактная шапка «Сводка» и кнопка Excel в одной строке с вкладками */
+.vcr-header--compact {
+  padding: 10px 20px;
+}
+.vcr-header--compact h2 {
+  margin: 0;
+  font-size: clamp(20px, 2.4vw, 26px);
+}
+.vcr-navbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+}
+.vcr-navbar .vcr-navigation {
+  flex: 0 1 auto;
+  gap: 8px;
+  margin: 0;
+}
+.vcr-navbar > .vcr-action {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}

@@ -1921,9 +1921,18 @@ export default function VisitChecklistReportDashboard({
         analyticsPath={analyticsPath}
       />
     );
+  const excelButton = (
+    <button
+      type="button"
+      className="vcr-action vcr-action--primary"
+      onClick={() => void exportExcel()}
+    >
+      Скачать Excel · все строки
+    </button>
+  );
   return (
     <div className="vcr-dashboard">
-      <header className="vcr-header">
+      <header className={`vcr-header${detail ? "" : " vcr-header--compact"}`}>
         <div className="vcr-header__title">
           <h2>{heading}</h2>
           {detail && needsSupport && (
@@ -1937,15 +1946,9 @@ export default function VisitChecklistReportDashboard({
             </span>
           )}
         </div>
-        <div className="vcr-header__actions">
-          <button
-            type="button"
-            className="vcr-action vcr-action--primary"
-            onClick={() => void exportExcel()}
-          >
-            Скачать Excel · все строки
-          </button>
-          {detail && (
+        {detail && (
+          <div className="vcr-header__actions">
+            {excelButton}
             <button
               type="button"
               className="vcr-action"
@@ -1953,8 +1956,8 @@ export default function VisitChecklistReportDashboard({
             >
               ← К списку
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </header>
       {exportError && <p role="alert">{exportError}</p>}
       {linkError && <p role="alert">{linkError}</p>}
@@ -1969,25 +1972,28 @@ export default function VisitChecklistReportDashboard({
       )}
       {!detail && (
         <>
-          <nav className="vcr-navigation" aria-label="Разделы аналитики">
-            {Object.entries({
-              summary: "Сводка",
-              teachers: "Результаты учителей",
-              departments: "Кафедры",
-              observers: "Наблюдатели",
-              criteria: "Критерии урока",
-            }).map(([id, name]) => (
-              <button
-                key={id}
-                aria-current={view === id ? "page" : undefined}
-                onClick={() =>
-                  update({ reportView: id, reportLevel: null, reportCriterion: null })
-                }
-              >
-                {name}
-              </button>
-            ))}
-          </nav>
+          <div className="vcr-navbar">
+            <nav className="vcr-navigation" aria-label="Разделы аналитики">
+              {Object.entries({
+                summary: "Сводка",
+                teachers: "Результаты учителей",
+                departments: "Кафедры",
+                observers: "Наблюдатели",
+                criteria: "Критерии урока",
+              }).map(([id, name]) => (
+                <button
+                  key={id}
+                  aria-current={view === id ? "page" : undefined}
+                  onClick={() =>
+                    update({ reportView: id, reportLevel: null, reportCriterion: null })
+                  }
+                >
+                  {name}
+                </button>
+              ))}
+            </nav>
+            {excelButton}
+          </div>
           <div className="vcr-filters">
             <label>
               Период{" "}

@@ -66,6 +66,7 @@ export default function VisitChecklistDirectorDashboardPage() {
   const summaryScreen = isDirectorSummaryShown(directorSummary, params.get('screen'));
 
   const projectId = dash?.project?.id;
+  const showScreens = directorSummary && !isDirectorSummaryDenied(directorSummary, params.get('screen'));
   const shownTitle =
     displayVisitChecklistTitle(dash?.project?.title) || VISIT_CHECKLIST_TITLE;
   useDocumentTitle(shownTitle);
@@ -207,6 +208,24 @@ export default function VisitChecklistDirectorDashboardPage() {
         <p className="vcd-hero__lead muted">
           Посещения, оценки наблюдателей и самоанализ педагогов.
         </p>
+        {showScreens ? (
+          <nav className="vcr-screens" aria-label="Экраны директора">
+            <Link
+              className="vcr-screen"
+              aria-current={summaryScreen ? 'page' : undefined}
+              to="?screen=summary"
+            >
+              Сводка для директора
+            </Link>
+            <Link
+              className="vcr-screen"
+              aria-current={summaryScreen ? undefined : 'page'}
+              to="."
+            >
+              Полная аналитика
+            </Link>
+          </nav>
+        ) : null}
       </header>
       {loadErr ? (
         <section className="card glass-surface" role="alert">
@@ -233,24 +252,6 @@ export default function VisitChecklistDirectorDashboardPage() {
         </section>
       ) : (
         <>
-          {directorSummary ? (
-            <nav className="vcr-screens" aria-label="Экраны директора">
-              <Link
-                className="vcr-screen"
-                aria-current={summaryScreen ? 'page' : undefined}
-                to="?screen=summary"
-              >
-                Сводка для директора
-              </Link>
-              <Link
-                className="vcr-screen"
-                aria-current={summaryScreen ? undefined : 'page'}
-                to="."
-              >
-                Полная аналитика
-              </Link>
-            </nav>
-          ) : null}
           <VisitChecklistReportDashboard
             responses={liveResponses}
             checklist={liveChecklist}

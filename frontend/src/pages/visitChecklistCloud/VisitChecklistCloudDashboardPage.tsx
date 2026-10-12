@@ -110,7 +110,18 @@ function SectionScoreBars({
   );
 }
 
-function LegacyVisitChecklistCloudDashboardPage() {
+function LegacyVisitChecklistCloudDashboardPage({
+  canArchive,
+  archiveOpen,
+  onToggleArchive,
+  onDirectorSummary,
+}: {
+  canArchive: boolean;
+  archiveOpen: boolean;
+  onToggleArchive: () => void;
+  onDirectorSummary: (shown: boolean) => void;
+}) {
+  const showArchive = canArchive && archiveOpen;
   const [searchParams, setSearchParams] = useSearchParams();
   const projectParam = searchParams.get('project');
   const teacherParam = searchParams.get('teacher');
@@ -191,6 +202,7 @@ function LegacyVisitChecklistCloudDashboardPage() {
       if (pack?.draft?.checklist) setLiveChecklist(pack.draft.checklist);
       setLiveDirectory(pack?.draft?.directory ?? null);
       setLiveStaffUnits(pack?.staffUnits ?? {});
+      onDirectorSummary(pack?.directorSummary === true);
       setLiveReady(true);
     }).catch((error) => {
       if (!cancelled) {
@@ -458,6 +470,14 @@ function LegacyVisitChecklistCloudDashboardPage() {
         ) : null}
         {projectId && !liveReady ? <p role="status">Загружаем ответы для сводки…</p> : null}
         {projectId && liveReady && !liveLoadErr ? <VisitChecklistReportDashboard projectId={projectId} responses={liveResponses} checklist={liveChecklist} directory={liveDirectory || defaultSeed.directory} staffUnits={liveStaffUnits} /> : null}
+        {canArchive ? (
+          <p className={`vcd-archive-link ${VCD_PDF_HIDE_CLASS}`}>
+            <button type="button" className="vcr-link" aria-expanded={archiveOpen} onClick={onToggleArchive}>
+              Архив и настройки
+            </button>
+          </p>
+        ) : null}
+        {showArchive ? (
         <details className="card glass-surface" style={{ padding: '1rem' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Архивная аналитика и отчёты по прежней шкале</summary>
         <header className="mo-eng-dash-hero vcd-hero">
@@ -616,6 +636,7 @@ function LegacyVisitChecklistCloudDashboardPage() {
         />
         <VisitChecklistMethodistInsights insights={methodistInsights} pendingReady={liveReady && !loading} />
         </details>
+        ) : null}
       </div>
 
       {loadErr ? (
@@ -624,6 +645,7 @@ function LegacyVisitChecklistCloudDashboardPage() {
         </p>
       ) : null}
 
+      {showArchive ? (
       <details className="card glass-surface" style={{ padding: '1rem' }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Карточки, PDF и публикация · прежняя шкала</summary>
       <div className="vcd-layout">
@@ -1046,6 +1068,7 @@ function LegacyVisitChecklistCloudDashboardPage() {
         </article>
       </div>
       </details>
+      ) : null}
       {cardPdfOpen && card ? (
         <Suspense fallback={null}>
           <VisitChecklistPdfBuilderDialog
@@ -1112,11 +1135,23 @@ function TeacherPickRow({
 
 
 export default function VisitChecklistCloudDashboardPage() {
+  const [canArchive, setCanArchive] = useState(false);
+  const [archiveShown, setArchiveShown] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
-  return <div className="page"><LegacyVisitChecklistCloudDashboardPage />
-    <details onToggle={(event) => setArchiveOpen(event.currentTarget.open)}>
-      <summary>Настройки версионного оценивания и доступа</summary>
-      {archiveOpen ? <VisitChecklistV3Dashboard /> : null}
-    </details>
+  return <div className="page"><LegacyVisitChecklistCloudDashboardPage
+      canArchive={canArchive}
+      onDirectorSummary={setCanArchive}
+      archiveOpen={archiveShown}
+      onToggleArchive={() => {
+        setArchiveShown((value) => !value);
+        setArchiveOpen(false);
+      }}
+    />
+    {canArchive && archiveShown ? (
+      <details onToggle={(event) => setArchiveOpen(event.currentTarget.open)}>
+        <summary>Настройки версионного оценивания и доступа</summary>
+        {archiveOpen ? <VisitChecklistV3Dashboard /> : null}
+      </details>
+    ) : null}
   </div>;
 }

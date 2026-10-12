@@ -38,7 +38,8 @@
 /* Director cabinet: glass page header, not the red engagement-dashboard billboard */
 .vcd-page--director .vcd-hero--cabinet {
   width: 100%;
-  min-height: 12.5rem;
+  min-height: 0;
+  height: auto;
   margin: 0 0 1.25rem;
   padding: 1.15rem 1.2rem 1.3rem;
   color: var(--cab-ink, #1a1512);
@@ -61,6 +62,22 @@
   letter-spacing: -0.02em;
   line-height: 1.25;
   color: var(--cab-ink, #1a1512);
+}
+
+.vcd-page--director .vcd-hero--cabinet .vcd-hero__lead {
+  margin-bottom: 0.65rem;
+}
+
+.vcd-page--director .vcd-hero--cabinet .vcd-hero__lead:last-child {
+  margin-bottom: 0;
+}
+
+.vcd-page--director .vcd-hero--cabinet .vcr-screens {
+  margin: 0;
+}
+
+.vcd-archive-link {
+  margin: 1rem 0 0;
 }
 
 .vcd-hero__lead {
