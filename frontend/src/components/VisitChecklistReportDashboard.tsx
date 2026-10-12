@@ -56,7 +56,9 @@ import {
   newTeacherStats,
   visitCoverage,
   weeklyArrows,
-  weeklyLines,
+  weeklyHint,
+  trimTrailingEmptyWeeks,
+  weeklyScoreLine,
   lessonsWithLowItem,
   niceAxis,
   weeklyAverages,
@@ -78,6 +80,7 @@ import {
   getLessonVisitSelfLinks,
   saveLessonVisitSelfLink,
 } from "../api/visitChecklist";
+import { useCabinetProfile } from "../lib/cabinet/profile";
 import "./VisitChecklistReportDashboard.css";
 
 type Props = {
@@ -193,19 +196,22 @@ function SortSelect({
   value: TeacherSort;
   onChange: (value: TeacherSort) => void;
 }) {
+  const selected = TEACHER_SORTS.find((s) => s.id === value)?.label ?? "";
   return (
     <label className={`vcr-sort ${VCD_PDF_HIDE_CLASS}`}>
-      Сортировка{" "}
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as TeacherSort)}
-      >
-        {TEACHER_SORTS.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.label}
-          </option>
-        ))}
-      </select>
+      <span>Сортировка</span>
+      <span className="vcr-sort__box" data-value={selected}>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value as TeacherSort)}
+        >
+          {TEACHER_SORTS.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </span>
     </label>
   );
 }
@@ -414,7 +420,9 @@ function DirectorSummary({
       newKeys,
       lessons: lessonObservations(rows),
       average: schoolAverage(rows),
-      series: weeklyAverages(report.visits, weeks, period === "week" ? undefined : range ?? undefined),
+      series: trimTrailingEmptyWeeks(
+        weeklyAverages(report.visits, weeks, period === "week" ? undefined : range ?? undefined),
+      ),
       attention,
       coverage: visitCoverage(report.teachers, directory, {
         from: range?.from,
@@ -511,13 +519,20 @@ function DirectorSummary({
     ) : (
       <>{children}</>
     );
-  const linked = (view: string, children: React.ReactNode) => {
+  const linked = (
+    view: string,
+    children: React.ReactNode,
+    button = false,
+  ) => {
     const to = href(view);
     return to ? (
-      <Link className={`vcr-link ${VCD_PDF_HIDE_CLASS}`} to={to}>
+      <Link
+        className={`${button ? "vcr-action vcr-metric__button" : "vcr-link"} ${VCD_PDF_HIDE_CLASS}`}
+        to={to}
+      >
         {children}
       </Link>
-    ) : (
+    ) : button ? null : (
       <>{children}</>
     );
   };
@@ -559,7 +574,7 @@ function DirectorSummary({
       const sheet = (name: string, rows: Record<string, unknown>[]) =>
         XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows), name);
       sheet("Сводка", [
-        { Показатель: "Период", Значение: `${dateText(range.from)}–${dateText(range.to)}` },
+        { Показатель: "Период", Значение: `${dateText(range.from)}-${dateText(range.to)}` },
         { Показатель: "Средний итог гимназии", Значение: data.average },
         { Показатель: "Итоги по неделям", Значение: weeklyArrows(data.series) },
         { Показатель: "Посещено учителей", Значение: data.coverage.visited },
@@ -637,13 +652,13 @@ function DirectorSummary({
       className={`vcr-dashboard vcr-director${pdfBusy ? " vcr-director--pdf" : ""}`}
       ref={pdfRef}
     >
-      <header className={`vcr-header ${PDF_CARD_KEEP_TOGETHER_CLASS}`}>
+      <header className={`vcr-header vcr-header--director ${PDF_CARD_KEEP_TOGETHER_CLASS}`}>
         <div>
           <span className="vcr-eyebrow">Кабинет директора</span>
           <h2>Сводка для директора</h2>
           <p>
             {range
-              ? `${dateText(range.from)}–${dateText(range.to)}`
+              ? `${dateText(range.from)}-${dateText(range.to)}`
               : "Период ещё не завершён"}{" "}
             · сформировано {generatedText(generatedAt)}
           </p>
@@ -702,25 +717,26 @@ function DirectorSummary({
               </strong>
               <span>Средний итог гимназии</span>
               <Badge percent={data.average} />
-              <span className="vcr-arrows" title="Недели с понедельника">
-                {weeklyLines(data.series).map((line) => (
-                  <span className="vcr-arrows__week" key={line}>
-                    {line}
-                  </span>
-                ))}
-              </span>
+              {data.series.length ? (
+                <span
+                  className={`vcr-arrows${data.series.length > 4 ? " vcr-arrows--long" : ""}`}
+                  title={weeklyHint(data.series)}
+                >
+                  {weeklyScoreLine(data.series)}
+                </span>
+              ) : null}
             </div>
             <div className="vcr-metric">
               <strong className="vcr-metric__nowrap">
                 {data.coverage.visited} из {data.coverage.total}
               </strong>
               <span>Посещено учителей</span>
-              {linked("not_visited", "Кто не посещён →")}
+              {linked("not_visited", "Кто не посещён", true)}
             </div>
             <div className="vcr-metric">
               <strong>{data.lessons.length}</strong>
               <span>Посещено уроков</span>
-              {linked("lessons", "Все уроки →")}
+              {linked("lessons", "Все уроки", true)}
             </div>
             <div className="vcr-metric">
               <strong>{data.rows.filter((v) => !v.self).length}</strong>
@@ -729,20 +745,31 @@ function DirectorSummary({
             <div className="vcr-metric">
               <strong>{groupA.length}</strong>
               <span>Требуют внимания</span>
-              <span>
-                ещё {groupB.length}: отдельные уроки ниже 70
-              </span>
-              {linked("support", "Список →")}
+              {groupB.length ? (
+                <span>
+                  и ещё {groupB.length}{" "}
+                  {pluralRu(groupB.length, ["учитель", "учителя", "учителей"])}{" "}
+                  с отдельными уроками ниже 70
+                </span>
+              ) : null}
+              {linked("support", "Список", true)}
             </div>
           </div>
           <section className={keep}>
-            <h3>Требуют внимания: {groupA.length} учителей</h3>
-            {groupA.length ? (
-              <>
+            <div className="vcr-head">
+              <h3>
+                Требуют внимания: {groupA.length}{" "}
+                {pluralRu(groupA.length, ["учитель", "учителя", "учителей"])}
+              </h3>
+              {groupA.length ? (
                 <SortSelect
                   value={sortAttention}
                   onChange={setSort("directorSortAttention", "worst")}
                 />
+              ) : null}
+            </div>
+            {groupA.length ? (
+              <>
                 <Table
                   stack
                   headers={["Учитель", "Кафедра", "Средний итог", "Повторяемость"]}
@@ -779,20 +806,29 @@ function DirectorSummary({
             )}
             {linked(
               "support",
-              `Все ${groupA.length} и ещё ${groupB.length} с отдельными уроками ниже 70 →`,
+              groupB.length
+                ? `Все ${groupA.length} и ещё ${groupB.length} ${pluralRu(groupB.length, ["учитель", "учителя", "учителей"])} с отдельными уроками ниже 70 →`
+                : `Все ${groupA.length} →`,
             )}
           </section>
           <section className={keep}>
-            <h3>Очень высокий уровень: {veryHigh.length} учителей</h3>
+            <div className="vcr-head">
+              <h3>
+                Очень высокий уровень: {veryHigh.length}{" "}
+                {pluralRu(veryHigh.length, ["учитель", "учителя", "учителей"])}
+              </h3>
+              {veryHigh.length ? (
+                <SortSelect
+                  value={sortTop}
+                  onChange={setSort("directorSortTop", "best")}
+                />
+              ) : null}
+            </div>
             <p className="vcr-note">
               средний итог по полным урокам от 85% доступного максимума
             </p>
             {veryHigh.length ? (
               <>
-                <SortSelect
-                  value={sortTop}
-                  onChange={setSort("directorSortTop", "best")}
-                />
                 <Table
                   stack
                   headers={["Учитель", "Кафедра", "Средний итог", "Полных уроков"]}
@@ -830,7 +866,15 @@ function DirectorSummary({
             )}
           </section>
           <section className={keep}>
-            <h3>Новые учителя</h3>
+            <div className="vcr-head">
+              <h3>Новые учителя</h3>
+              {newList.length > 0 ? (
+                <SortSelect
+                  value={sortNew}
+                  onChange={setSort("directorSortNew", "alpha")}
+                />
+              ) : null}
+            </div>
             {news.configured ? (
               <>
                 <p>
@@ -867,10 +911,6 @@ function DirectorSummary({
                 </p>
                 {newList.length > 0 && (
                   <>
-                    <SortSelect
-                      value={sortNew}
-                      onChange={setSort("directorSortNew", "alpha")}
-                    />
                     <Table
                       stack
                       headers={["Учитель", "Кафедра", "Средний итог", "Уроков"]}
@@ -995,7 +1035,7 @@ function DirectorSummary({
             <LevelChart
               title="Уроки по уровням"
               rows={data.rows}
-              dates={`${dateText(range.from)}–${dateText(range.to)}`}
+              dates={`${dateText(range.from)}-${dateText(range.to)}`}
               onOpen={(label) => {
                 const to = href("lessons");
                 if (to) navigate(`${to}&reportLevel=${encodeURIComponent(label)}`);
@@ -1147,6 +1187,8 @@ export default function VisitChecklistReportDashboard({
   now,
 }: Props) {
   const [params, setParams] = useSearchParams();
+  const { user: profileUser } = useCabinetProfile();
+  const canLinkAll = Boolean(profileUser?.permissions?.includes("*"));
   const currentParams = useRef(params);
   currentParams.current = params;
   const [exportError, setExportError] = useState("");
@@ -1343,6 +1385,45 @@ export default function VisitChecklistReportDashboard({
   const unlinked = selfMatches
     .filter((m) => rows.some((v) => v.id === m.self.id) && !m.lesson)
     .sort((a, b) => a.self.date.localeCompare(b.self.date));
+  // Сколько самоанализов однозначно привязываются к уроку того же учителя в тот же день.
+  const sameDayLinkable = selfMatches.filter(
+    (m) =>
+      !m.lesson &&
+      m.self.linkedLessonId == null &&
+      allLessonsForLinks.filter(
+        (o) => o.teacherKey === m.self.teacherKey && o.date === m.self.date,
+      ).length === 1,
+  ).length;
+  const confirmLinkAll = () => {
+    if (!sameDayLinkable) return;
+    const words =
+      sameDayLinkable % 10 === 1 && sameDayLinkable % 100 !== 11
+        ? ["самоанализ", "уроку"]
+        : sameDayLinkable % 10 >= 2 &&
+            sameDayLinkable % 10 <= 4 &&
+            (sameDayLinkable % 100 < 12 || sameDayLinkable % 100 > 14)
+          ? ["самоанализа", "урокам"]
+          : ["самоанализов", "урокам"];
+    if (
+      window.confirm(
+        `Привязать ${sameDayLinkable} ${words[0]} к ${words[1]} того же учителя в тот же день?`,
+      )
+    )
+      void saveLink({ mode: "automatic" });
+  };
+  const linkAllButton =
+    projectId && canLinkAll ? (
+      <div className={`vcr-selflink ${VCD_PDF_HIDE_CLASS}`}>
+        <button
+          type="button"
+          disabled={linkBusy || !sameDayLinkable}
+          className="vcr-action"
+          onClick={confirmLinkAll}
+        >
+          Привязать однозначные самоанализы по учителю и дате
+        </button>
+      </div>
+    ) : null;
   const departments = [
     ...new Set(report.teachers.map((t) => t.department)),
   ].sort((a, b) => a.localeCompare(b, "ru"));
@@ -1608,7 +1689,11 @@ export default function VisitChecklistReportDashboard({
                 .filter((v) => scorePercent(v) != null && scorePercent(v)! < 70)
                 .slice(0, 1)
                 .map((v) => (
-                  <p key={v.id}>{lessonLink(v)}</p>
+                  <p key={v.id}>
+                    <button className="vcr-link" onClick={() => openLesson(v)}>
+                      {dateText(v.date)} · {v.subject} · {v.className}
+                    </button>
+                  </p>
                 ))}
               {t.below70 > 1 && (
                 <button
@@ -1666,9 +1751,9 @@ export default function VisitChecklistReportDashboard({
             {dateText(m.self.date)} · {m.self.className} · {m.self.subject}
           </td>
           <td>
-            {m.reason}
+            <div>{m.reason}</div>
             {projectId && (
-              <label>
+              <label className="vcr-reason__pick">
                 Выбрать урок{" "}
                 <select
                   disabled={linkBusy}
@@ -1759,6 +1844,9 @@ export default function VisitChecklistReportDashboard({
   const pages = size === "all" ? 1 : Math.max(1, Math.ceil(total / size)),
     currentPage = Math.min(page, pages);
   const paged = <T,>(list: T[]) => pageRows(list, currentPage, size);
+  const firstResultGroupKey = sortedResultGroups.find((group) =>
+    paged(shownResultRows).some((row) => row.groupKey === group.key),
+  )?.key;
   const pagination =
     !detail && view !== "summary" ? (
       <div className="vcr-pagination">
@@ -1961,15 +2049,6 @@ export default function VisitChecklistReportDashboard({
       </header>
       {exportError && <p role="alert">{exportError}</p>}
       {linkError && <p role="alert">{linkError}</p>}
-      {projectId && (view === "unlinked" || view === "summary") && !detail && (
-        <button
-          disabled={linkBusy}
-          className="vcr-link"
-          onClick={() => void saveLink({ mode: "automatic" })}
-        >
-          Привязать однозначные самоанализы по учителю и дате
-        </button>
-      )}
       {!detail && (
         <>
           <div className="vcr-navbar">
@@ -2170,13 +2249,17 @@ export default function VisitChecklistReportDashboard({
             }
           </p>
           <section id="vcr-support" className="vcr-panel vcr-compact">
-            <h3>Нужна методическая поддержка</h3>
-            {support.length ? (
-              <>
+            <div className="vcr-head">
+              <h3>Нужна методическая поддержка</h3>
+              {support.length ? (
                 <SortSelect
                   value={sortSupport}
                   onChange={setSort("reportSortSupport", "worst")}
                 />
+              ) : null}
+            </div>
+            {support.length ? (
+              <>
                 {renderSupport(compactRows(supportList, isOpen("support")))}
                 <ListToggle
                   total={supportList.length}
@@ -2189,16 +2272,20 @@ export default function VisitChecklistReportDashboard({
             )}
           </section>
           <section id="vcr-top" className="vcr-panel vcr-compact">
-            <h3>Очень высокий уровень</h3>
+            <div className="vcr-head">
+              <h3>Очень высокий уровень</h3>
+              {veryHigh.length ? (
+                <SortSelect
+                  value={sortTop}
+                  onChange={setSort("reportSortTop", "best")}
+                />
+              ) : null}
+            </div>
             <p className="vcr-note">
               средний итог по полным урокам от 85% доступного максимума
             </p>
             {veryHigh.length ? (
               <>
-                <SortSelect
-                  value={sortTop}
-                  onChange={setSort("reportSortTop", "best")}
-                />
                 {renderTop(compactRows(topList, isOpen("top")))}
                 <ListToggle
                   total={topList.length}
@@ -2217,7 +2304,7 @@ export default function VisitChecklistReportDashboard({
               dates={
                 period === "all"
                   ? "За всё время"
-                  : `${dateText(from)}–${dateText(to)}`
+                  : `${dateText(from)}-${dateText(to)}`
               }
               onOpen={(label) =>
                 update({ reportView: "lessons", reportLevel: label })
@@ -2226,7 +2313,7 @@ export default function VisitChecklistReportDashboard({
             <LevelChart
               title="Уроки по уровням: весь период"
               rows={scoped}
-              dates={`${dateText("2026-09-01")}–${dateText(report.week.today)}`}
+              dates={`${dateText("2026-09-01")}-${dateText(report.week.today)}`}
               onOpen={(label) =>
                 update({
                   reportView: "lessons",
@@ -2333,6 +2420,7 @@ export default function VisitChecklistReportDashboard({
           </section>
           <section id="vcr-unlinked" className="vcr-panel vcr-compact">
             <h3>Самоанализы без урока</h3>
+            {linkAllButton}
             {unlinked.length ? (
               renderUnlinked(compactRows(unlinked, isOpen("unlinked")))
             ) : (
@@ -2401,18 +2489,22 @@ export default function VisitChecklistReportDashboard({
         <>
           {view === "teachers" ? (
             <>
-              <SortSelect
-                value={sortResults}
-                onChange={setSort("reportSortTeachers", "best")}
-              />
-              {sortedResultGroups.map((group) => {
+{sortedResultGroups.map((group) => {
                 const displayed = paged(shownResultRows).filter(
                   (row) => row.groupKey === group.key,
                 );
                 if (!displayed.length) return null;
                 return (
                   <section className="vcr-panel" key={group.key}>
-                    <h3>{group.title}</h3>
+                    <div className="vcr-head">
+                      <h3>{group.title}</h3>
+                      {group.key === firstResultGroupKey ? (
+                        <SortSelect
+                          value={sortResults}
+                          onChange={setSort("reportSortTeachers", "best")}
+                        />
+                      ) : null}
+                    </div>
                     <Table
                       headers={[
                         "Место",
@@ -2568,16 +2660,21 @@ export default function VisitChecklistReportDashboard({
             </>
           ) : view === "support" ? (
             <>
-              <SortSelect
-                value={sortSupport}
-                onChange={setSort("reportSortSupport", "worst")}
-              />
+<div className="vcr-head vcr-head--end">
+  <SortSelect
+    value={sortSupport}
+    onChange={setSort("reportSortSupport", "worst")}
+  />
+</div>
               {renderSupport(paged(supportList))}
             </>
           ) : view === "discrepancies" ? (
             renderFlags(paged(flags))
           ) : view === "unlinked" ? (
-            renderUnlinked(paged(unlinked))
+            <>
+              {linkAllButton}
+              {renderUnlinked(paged(unlinked))}
+            </>
           ) : view === "not_visited" ? (
             renderNotVisited(paged(notVisited))
           ) : (

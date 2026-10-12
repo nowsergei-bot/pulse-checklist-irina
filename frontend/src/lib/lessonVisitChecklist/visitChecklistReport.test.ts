@@ -37,6 +37,9 @@ import {
   lessonsWithLowItem,
   itemScoreText,
   weeklyLines,
+  weeklyScoreLine,
+  weeklyHint,
+  trimTrailingEmptyWeeks,
   lessonsGenitive,
   newTeacherStats,
   repeatText,
@@ -737,6 +740,30 @@ test("director periods: week, last completed month, school year and weekly serie
   // в интерфейсе по одной неделе на строку
   assert.deepEqual(weeklyLines(series), ["07.09: 70", "14.09: нет данных", "21.09: нет данных", "28.09: 90"]);
   assert.deepEqual(weeklyLines([]), []);
+  // одной строкой: значения со стрелками, даты в подсказке
+  assert.equal(weeklyScoreLine(series), "70 → — → — → 90");
+  assert.equal(
+    weeklyScoreLine([
+      { start: "2026-09-07", value: 72 },
+      { start: "2026-09-14", value: 75 },
+      { start: "2026-09-21", value: 73 },
+      { start: "2026-09-28", value: 75 },
+    ]),
+    "72 → 75 → 73 → 75",
+  );
+  assert.equal(weeklyScoreLine([]), "");
+  // последние недели без данных не показываются, пропуски внутри ряда остаются
+  const gaps = [
+    { start: "2026-09-07", value: 72 },
+    { start: "2026-09-14", value: null },
+    { start: "2026-09-21", value: 75 },
+    { start: "2026-09-28", value: null },
+    { start: "2026-10-05", value: null },
+  ];
+  assert.equal(weeklyScoreLine(trimTrailingEmptyWeeks(gaps)), "72 → — → 75");
+  assert.deepEqual(trimTrailingEmptyWeeks([{ start: "2026-09-07", value: null }]), []);
+  assert.equal(weeklyHint(series), "Недели с понедельника\n07.09: 70\n14.09: нет данных\n21.09: нет данных\n28.09: 90");
+  assert.equal(weeklyHint([]), "");
 });
 
 test("lessons with a low score on an item: only lessons where it is scored below maximum, weakest first", () => {

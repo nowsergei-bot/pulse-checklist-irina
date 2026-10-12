@@ -646,6 +646,30 @@ export function weeklyLines(
       `${w.start.slice(8, 10)}.${w.start.slice(5, 7)}: ${w.value == null ? "нет данных" : displayScore(w.value)}`,
   );
 }
+/** Последние недели без данных не показываются; пропуски внутри ряда остаются. */
+export function trimTrailingEmptyWeeks<T extends { value: number | null }>(
+  series: T[],
+): T[] {
+  let end = series.length;
+  while (end > 0 && series[end - 1].value == null) end -= 1;
+  return series.slice(0, end);
+}
+/** Итоги по неделям одной строкой: «72 → 75 → 73 → 75»; неделя без данных показывается тире. */
+export function weeklyScoreLine(
+  series: { start: string; value: number | null }[],
+): string {
+  return series
+    .map((w) => (w.value == null ? "—" : displayScore(w.value)))
+    .join(" → ");
+}
+/** Подсказка к строке итогов: даты понедельников и значение каждой недели. */
+export function weeklyHint(
+  series: { start: string; value: number | null }[],
+): string {
+  return series.length
+    ? `Недели с понедельника\n${weeklyLines(series).join("\n")}`
+    : "";
+}
 /** «07.09: 72 → 14.09: 69,9»: пары «понедельник: итог» через стрелку (для Excel). */
 export function weeklyArrows(
   series: { start: string; value: number | null }[],
@@ -1064,15 +1088,15 @@ export function compactRows<T>(list: T[], open: boolean): T[] {
 }
 
 export const TEACHER_SORTS = [
-  { id: "best", label: "От лучшего к худшему" },
-  { id: "worst", label: "От худшего к лучшему" },
-  { id: "alpha", label: "По алфавиту" },
-  { id: "department", label: "По кафедре (внутри кафедры по алфавиту)" },
-  { id: "visits", label: "По числу посещений, сначала меньше" },
-  { id: "last_visit", label: "По дате последнего посещения, сначала давно не посещённые" },
-  { id: "below70", label: "По числу уроков ниже 70, сначала больше" },
-  { id: "dynamics", label: "По динамике, сначала снижение" },
-  { id: "new_first", label: "Новые учителя сначала" },
+  { id: "best", label: "Средний итог: от высокого к низкому" },
+  { id: "worst", label: "Средний итог: от низкого к высокому" },
+  { id: "alpha", label: "ФИО: по алфавиту" },
+  { id: "department", label: "По кафедрам, внутри кафедры по алфавиту" },
+  { id: "visits", label: "Сначала учителя с меньшим числом посещений" },
+  { id: "last_visit", label: "Сначала учителя, которых давно не посещали" },
+  { id: "below70", label: "Сначала учителя с большим числом уроков, требующих методической поддержки" },
+  { id: "dynamics", label: "Сначала учителя со снижением результатов" },
+  { id: "new_first", label: "Сначала новые учителя" },
 ] as const;
 export type TeacherSort = (typeof TEACHER_SORTS)[number]["id"];
 export function parseTeacherSort(

@@ -898,3 +898,134 @@
   line-height: 1.25;
   white-space: nowrap;
 }
+
+/* «Сортировка» справа от заголовка раздела: ширина по выбранному пункту, заголовок не переносится */
+.vcr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.vcr-head h3 {
+  flex: 0 0 auto;
+  margin: 0;
+  white-space: nowrap;
+}
+.vcr-head .vcr-sort {
+  display: inline-flex;
+  flex: 0 1 auto;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 0 0 auto;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.vcr-sort__box {
+  display: inline-grid;
+  min-width: 0;
+}
+/* Невидимая копия выбранного текста задаёт ширину списка. */
+.vcr-sort__box::after {
+  content: attr(data-value);
+  grid-area: 1 / 1;
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  padding: 0 34px 0 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.vcr-sort__box select {
+  grid-area: 1 / 1;
+  width: 0;
+  min-width: 100%;
+  font-size: 13px;
+  text-overflow: ellipsis;
+}
+@media (max-width: 720px) {
+  .vcr-head {
+    flex-wrap: wrap;
+  }
+  .vcr-head h3 {
+    flex-basis: 100%;
+    white-space: normal;
+  }
+  .vcr-head .vcr-sort {
+    width: 100%;
+    margin-left: 0;
+  }
+  .vcr-head .vcr-sort > span:first-child {
+    flex: 0 0 auto;
+  }
+  .vcr-head .vcr-sort .vcr-sort__box {
+    flex: 1 1 auto;
+  }
+}
+.vcr-head--end {
+  justify-content: flex-end;
+  margin: 0 0 12px;
+}
+.vcr-reason__pick {
+  display: block;
+  margin-top: 6px;
+}
+
+.vcr-selflink {
+  margin: 0 0 12px;
+}
+
+/* Сводка для директора: шапка с заголовком в одну строку и кнопками в один ряд */
+.vcr-header--director {
+  flex-wrap: wrap;
+}
+.vcr-header--director h2 {
+  font-size: clamp(19px, 2.2vw, 24px);
+  white-space: nowrap;
+}
+.vcr-header--director .vcr-director__controls {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+.vcr-header--director .vcr-director__controls .vcr-action {
+  white-space: nowrap;
+}
+@media (max-width: 650px) {
+  .vcr-header--director h2 {
+    white-space: normal;
+  }
+  .vcr-header--director .vcr-director__controls {
+    flex-wrap: wrap;
+  }
+}
+
+/* Кнопки в карточках показателей: один размер, внизу карточки, без стрелок */
+.vcr-metric .vcr-metric__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: auto;
+  padding: 7px 8px;
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 500;
+  color: #203e3a;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.vcr-director__controls .vcr-action {
+  color: #203e3a;
+}
+.vcr-metric .vcr-arrows {
+  display: block;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.vcr-metric .vcr-arrows--long {
+  white-space: normal;
+}
