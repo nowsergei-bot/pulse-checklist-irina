@@ -189,7 +189,8 @@
     "backend/functions/lib/visit-checklist-dashboard-contract.test.js": "6cbdc30145c84657124120f330d566cfba6b86c7e9d0da8670bf8a531b2990e9",
     "backend/functions/lib/visit-checklist-prepare.js": "5b21e92cd2c0ba940a9b8ed0289e0beaca5bc77f222e2cf06adc6f5e1731e1ac",
     "backend/functions/lib/cabinet-lesson-visit-schedule-access.test.js": "3b3c8bc3d96c69c57630631d851406b640dfd80931fedff063429415880907e5",
-    "backend/functions/pulse-self-analysis-links.js": "42c4a29e5235f1a9a7c0cfa55cc1efcd07812adf4e10ed7f711a15082efc18f0"
+    "backend/functions/pulse-self-analysis-links.js": "42c4a29e5235f1a9a7c0cfa55cc1efcd07812adf4e10ed7f711a15082efc18f0",
+    "modules/monitoring/**": "directory"
   },
   "context": [
     "frontend/src/api/audioProtocol.ts",
@@ -731,5 +732,8 @@
     "backend/functions/lib/visit-report-context.js": "a385f315783665175994e05ab83219cfa8b631bdca24e8fc5fe725595e20adf9",
     "backend/functions/lib/visit-report-delivery.js": "97758364a5c523742a28917418cc3c2b750959c57c65bb72cb0a89d2e962f97b",
     "backend/functions/lib/visit-report-statuses.js": "2d21a9f038ea9f64cfd52d78e550522f2a42ce2473e55db087e0e8d330d2dca6"
-  }
+  },
+  "editablePatterns": [
+    "modules/monitoring/**"
+  ]
 }
