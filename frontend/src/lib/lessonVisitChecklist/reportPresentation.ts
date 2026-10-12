@@ -1056,3 +1056,132 @@ export function newTeacherStats(
     below70: attention.filter((a) => keys.has(a.key)).length,
   };
 }
+
+/** Сколько строк списка видно сразу; остальное раскрывается кнопкой «Показать всех (N)». */
+export const COMPACT_LIST_SIZE = 5;
+export function compactRows<T>(list: T[], open: boolean): T[] {
+  return open ? list : list.slice(0, COMPACT_LIST_SIZE);
+}
+
+export const TEACHER_SORTS = [
+  { id: "best", label: "От лучшего к худшему" },
+  { id: "worst", label: "От худшего к лучшему" },
+  { id: "alpha", label: "По алфавиту" },
+  { id: "department", label: "По кафедре (внутри кафедры по алфавиту)" },
+  { id: "visits", label: "По числу посещений, сначала меньше" },
+  { id: "last_visit", label: "По дате последнего посещения, сначала давно не посещённые" },
+  { id: "below70", label: "По числу уроков ниже 70, сначала больше" },
+  { id: "dynamics", label: "По динамике, сначала снижение" },
+  { id: "new_first", label: "Новые учителя сначала" },
+] as const;
+export type TeacherSort = (typeof TEACHER_SORTS)[number]["id"];
+export function parseTeacherSort(
+  value: string | null,
+  fallback: TeacherSort,
+): TeacherSort {
+  return TEACHER_SORTS.find((s) => s.id === value)?.id ?? fallback;
+}
+
+export type TeacherMetrics = {
+  /** Средний итог по полным урокам, точное значение. */
+  average: number | null;
+  /** Число посещённых уроков (самоанализы не считаются). */
+  visits: number;
+  lastDate: string | null;
+  /** Полные уроки ниже 70. */
+  below70: number;
+  /** Итог последнего полного урока минус итог первого; без двух полных уроков динамики нет. */
+  dynamics: number | null;
+};
+export function teacherMetrics(rows: ReportVisit[]): TeacherMetrics {
+  const lessons = lessonObservations(rows);
+  const full = lessons
+    .map((v) => ({ v, p: scorePercent(v) }))
+    .filter((x): x is { v: ReportVisit; p: number } => x.p != null)
+    .sort((a, b) => a.v.date.localeCompare(b.v.date) || a.v.id - b.v.id);
+  return {
+    average: schoolAverage(rows),
+    visits: lessons.length,
+    lastDate: lessons.reduce<string | null>(
+      (last, v) => (v.date && (!last || v.date > last) ? v.date : last),
+      null,
+    ),
+    below70: full.filter((x) => x.p < 70).length,
+    dynamics: full.length >= 2 ? full[full.length - 1].p - full[0].p : null,
+  };
+}
+/**
+ * Сортировка списка учителей. Итог сравнивается по точному значению. Если для выбранного варианта у учителя нет данных,
+ * он стоит в конце списка. `average` позволяет подставить итог группы (например, предварительный) вместо полного.
+ */
+export function sortTeachers<
+  T extends { key: string; name: string; department: string },
+>(
+  list: T[],
+  sort: TeacherSort,
+  metrics: (teacher: T) => TeacherMetrics,
+  isNew: (teacher: T) => boolean,
+  average: (teacher: T) => number | null = (t) => metrics(t).average,
+): T[] {
+  const byName = (a: T, b: T) => a.name.localeCompare(b.name, "ru");
+  const numeric =
+    (value: (t: T) => number | null, direction: 1 | -1) => (a: T, b: T) => {
+      const x = value(a),
+        y = value(b);
+      if (x == null || y == null)
+        return x == null && y == null ? byName(a, b) : x == null ? 1 : -1;
+      return (x - y) * direction || byName(a, b);
+    };
+  const compare: (a: T, b: T) => number =
+    sort === "best"
+      ? numeric(average, -1)
+      : sort === "worst"
+        ? numeric(average, 1)
+        : sort === "visits"
+          ? numeric((t) => metrics(t).visits, 1)
+          : sort === "below70"
+            ? numeric((t) => metrics(t).below70, -1)
+            : sort === "dynamics"
+              ? numeric((t) => metrics(t).dynamics, 1)
+              : sort === "last_visit"
+                ? (a, b) => {
+                    const x = metrics(a).lastDate,
+                      y = metrics(b).lastDate;
+                    if (x == null || y == null)
+                      return x == null && y == null ? byName(a, b) : x == null ? 1 : -1;
+                    return x.localeCompare(y) || byName(a, b);
+                  }
+                : sort === "department"
+                  ? (a, b) => {
+                      if (!a.department || !b.department)
+                        return a.department === b.department
+                          ? byName(a, b)
+                          : !a.department
+                            ? 1
+                            : -1;
+                      return (
+                        a.department.localeCompare(b.department, "ru") ||
+                        byName(a, b)
+                      );
+                    }
+                  : sort === "new_first"
+                    ? (a, b) => Number(isNew(b)) - Number(isNew(a)) || byName(a, b)
+                    : byName;
+  return [...list].sort(compare);
+}
+
+/** «Очень высокий уровень»: средний итог по полным урокам от 85% доступного максимума, предварительные итоги не входят. */
+export function veryHighTeachers<
+  T extends { key: string; name: string; rows: ReportVisit[] },
+>(teachers: T[]): (T & { average: number; fullLessons: number; single: boolean })[] {
+  const out: (T & { average: number; fullLessons: number; single: boolean })[] = [];
+  for (const teacher of teachers) {
+    const average = schoolAverage(teacher.rows);
+    if (average == null || levelIndex(average) !== LEVELS.length - 1) continue;
+    const fullLessons = lessonObservations(teacher.rows).filter(
+      (v) => scorePercent(v) != null,
+    ).length;
+    out.push({ ...teacher, average, fullLessons, single: fullLessons <= 1 });
+  }
+  return out;
+}

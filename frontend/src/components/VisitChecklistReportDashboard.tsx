@@ -13,10 +13,12 @@ import {
   mean,
   pairedSelf,
   selfMatchReport,
+  reportPersonKey,
   SECTION_NAMES,
   type ReportVisit,
 } from "../lib/lessonVisitChecklist/visitChecklistReport";
 import {
+  COMPACT_LIST_SIZE,
   DISCREPANCY_NAMES,
   LEVEL_COLORS,
   LEVELS,
@@ -58,7 +60,14 @@ import {
   lessonsWithLowItem,
   niceAxis,
   weeklyAverages,
+  compactRows,
+  parseTeacherSort,
+  sortTeachers,
+  teacherMetrics,
+  TEACHER_SORTS,
+  veryHighTeachers,
   type DirectorPeriod,
+  type TeacherSort,
 } from "../lib/lessonVisitChecklist/reportPresentation";
 import {
   VCD_PDF_HIDE_CLASS,
@@ -154,6 +163,51 @@ function Score({ visit }: { visit: ReportVisit }) {
 }
 function Empty() {
   return <p className="vcr-empty">В выбранном отборе данных нет.</p>;
+}
+/** Кнопка под списком, где строк больше пяти: раскрывает остальные на месте и сворачивает обратно. */
+function ListToggle({
+  total,
+  open,
+  onToggle,
+}: {
+  total: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  if (total <= COMPACT_LIST_SIZE) return null;
+  return (
+    <button
+      type="button"
+      className={`vcr-link vcr-toggle ${VCD_PDF_HIDE_CLASS}`}
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      {open ? "Свернуть" : `Показать всех (${total})`}
+    </button>
+  );
+}
+function SortSelect({
+  value,
+  onChange,
+}: {
+  value: TeacherSort;
+  onChange: (value: TeacherSort) => void;
+}) {
+  return (
+    <label className={`vcr-sort ${VCD_PDF_HIDE_CLASS}`}>
+      Сортировка{" "}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as TeacherSort)}
+      >
+        {TEACHER_SORTS.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 function Table({
   headers,
@@ -343,6 +397,12 @@ function DirectorSummary({
       rows: rows.filter((v) => v.teacherKey === t.key),
     }));
     const attention = attentionTeachers(teachers);
+    const newIds = new Set(listedIds || []);
+    const newKeys = new Set(
+      directory.teachers
+        .filter((t) => newIds.has(t.id))
+        .map((t) => reportPersonKey(t.name)),
+    );
     const weeks = directorWeeks(
       period,
       range ?? { from: report.week.start, to: report.week.end },
@@ -350,6 +410,8 @@ function DirectorSummary({
     );
     return {
       rows,
+      teachers,
+      newKeys,
       lessons: lessonObservations(rows),
       average: schoolAverage(rows),
       series: weeklyAverages(report.visits, weeks, period === "week" ? undefined : range ?? undefined),
@@ -370,6 +432,35 @@ function DirectorSummary({
   }, [report, directory, staffUnits, listedIds, period, range?.from, range?.to]);
   const groupA = data.attention.filter((t) => t.group === "A");
   const groupB = data.attention.filter((t) => t.group === "B");
+  const metricsByKey = useMemo(
+    () => new Map(data.teachers.map((t) => [t.key, teacherMetrics(t.rows)])),
+    [data.teachers],
+  );
+  const metricsOf = (t: { key: string; rows: ReportVisit[] }) =>
+    metricsByKey.get(t.key) ?? teacherMetrics(t.rows);
+  const isNewTeacher = (t: { key: string }) => data.newKeys.has(t.key);
+  const veryHigh = veryHighTeachers(data.teachers);
+  const newRows = data.teachers.filter((t) => data.newKeys.has(t.key));
+  // Сортировка живёт в адресе страницы, поэтому не сбрасывается при смене периода.
+  const sortOf = (name: string, fallback: TeacherSort) =>
+    parseTeacherSort(params.get(name), fallback);
+  const setSort = (name: string, fallback: TeacherSort) => (value: TeacherSort) => {
+    const next = new URLSearchParams(params);
+    if (value === fallback) next.delete(name);
+    else next.set(name, value);
+    setParams(next);
+  };
+  const sortAttention = sortOf("directorSortAttention", "worst"),
+    sortTop = sortOf("directorSortTop", "best"),
+    sortNew = sortOf("directorSortNew", "alpha");
+  const attentionList = sortTeachers(groupA, sortAttention, metricsOf, isNewTeacher);
+  const topList = sortTeachers(veryHigh, sortTop, metricsOf, isNewTeacher);
+  const newList = sortTeachers(newRows, sortNew, metricsOf, isNewTeacher);
+  // Списки длиннее пяти строк раскрываются на месте; в PDF всегда выводятся полностью.
+  const [openLists, setOpenLists] = useState<Record<string, boolean>>({});
+  const isOpen = (id: string) => pdfBusy || Boolean(openLists[id]);
+  const toggleList = (id: string) =>
+    setOpenLists((current) => ({ ...current, [id]: !current[id] }));
   const href = (view: string) =>
     analyticsPath && range
       ? `${analyticsPath}?reportPeriod=custom&reportFrom=${range.from}&reportTo=${range.to}&reportView=${view}`
@@ -387,6 +478,20 @@ function DirectorSummary({
       ...extra,
     });
     return `${analyticsPath ?? pathname}?${query.toString()}`;
+  };
+  /**
+   * Куда ведёт строка учителя: единичный результат открывает сразу полный чек-лист этого урока, иначе карточка учителя.
+   * Учитель без посещений ссылки не имеет: открывать нечего.
+   */
+  const teacherTo = (t: { key: string; rows: ReportVisit[] }) => {
+    const lessons = lessonObservations(t.rows);
+    if (!lessons.length) return null;
+    const full = lessons.filter((v) => scorePercent(v) != null);
+    return detailTo(
+      full.length === 1
+        ? { reportLesson: String(full[0].id) }
+        : { reportTeacher: t.key },
+    );
   };
   /** Строка целиком кликабельна (подсветка при наведении); ссылка внутри нужна для клавиатуры и открытия в новой вкладке. */
   const clickable = (to: string | null) =>
@@ -432,7 +537,7 @@ function DirectorSummary({
     setPdfError("");
     setGeneratedAt(new Date());
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 60));
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
       await downloadVisitChecklistPdf(
         pdfRef.current,
         `Сводка_для_директора_${range.from}_${range.to}.pdf`,
@@ -528,7 +633,10 @@ function DirectorSummary({
   const keep = `vcr-panel ${PDF_CARD_KEEP_TOGETHER_CLASS}`;
   const { news } = data;
   return (
-    <div className="vcr-dashboard vcr-director" ref={pdfRef}>
+    <div
+      className={`vcr-dashboard vcr-director${pdfBusy ? " vcr-director--pdf" : ""}`}
+      ref={pdfRef}
+    >
       <header className={`vcr-header ${PDF_CARD_KEEP_TOGETHER_CLASS}`}>
         <div>
           <span className="vcr-eyebrow">Кабинет директора</span>
@@ -627,171 +735,98 @@ function DirectorSummary({
               {linked("support", "Список →")}
             </div>
           </div>
-          <div className={PDF_CARD_KEEP_TOGETHER_CLASS}>
-            <LevelChart
-              title="Уроки по уровням"
-              rows={data.rows}
-              dates={`${dateText(range.from)}–${dateText(range.to)}`}
-              onOpen={(label) => {
-                const to = href("lessons");
-                if (to) navigate(`${to}&reportLevel=${encodeURIComponent(label)}`);
-              }}
-            />
-          </div>
-          <section className={keep}>
-            <h3>Блоки чек-листа</h3>
-            <p className="vcr-note">% от максимума по гимназии, цвет по уровню</p>
-            <div className="vcr-bars">
-              {data.blocks.map((block) => (
-                <div className="vcr-bars__row" key={block.name}>
-                  <div className="vcr-bars__name">
-                    {block.name}
-                    {block.understated && <sup>*</sup>}
-                    {block.understated && (
-                      <small>
-                        * занижен пунктами, которые пока оцениваются по минимальному уровню
-                      </small>
-                    )}
-                  </div>
-                  <PercentBar
-                    percent={block.percent}
-                    label={`${block.name}: ${block.percent == null ? "нет данных" : displayScore(block.percent) + "%"}`}
-                  />
-                  <strong>
-                    {block.percent == null ? "нет данных" : `${displayScore(block.percent)}%`}
-                  </strong>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className={keep}>
-            <h3>Кафедры</h3>
-            {data.departments.length ? (
-              <Table
-                stack
-                headers={[
-                  "Кафедра",
-                  "Учителей",
-                  "Уроков",
-                  "Средний итог",
-                  ATTENTION_GROUP_NAMES.A,
-                  ATTENTION_GROUP_NAMES.B,
-                ]}
-              >
-                {data.departments.map((d) => {
-                  const to = detailTo({
-                    reportView: "teachers",
-                    reportDepartment: d.department,
-                  });
-                  return (
-                    <tr key={d.department} {...clickable(to)}>
-                      <th scope="row" className="vcr-stack__title">
-                        {rowName(to, d.department)}
-                      </th>
-                      <td data-label="Учителей">{d.teachers}</td>
-                      <td data-label="Уроков">{d.lessons}</td>
-                      <td data-label="Средний итог">
-                        {d.average == null ? (
-                          "нет данных"
-                        ) : (
-                          <ScoreLevel
-                            text={`${displayScore(d.average)} из 100`}
-                            percent={d.average}
-                          />
-                        )}
-                      </td>
-                      <td data-label={ATTENTION_GROUP_NAMES.A}>{d.a || "—"}</td>
-                      <td data-label={ATTENTION_GROUP_NAMES.B}>{d.b || "—"}</td>
-                    </tr>
-                  );
-                })}
-              </Table>
-            ) : (
-              <Empty />
-            )}
-          </section>
-          <section className={keep}>
-            <h3>Зоны роста</h3>
-            {data.zones.length ? (
-              <div className="vcr-bars">
-                {data.zones.map((zone) => {
-                  const to = detailTo({
-                    reportView: "lessons",
-                    reportCriterion: zone.code,
-                  });
-                  return (
-                  <div
-                    className={`vcr-bars__row${to ? " vcr-bars__row--link" : ""}`}
-                    key={zone.code}
-                    {...(to
-                      ? {
-                          onClick: (e: React.MouseEvent) => {
-                            if (!(e.target as HTMLElement).closest("a")) navigate(to);
-                          },
-                        }
-                      : {})}
-                  >
-                    <div className="vcr-bars__name">
-                      {rowName(to, `${zone.code} ${zone.title}`)}
-                      {zone.note && <small>{zone.note}</small>}
-                      {zone.noteExtra && <small>{zone.noteExtra}</small>}
-                    </div>
-                    <PercentBar
-                      percent={zone.percent}
-                      label={`${zone.code} ${zone.title}: ${displayScore(zone.percent)}%`}
-                    />
-                    <strong>{displayScore(zone.percent)}%</strong>
-                  </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <Empty />
-            )}
-          </section>
           <section className={keep}>
             <h3>Требуют внимания: {groupA.length} учителей</h3>
             {groupA.length ? (
-              <Table
-                stack
-                headers={["Учитель", "Кафедра", "Средний итог", "Повторяемость"]}
-              >
-                {groupA.slice(0, 5).map((t) => {
-                  // Единичный результат: сразу полный чек-лист этого урока; несколько уроков: карточка учителя.
-                  const only =
-                    t.fullLessons <= 1
-                      ? lessonObservations(t.rows).find((v) => scorePercent(v) != null)
-                      : undefined;
-                  const to = detailTo(
-                    only
-                      ? { reportLesson: String(only.id) }
-                      : { reportTeacher: t.key },
-                  );
-                  return (
-                    <tr key={t.key} {...clickable(to)}>
-                      <td className="vcr-stack__title">
-                        {rowName(to, shortName(t.name))}
-                      </td>
-                      <td data-label="Кафедра">{t.department}</td>
-                      <td data-label="Средний итог">
-                        {t.average != null && (
-                          <ScoreLevel
-                            text={`${displayScore(t.average)} из 100`}
-                            percent={t.average}
-                          />
-                        )}
-                      </td>
-                      <td data-label="Повторяемость">{t.repeat}</td>
-                    </tr>
-                  );
-                })}
-              </Table>
+              <>
+                <SortSelect
+                  value={sortAttention}
+                  onChange={setSort("directorSortAttention", "worst")}
+                />
+                <Table
+                  stack
+                  headers={["Учитель", "Кафедра", "Средний итог", "Повторяемость"]}
+                >
+                  {compactRows(attentionList, isOpen("attention")).map((t) => {
+                    const to = teacherTo(t);
+                    return (
+                      <tr key={t.key} {...clickable(to)}>
+                        <td className="vcr-stack__title">
+                          {rowName(to, shortName(t.name))}
+                        </td>
+                        <td data-label="Кафедра">{t.department}</td>
+                        <td data-label="Средний итог">
+                          {t.average != null && (
+                            <ScoreLevel
+                              text={`${displayScore(t.average)} из 100`}
+                              percent={t.average}
+                            />
+                          )}
+                        </td>
+                        <td data-label="Повторяемость">{t.repeat}</td>
+                      </tr>
+                    );
+                  })}
+                </Table>
+                <ListToggle
+                  total={attentionList.length}
+                  open={isOpen("attention")}
+                  onToggle={() => toggleList("attention")}
+                />
+              </>
             ) : (
               <Empty />
             )}
             {linked(
               "support",
               `Все ${groupA.length} и ещё ${groupB.length} с отдельными уроками ниже 70 →`,
+            )}
+          </section>
+          <section className={keep}>
+            <h3>Очень высокий уровень: {veryHigh.length} учителей</h3>
+            <p className="vcr-note">
+              средний итог по полным урокам от 85% доступного максимума
+            </p>
+            {veryHigh.length ? (
+              <>
+                <SortSelect
+                  value={sortTop}
+                  onChange={setSort("directorSortTop", "best")}
+                />
+                <Table
+                  stack
+                  headers={["Учитель", "Кафедра", "Средний итог", "Полных уроков"]}
+                >
+                  {compactRows(topList, isOpen("top")).map((t) => {
+                    const to = teacherTo(t);
+                    return (
+                      <tr key={t.key} {...clickable(to)}>
+                        <td className="vcr-stack__title">
+                          {rowName(to, shortName(t.name))}
+                        </td>
+                        <td data-label="Кафедра">{t.department}</td>
+                        <td data-label="Средний итог">
+                          <ScoreLevel
+                            text={`${displayScore(t.average)} из 100`}
+                            percent={t.average}
+                          />
+                        </td>
+                        <td data-label="Полных уроков">
+                          {t.fullLessons}
+                          {t.single && <small>единичный результат</small>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Table>
+                <ListToggle
+                  total={topList.length}
+                  open={isOpen("top")}
+                  onToggle={() => toggleList("top")}
+                />
+              </>
+            ) : (
+              <Empty />
             )}
           </section>
           <section className={keep}>
@@ -830,6 +865,49 @@ function DirectorSummary({
                     ? news.notVisited.map((t) => shortName(t.name)).join(", ")
                     : "все посещены"}
                 </p>
+                {newList.length > 0 && (
+                  <>
+                    <SortSelect
+                      value={sortNew}
+                      onChange={setSort("directorSortNew", "alpha")}
+                    />
+                    <Table
+                      stack
+                      headers={["Учитель", "Кафедра", "Средний итог", "Уроков"]}
+                    >
+                      {compactRows(newList, isOpen("new")).map((t) => {
+                        const to = teacherTo(t);
+                        const metrics = metricsOf(t);
+                        return (
+                          <tr key={t.key} {...clickable(to)}>
+                            <td className="vcr-stack__title">
+                              {rowName(to, shortName(t.name))}
+                            </td>
+                            <td data-label="Кафедра">{t.department}</td>
+                            <td data-label="Средний итог">
+                              {metrics.average != null ? (
+                                <ScoreLevel
+                                  text={`${displayScore(metrics.average)} из 100`}
+                                  percent={metrics.average}
+                                />
+                              ) : metrics.visits ? (
+                                "Итог не сформирован"
+                              ) : (
+                                "Не посещён"
+                              )}
+                            </td>
+                            <td data-label="Уроков">{metrics.visits}</td>
+                          </tr>
+                        );
+                      })}
+                    </Table>
+                    <ListToggle
+                      total={newList.length}
+                      open={isOpen("new")}
+                      onToggle={() => toggleList("new")}
+                    />
+                  </>
+                )}
               </>
             ) : (
               <p className="vcr-empty">Список новых учителей не задан.</p>
@@ -913,6 +991,143 @@ function DirectorSummary({
               </div>
             )}
           </section>
+          <div className={PDF_CARD_KEEP_TOGETHER_CLASS}>
+            <LevelChart
+              title="Уроки по уровням"
+              rows={data.rows}
+              dates={`${dateText(range.from)}–${dateText(range.to)}`}
+              onOpen={(label) => {
+                const to = href("lessons");
+                if (to) navigate(`${to}&reportLevel=${encodeURIComponent(label)}`);
+              }}
+            />
+          </div>
+          <section className={keep}>
+            <h3>Блоки чек-листа</h3>
+            <p className="vcr-note">% от максимума по гимназии, цвет по уровню</p>
+            <div className="vcr-bars">
+              {compactRows(data.blocks, isOpen("blocks")).map((block) => (
+                <div className="vcr-bars__row" key={block.name}>
+                  <div className="vcr-bars__name">
+                    {block.name}
+                    {block.understated && <sup>*</sup>}
+                    {block.understated && (
+                      <small>
+                        * занижен пунктами, которые пока оцениваются по минимальному уровню
+                      </small>
+                    )}
+                  </div>
+                  <PercentBar
+                    percent={block.percent}
+                    label={`${block.name}: ${block.percent == null ? "нет данных" : displayScore(block.percent) + "%"}`}
+                  />
+                  <strong>
+                    {block.percent == null ? "нет данных" : `${displayScore(block.percent)}%`}
+                  </strong>
+                </div>
+              ))}
+            </div>
+            <ListToggle
+              total={data.blocks.length}
+              open={isOpen("blocks")}
+              onToggle={() => toggleList("blocks")}
+            />
+          </section>
+          <section className={keep}>
+            <h3>Кафедры</h3>
+            {data.departments.length ? (
+              <Table
+                stack
+                headers={[
+                  "Кафедра",
+                  "Учителей",
+                  "Уроков",
+                  "Средний итог",
+                  ATTENTION_GROUP_NAMES.A,
+                  ATTENTION_GROUP_NAMES.B,
+                ]}
+              >
+                {compactRows(data.departments, isOpen("departments")).map((d) => {
+                  const to = detailTo({
+                    reportView: "teachers",
+                    reportDepartment: d.department,
+                  });
+                  return (
+                    <tr key={d.department} {...clickable(to)}>
+                      <th scope="row" className="vcr-stack__title">
+                        {rowName(to, d.department)}
+                      </th>
+                      <td data-label="Учителей">{d.teachers}</td>
+                      <td data-label="Уроков">{d.lessons}</td>
+                      <td data-label="Средний итог">
+                        {d.average == null ? (
+                          "нет данных"
+                        ) : (
+                          <ScoreLevel
+                            text={`${displayScore(d.average)} из 100`}
+                            percent={d.average}
+                          />
+                        )}
+                      </td>
+                      <td data-label={ATTENTION_GROUP_NAMES.A}>{d.a || "—"}</td>
+                      <td data-label={ATTENTION_GROUP_NAMES.B}>{d.b || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </Table>
+            ) : (
+              <Empty />
+            )}
+            <ListToggle
+              total={data.departments.length}
+              open={isOpen("departments")}
+              onToggle={() => toggleList("departments")}
+            />
+          </section>
+          <section className={keep}>
+            <h3>Зоны роста</h3>
+            {data.zones.length ? (
+              <div className="vcr-bars">
+                {compactRows(data.zones, isOpen("zones")).map((zone) => {
+                  const to = detailTo({
+                    reportView: "lessons",
+                    reportCriterion: zone.code,
+                  });
+                  return (
+                  <div
+                    className={`vcr-bars__row${to ? " vcr-bars__row--link" : ""}`}
+                    key={zone.code}
+                    {...(to
+                      ? {
+                          onClick: (e: React.MouseEvent) => {
+                            if (!(e.target as HTMLElement).closest("a")) navigate(to);
+                          },
+                        }
+                      : {})}
+                  >
+                    <div className="vcr-bars__name">
+                      {rowName(to, `${zone.code} ${zone.title}`)}
+                      {zone.note && <small>{zone.note}</small>}
+                      {zone.noteExtra && <small>{zone.noteExtra}</small>}
+                    </div>
+                    <PercentBar
+                      percent={zone.percent}
+                      label={`${zone.code} ${zone.title}: ${displayScore(zone.percent)}%`}
+                    />
+                    <strong>{displayScore(zone.percent)}%</strong>
+                  </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <Empty />
+            )}
+            <ListToggle
+              total={data.zones.length}
+              open={isOpen("zones")}
+              onToggle={() => toggleList("zones")}
+            />
+          </section>
         </>
       )}
     </div>
@@ -938,6 +1153,10 @@ export default function VisitChecklistReportDashboard({
   const [links, setLinks] = useState<SavedSelfLink[]>([]);
   const [linkError, setLinkError] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
+  const [openLists, setOpenLists] = useState<Record<string, boolean>>({});
+  const isOpen = (id: string) => Boolean(openLists[id]);
+  const toggleList = (id: string) =>
+    setOpenLists((current) => ({ ...current, [id]: !current[id] }));
   useEffect(() => {
     let active = true;
     setLinks([]);
@@ -1068,6 +1287,57 @@ export default function VisitChecklistReportDashboard({
   );
   // Нужна методическая поддержка = «Требуют внимания» (А) + «Есть уроки ниже 70» (Б).
   const support = attentionTeachers(teachers);
+  // Сортировка живёт в адресе страницы, поэтому не сбрасывается при смене периода и фильтров.
+  const sortOf = (name: string, fallback: TeacherSort) =>
+    parseTeacherSort(params.get(name), fallback);
+  const setSort = (name: string, fallback: TeacherSort) => (value: TeacherSort) =>
+    update({ [name]: value === fallback ? null : value });
+  const sortSupport = sortOf("reportSortSupport", "worst"),
+    sortTop = sortOf("reportSortTop", "best"),
+    sortResults = sortOf("reportSortTeachers", "best");
+  const metricsByKey = new Map(
+    report.teachers.map((t) => [t.key, teacherMetrics(rows.filter((v) => v.teacherKey === t.key))]),
+  );
+  const metricsOf = (t: { key: string }) =>
+    metricsByKey.get(t.key) ?? teacherMetrics([]);
+  const newKeys = new Set(
+    directory.teachers
+      .filter((t) => (newTeacherIds || []).includes(t.id))
+      .map((t) => reportPersonKey(t.name)),
+  );
+  const isNewTeacher = (t: { key: string }) => newKeys.has(t.key);
+  // «Нужна методическая поддержка»: группы А и Б остаются на своих местах, сортировка идёт внутри группы.
+  const supportList = (["A", "B"] as const).flatMap((group) =>
+    sortTeachers(
+      support.filter((t) => t.group === group),
+      sortSupport,
+      metricsOf,
+      isNewTeacher,
+    ),
+  );
+  // Группы итогов (в том числе предварительные) остаются как есть, сортировка идёт внутри группы по итогу группы.
+  const sortedResultGroups = resultGroups.map((group) => ({
+    ...group,
+    rows: sortTeachers(
+      group.rows,
+      sortResults,
+      metricsOf,
+      isNewTeacher,
+      (row) => row.percent,
+    ),
+  }));
+  const shownResultRows = sortedResultGroups.flatMap((group) =>
+    group.rows.map((row) => ({ ...row, groupKey: group.key })),
+  );
+  // «Критерии, требующие внимания»: блоки от самого низкого результата к высокому, без данных в конце.
+  const attentionBlocks = blockPercents(rows)
+    .map((block, index) => ({ name: block.name, index, percent: block.percent }))
+    .sort(
+      (a, b) =>
+        (a.percent ?? Infinity) - (b.percent ?? Infinity) || a.index - b.index,
+    );
+  const veryHigh = veryHighTeachers(teachers);
+  const topList = sortTeachers(veryHigh, sortTop, metricsOf, isNewTeacher);
   const allLessonsForLinks = lessonObservations(report.visits);
   const selfMatches = selfMatchReport(report.visits);
   const unlinked = selfMatches
@@ -1167,22 +1437,16 @@ export default function VisitChecklistReportDashboard({
             lessons: "Уроки",
           } as Record<string, string>
         )[view] || "Сводка";
-  const fullList = (name: string, total: number) => (
-    <button
-      className="vcr-link"
-      onClick={() =>
-        update({ reportView: name, reportTeacher: null, reportLesson: null })
-      }
-    >
-      Все {total} →
-    </button>
-  );
   const lessonLink = (v: ReportVisit) => (
     <button className="vcr-link" onClick={() => openLesson(v)}>
       {lessonText(v)}
     </button>
   );
-  const renderLessons = (visits: ReportVisit[], itemCode = "") => (
+  const renderLessons = (
+    visits: ReportVisit[],
+    itemCode = "",
+    withSelf = true,
+  ) => (
     <Table
       headers={[
         "Урок",
@@ -1190,7 +1454,7 @@ export default function VisitChecklistReportDashboard({
         "Наблюдатель",
         ...(itemCode ? [`Балл по пункту ${itemCode}`] : []),
         "Итог",
-        "Самоанализ",
+        ...(withSelf ? ["Самоанализ"] : []),
       ]}
     >
       {visits.map((v) => {
@@ -1207,30 +1471,32 @@ export default function VisitChecklistReportDashboard({
             <td>
               <Score visit={v} />
             </td>
-            <td>
-              {self ? (
-                <>
-                  <Score visit={self} />
-                  {self.linkMethod && (
-                    <small>
-                      {self.linkMethod === "teacher_date"
-                        ? "Привязан по учителю и дате"
-                        : "Связь подтверждена"}
-                      {self.linkConfirmedBy
-                        ? ` · ${shortName(self.linkConfirmedBy)}`
-                        : ""}
-                      {self.linkConfirmedAt
-                        ? ` · ${dateText(self.linkConfirmedAt.slice(0, 10))}`
-                        : ""}
-                    </small>
-                  )}
-                </>
-              ) : candidates ? (
-                "Самоанализ не привязан"
-              ) : (
-                "Самоанализа нет"
-              )}
-            </td>
+            {withSelf && (
+              <td>
+                {self ? (
+                  <>
+                    <Score visit={self} />
+                    {self.linkMethod && (
+                      <small>
+                        {self.linkMethod === "teacher_date"
+                          ? "Привязан по учителю и дате"
+                          : "Связь подтверждена"}
+                        {self.linkConfirmedBy
+                          ? ` · ${shortName(self.linkConfirmedBy)}`
+                          : ""}
+                        {self.linkConfirmedAt
+                          ? ` · ${dateText(self.linkConfirmedAt.slice(0, 10))}`
+                          : ""}
+                      </small>
+                    )}
+                  </>
+                ) : candidates ? (
+                  "Самоанализ не привязан"
+                ) : (
+                  "Самоанализа нет"
+                )}
+              </td>
+            )}
           </tr>
         );
       })}
@@ -1357,6 +1623,35 @@ export default function VisitChecklistReportDashboard({
             </td>
           </tr>
         </Fragment>
+      ))}
+    </Table>
+  );
+  const renderTop = (list: typeof topList) => (
+    <Table
+      headers={["Учитель", "Кафедра", "Средний итог", "Полных уроков"]}
+    >
+      {list.map((t) => (
+        <tr key={t.key}>
+          <td>
+            <button
+              className="vcr-link"
+              onClick={() => update({ reportTeacher: t.key, reportLesson: null })}
+            >
+              {shortName(t.name)}
+            </button>
+          </td>
+          <td>{t.department}</td>
+          <td>
+            <ScoreLevel
+              text={`${displayScore(t.average)} из 100`}
+              percent={t.average}
+            />
+          </td>
+          <td>
+            {t.fullLessons}
+            {t.single && <small>единичный результат</small>}
+          </td>
+        </tr>
       ))}
     </Table>
   );
@@ -1787,10 +2082,11 @@ export default function VisitChecklistReportDashboard({
             <span className="vcr-contents__label">Перейти к разделу:</span>
             {(
               [
-                ["charts", "Диаграммы", null],
+                ["support", "Нужна методическая поддержка", support.length],
+                ["top", "Очень высокий уровень", veryHigh.length],
+                ["charts", "Уроки по уровням", null],
                 ["attention", "Критерии, требующие внимания", SECTION_NAMES.length],
                 ["priorities", "Зоны роста", null],
-                ["support", "Нужна методическая поддержка", support.length],
                 [
                   "discrepancies",
                   "Расхождения в оценках",
@@ -1867,6 +2163,47 @@ export default function VisitChecklistReportDashboard({
               ).length
             }
           </p>
+          <section id="vcr-support" className="vcr-panel vcr-compact">
+            <h3>Нужна методическая поддержка</h3>
+            {support.length ? (
+              <>
+                <SortSelect
+                  value={sortSupport}
+                  onChange={setSort("reportSortSupport", "worst")}
+                />
+                {renderSupport(compactRows(supportList, isOpen("support")))}
+                <ListToggle
+                  total={supportList.length}
+                  open={isOpen("support")}
+                  onToggle={() => toggleList("support")}
+                />
+              </>
+            ) : (
+              <Empty />
+            )}
+          </section>
+          <section id="vcr-top" className="vcr-panel vcr-compact">
+            <h3>Очень высокий уровень</h3>
+            <p className="vcr-note">
+              средний итог по полным урокам от 85% доступного максимума
+            </p>
+            {veryHigh.length ? (
+              <>
+                <SortSelect
+                  value={sortTop}
+                  onChange={setSort("reportSortTop", "best")}
+                />
+                {renderTop(compactRows(topList, isOpen("top")))}
+                <ListToggle
+                  total={topList.length}
+                  open={isOpen("top")}
+                  onToggle={() => toggleList("top")}
+                />
+              </>
+            ) : (
+              <Empty />
+            )}
+          </section>
           <div id="vcr-charts" className="vcr-chart-grid">
             <LevelChart
               title="Уроки по уровням: неделя"
@@ -1893,10 +2230,14 @@ export default function VisitChecklistReportDashboard({
               }
             />
           </div>
-          <section id="vcr-attention" className="vcr-panel">
+          <section id="vcr-attention" className="vcr-panel vcr-compact">
             <h3>Критерии, требующие внимания</h3>
+            <p className="vcr-note">
+              блоки от самого низкого результата к высокому, % от максимума по
+              гимназии
+            </p>
             <Table headers={["Блок", ...departments]}>
-              {SECTION_NAMES.map((name, index) => (
+              {compactRows(attentionBlocks, isOpen("attention")).map(({ name, index }) => (
                 <tr key={name}>
                   <th scope="row">{name}</th>
                   {departments.map((d) => {
@@ -1935,28 +2276,32 @@ export default function VisitChecklistReportDashboard({
                 </tr>
               ))}
             </Table>
+            <ListToggle
+              total={SECTION_NAMES.length}
+              open={isOpen("attention")}
+              onToggle={() => toggleList("attention")}
+            />
           </section>
-          <section id="vcr-priorities" className="vcr-panel">
+          <section id="vcr-priorities" className="vcr-panel vcr-compact">
             <h3>Зоны роста</h3>
             <p className="vcr-note">
               пункты чек-листа с самым низким средним баллом по гимназии
             </p>
             {priorities.length ? (
-              renderCriteria(priorities.slice(0, 5), true)
+              renderCriteria(compactRows(priorities, isOpen("priorities")), true)
             ) : (
               <Empty />
             )}
-            {priorities.length > 5 && fullList("priorities", priorities.length)}
+            <ListToggle
+              total={priorities.length}
+              open={isOpen("priorities")}
+              onToggle={() => toggleList("priorities")}
+            />
             <small className="vcr-fine">
               3.5, 5.2, 5.3 не учитываются, пока оцениваются по минимальному уровню
             </small>
           </section>
-          <section id="vcr-support" className="vcr-panel">
-            <h3>Нужна методическая поддержка</h3>
-            {support.length ? renderSupport(support.slice(0, 5)) : <Empty />}
-            {fullList("support", support.length)}
-          </section>
-          <section id="vcr-discrepancies" className="vcr-panel">
+          <section id="vcr-discrepancies" className="vcr-panel vcr-compact">
             <h3>
               Расхождения в оценках ·{" "}
               {new Set(flags.map((f) => f.lesson.id)).size} уроков
@@ -1969,18 +2314,35 @@ export default function VisitChecklistReportDashboard({
                 )
                 .join(" · ")}
             </p>
-            {flags.length ? renderFlags(flags.slice(0, 5)) : <Empty />}
-            {fullList("discrepancies", flags.length)}
+            {flags.length ? (
+              renderFlags(compactRows(flags, isOpen("discrepancies")))
+            ) : (
+              <Empty />
+            )}
+            <ListToggle
+              total={flags.length}
+              open={isOpen("discrepancies")}
+              onToggle={() => toggleList("discrepancies")}
+            />
           </section>
-          <section id="vcr-unlinked" className="vcr-panel">
+          <section id="vcr-unlinked" className="vcr-panel vcr-compact">
             <h3>Самоанализы без урока</h3>
-            {unlinked.length ? renderUnlinked(unlinked.slice(0, 5)) : <Empty />}
-            {fullList("unlinked", unlinked.length)}
+            {unlinked.length ? (
+              renderUnlinked(compactRows(unlinked, isOpen("unlinked")))
+            ) : (
+              <Empty />
+            )}
+            <ListToggle
+              total={unlinked.length}
+              open={isOpen("unlinked")}
+              onToggle={() => toggleList("unlinked")}
+            />
           </section>
         </>
       ) : detail ? (
         <>
-          {renderLessons(lessons)}
+          {/* В карточке учителя самоанализов нет: они остаются в карточке урока, на основной странице и в Excel. */}
+          {renderLessons(lessons, "", Boolean(selectedLesson))}
           {flags.length > 0 && (
             <section className="vcr-panel">
               <h3>Расхождения в оценках</h3>
@@ -2033,8 +2395,12 @@ export default function VisitChecklistReportDashboard({
         <>
           {view === "teachers" ? (
             <>
-              {resultGroups.map((group) => {
-                const displayed = paged(teacherResultRows).filter(
+              <SortSelect
+                value={sortResults}
+                onChange={setSort("reportSortTeachers", "best")}
+              />
+              {sortedResultGroups.map((group) => {
+                const displayed = paged(shownResultRows).filter(
                   (row) => row.groupKey === group.key,
                 );
                 if (!displayed.length) return null;
@@ -2195,7 +2561,13 @@ export default function VisitChecklistReportDashboard({
               </small>
             </>
           ) : view === "support" ? (
-            renderSupport(paged(support))
+            <>
+              <SortSelect
+                value={sortSupport}
+                onChange={setSort("reportSortSupport", "worst")}
+              />
+              {renderSupport(paged(supportList))}
+            </>
           ) : view === "discrepancies" ? (
             renderFlags(paged(flags))
           ) : view === "unlinked" ? (

@@ -7,6 +7,9 @@ import {
   type ReportVisit,
 } from "./visitChecklistReport.ts";
 import {
+  COMPACT_LIST_SIZE,
+  TEACHER_SORTS,
+  compactRows,
   discrepancies,
   displayScore,
   fullLessonCount,
@@ -14,6 +17,7 @@ import {
   levelIndex,
   losses,
   pageRows,
+  parseTeacherSort,
   pluralRu,
   schoolAverage,
   shortName,
@@ -21,6 +25,9 @@ import {
   scorePercent,
   selectReportRows,
   signalItems,
+  sortTeachers,
+  teacherMetrics,
+  veryHighTeachers,
 } from "./reportPresentation.ts";
 const seed = JSON.parse(
   readFileSync(new URL("./defaultSeed.json", import.meta.url), "utf8"),
@@ -295,4 +302,143 @@ test("pluralRu: 1 строка, 2 строки, 9 строк, 11 строк, 61 
   assert.equal(word(100), "строк");
   assert.equal(word(111), "строк");
   assert.equal(word(0), "строк");
+});
+
+const person = (
+  key: string,
+  name: string,
+  department: string,
+  lessons: [number, string][],
+  extra: Partial<ReportVisit> = {},
+) => ({
+  key,
+  name,
+  department,
+  rows: lessons.map(([total, date], i) => ({
+    ...make(Number(`${key.charCodeAt(0)}${i}`), total, 100, key, `${key}${i}`),
+    date,
+    ...extra,
+  })),
+});
+const roster = [
+  person("a", "Алексеев", "Кафедра Б", [[90, "2026-09-10"], [60, "2026-09-20"]]),
+  person("b", "Борисов", "Кафедра А", [[40, "2026-09-05"], [80, "2026-10-01"], [66, "2026-09-25"]]),
+  person("c", "Васильев", "Кафедра Б", [[88, "2026-10-03"]]),
+  person("d", "Григорьев", "", []),
+];
+const order = (list: { name: string }[]) => list.map((t) => t.name).join(" ");
+const sorted = (sort: Parameters<typeof sortTeachers>[1], isNew: (t: { key: string }) => boolean = () => false) =>
+  order(
+    sortTeachers(
+      roster,
+      sort,
+      (t) => teacherMetrics(t.rows),
+      isNew,
+    ),
+  );
+test("teacher metrics: visits, last date, lessons below 70 and dynamics from full lessons", () => {
+  const b = teacherMetrics(roster[1].rows);
+  assert.equal(b.visits, 3);
+  assert.equal(b.lastDate, "2026-10-01");
+  assert.equal(b.below70, 2);
+  // первый полный урок 40 (05.09), последний 80 (01.10)
+  assert.equal(b.dynamics, 40);
+  assert.equal(teacherMetrics(roster[2].rows).dynamics, null);
+  assert.deepEqual(teacherMetrics([]), {
+    average: null,
+    visits: 0,
+    lastDate: null,
+    below70: 0,
+    dynamics: null,
+  });
+});
+test("teacher sorting: all nine variants, no-data teachers stay at the end", () => {
+  assert.deepEqual(
+    TEACHER_SORTS.map((s) => s.label),
+    [
+      "От лучшего к худшему",
+      "От худшего к лучшему",
+      "По алфавиту",
+      "По кафедре (внутри кафедры по алфавиту)",
+      "По числу посещений, сначала меньше",
+      "По дате последнего посещения, сначала давно не посещённые",
+      "По числу уроков ниже 70, сначала больше",
+      "По динамике, сначала снижение",
+      "Новые учителя сначала",
+    ],
+  );
+  // средние: Алексеев 75, Борисов 62, Васильев 88, Григорьев нет данных
+  assert.equal(sorted("best"), "Васильев Алексеев Борисов Григорьев");
+  assert.equal(sorted("worst"), "Борисов Алексеев Васильев Григорьев");
+  assert.equal(sorted("alpha"), "Алексеев Борисов Васильев Григорьев");
+  assert.equal(sorted("department"), "Борисов Алексеев Васильев Григорьев");
+  assert.equal(sorted("visits"), "Григорьев Васильев Алексеев Борисов");
+  assert.equal(sorted("last_visit"), "Алексеев Борисов Васильев Григорьев");
+  assert.equal(sorted("below70"), "Борисов Алексеев Васильев Григорьев");
+  // динамика: Алексеев 60-90=-30, Борисов +40, у остальных динамики нет
+  assert.equal(sorted("dynamics"), "Алексеев Борисов Васильев Григорьев");
+  assert.equal(sorted("new_first", (t) => t.key === "c" || t.key === "d"), "Васильев Григорьев Алексеев Борисов");
+});
+test("teacher sorting compares exact values, not rounded ones", () => {
+  const near = [
+    person("x", "Яковлев", "К", [[69.96, "2026-09-10"]]),
+    person("y", "Андреев", "К", [[69.94, "2026-09-10"]]),
+  ];
+  const run = (sort: "best" | "worst") =>
+    order(sortTeachers(near, sort, (t) => teacherMetrics(t.rows), () => false));
+  // оба показываются как 69,9, но порядок определяет точное значение
+  assert.equal(displayScore(69.96), displayScore(69.94));
+  assert.equal(run("best"), "Яковлев Андреев");
+  assert.equal(run("worst"), "Андреев Яковлев");
+});
+test("group average override lets preliminary groups sort by their own result", () => {
+  const list = [
+    { key: "p", name: "Первый", department: "К", percent: 30 },
+    { key: "q", name: "Второй", department: "К", percent: 55 },
+    { key: "r", name: "Третий", department: "К", percent: null },
+  ];
+  const out = sortTeachers(
+    list,
+    "best",
+    () => teacherMetrics([]),
+    () => false,
+    (t) => t.percent,
+  );
+  assert.equal(order(out), "Второй Первый Третий");
+});
+test("very high level: from 85% of the available maximum, one lesson counts, preliminary results do not", () => {
+  const reduced = {
+    ...make(900, 42.5, 50, "e", "e0"),
+    score: { items: [], subtotal: 42.5, max: 50, total: 42.5, missing: [] },
+  } as ReportVisit;
+  const preliminary = {
+    ...make(901, 95, 100, "f", "f0"),
+    score: { items: [], subtotal: 95, max: 100, total: null, missing: [] },
+  } as ReportVisit;
+  const teachers = [
+    ...roster,
+    { key: "e", name: "Дмитриев", department: "К", rows: [reduced] },
+    { key: "f", name: "Егоров", department: "К", rows: [preliminary] },
+    person("g", "Жуков", "К", [[84.99, "2026-09-10"]]),
+    person("h", "Зайцев", "К", [[85, "2026-09-10"], [90, "2026-09-12"]]),
+  ];
+  const top = veryHighTeachers(teachers);
+  assert.equal(order(top), "Васильев Дмитриев Зайцев");
+  assert.deepEqual(
+    top.map((t) => [t.fullLessons, t.single]),
+    [[1, true], [1, true], [2, false]],
+  );
+  assert.equal(levelIndex(top[1].average), 4);
+});
+test("compact lists show five rows and expand to all", () => {
+  assert.equal(COMPACT_LIST_SIZE, 5);
+  const list = [1, 2, 3, 4, 5, 6, 7];
+  assert.deepEqual(compactRows(list, false), [1, 2, 3, 4, 5]);
+  assert.deepEqual(compactRows(list, true), list);
+  assert.deepEqual(compactRows([1, 2], false), [1, 2]);
+});
+test("parseTeacherSort falls back for unknown values", () => {
+  assert.equal(parseTeacherSort("alpha", "best"), "alpha");
+  assert.equal(parseTeacherSort("nope", "worst"), "worst");
+  assert.equal(parseTeacherSort(null, "best"), "best");
 });

@@ -840,3 +840,29 @@
   background: #fdf1d6;
   color: #7a5200;
 }
+/* Сортировка списков учителей и кнопка «Показать всех (N)» / «Свернуть» */
+.vcr-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.vcr-sort select {
+  max-width: 100%;
+}
+.vcr-toggle {
+  display: inline-block;
+  margin: 12px 24px 12px 0;
+}
+/* Раскрытый список показывается целиком на странице, без внутренней прокрутки таблицы. */
+.vcr-compact .vcr-table-scroll,
+.vcr-director .vcr-table-scroll {
+  max-height: none;
+}
+/* В PDF списки выводятся полностью: внутренняя прокрутка таблиц не нужна. */
+.vcr-director--pdf .vcr-table-scroll {
+  max-height: none;
+  overflow: visible;
+}
