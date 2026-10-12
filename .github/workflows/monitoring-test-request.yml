@@ -1,0 +1,26 @@
+name: Request monitoring test publication
+on:
+  push:
+    branches: [codex/checklist-irina]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: monitoring-test-request
+  cancel-in-progress: true
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Request the private publisher for this workshop HEAD
+        env:
+          REQUEST_KEY: ${{ secrets.PULSE_MONITORING_REQUEST_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PULSE_MONITORING_REQUEST_HOSTS }}
+          EDITOR_SHA: ${{ github.sha }}
+        run: |
+          umask 077
+          mkdir -p "$RUNNER_TEMP/monitoring-request"
+          printf '%s\n' "$REQUEST_KEY" > "$RUNNER_TEMP/monitoring-request/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/monitoring-request/hosts"
+          ssh -i "$RUNNER_TEMP/monitoring-request/key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/monitoring-request/hosts" root@153.76.163.83 "request $EDITOR_SHA"
