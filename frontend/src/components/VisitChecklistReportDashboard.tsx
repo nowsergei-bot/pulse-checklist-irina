@@ -219,14 +219,20 @@ function Table({
   headers,
   children,
   stack = false,
+  fit = false,
 }: {
   headers: string[];
   children: React.ReactNode;
+  /** Таблица помещается в карточку целиком: колонки сжимаются, текст переносится. */
+  fit?: boolean;
   /** На узком экране каждая строка превращается в карточку «подпись: значение» (в ячейках нужен data-label). */
   stack?: boolean;
 }) {
   return (
-    <div className="vcr-table-scroll" tabIndex={0}>
+    <div
+      className={`vcr-table-scroll${fit ? " vcr-table-scroll--fit" : ""}`}
+      tabIndex={0}
+    >
       <table className={stack ? "vcr-stack" : undefined}>
         <thead>
           <tr>
@@ -654,7 +660,6 @@ function DirectorSummary({
     >
       <header className={`vcr-header vcr-header--director ${PDF_CARD_KEEP_TOGETHER_CLASS}`}>
         <div>
-          <span className="vcr-eyebrow">Кабинет директора</span>
           <h2>Сводка для директора</h2>
           <p>
             {range
@@ -1645,6 +1650,7 @@ export default function VisitChecklistReportDashboard({
   );
   const renderSupport = (list: typeof support) => (
     <Table
+      fit
       headers={[
         "Учитель",
         "Кафедра",
@@ -1713,6 +1719,7 @@ export default function VisitChecklistReportDashboard({
   );
   const renderTop = (list: typeof topList) => (
     <Table
+      fit
       headers={["Учитель", "Кафедра", "Средний итог", "Полных уроков"]}
     >
       {list.map((t) => (
