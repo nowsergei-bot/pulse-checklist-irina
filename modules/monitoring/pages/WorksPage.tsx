@@ -1,17 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useApi } from './api';
+import { GroupName, STATUS_NAMES, versionLabel } from './labels';
 
 type Group = { id: number; title: string; digital: boolean };
 type Work = {
   id: number; title: string; parallel: number; status: 'draft' | 'open' | 'closed'; is_test: boolean; type_name: string;
   spec: string; version: number; max_points: number; parts: { name: string; held_on: string | null }[]; groups: Group[];
 };
-
-export const STATUS_NAMES: Record<string, string> = { draft: 'Черновик', open: 'Открыта', closed: 'Закрыта' };
-
-export function GroupName({ group }: { group: Group }) {
-  return <span className="mon-group-name">{group.title}<span className={`mon-gtype${group.digital ? ' mon-gtype--digital' : ''}`}>{group.digital ? 'ЦГ' : 'Основной'}</span></span>;
-}
 
 function date(value: string | null) {
   if (!value) return 'дата не задана';
@@ -46,7 +41,7 @@ export default function WorksPage({ manage, base, message }: { manage: boolean; 
                   <div className="mon-muted">{w.type_name}</div>
                 </td>
                 <td className="mon-num">{w.parallel}</td>
-                <td>{w.spec}<div className="mon-muted">версия {w.version}, итого {w.max_points}</div></td>
+                <td>{versionLabel({ title: w.spec, version: w.version, max_points: w.max_points })}</td>
                 <td>{w.parts.map(p => <div key={p.name}>{p.name}: <span className="mon-muted">{date(p.held_on)}</span></div>)}</td>
                 <td><span className="mon-group-list">{w.groups.map(g => <GroupName key={g.id} group={g} />)}</span></td>
                 <td><span className={`mon-status mon-status--${w.status}`}>{STATUS_NAMES[w.status]}</span></td>

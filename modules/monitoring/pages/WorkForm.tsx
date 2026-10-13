@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, useApi } from './api';
-import { GroupName, STATUS_NAMES } from './WorksPage';
+import Dialog from './Dialog';
+import { GroupName, STATUS_NAMES, versionLabel } from './labels';
 
 type Group = { id: number; title: string; parallel: number | null; digital: boolean };
 type Version = { id: number; title: string; type_id: number; version: number; max_points: number; class_hint: string | null; parts: { code: string; name: string }[] };
@@ -17,6 +18,33 @@ type Work = {
   id: number; type_id: number; title: string; academic_year_id: number; parallel: number; spec_version_id: number;
   scale_id: number; status: string; is_test: boolean; dates: Record<string, string> | null; groups: number[]; has_results: boolean;
 };
+
+// Даты в форме в виде ДД.ММ.ГГГГ, на сервер уходят как ГГГГ-ММ-ДД.
+function toDisplay(iso: string | null | undefined) {
+  if (!iso) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${d}.${m}.${y}`;
+}
+
+function typeDate(text: string) {
+  const digits = text.replace(/\D/g, '').slice(0, 8);
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join('.');
+}
+
+function toIso(text: string): string | null | undefined {
+  if (!text) return null;
+  const m = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!m) return undefined;
+  const iso = `${m[3]}-${m[2]}-${m[1]}`;
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.getUTCDate() === Number(m[1]) && d.getUTCMonth() + 1 === Number(m[2]) ? iso : undefined;
+}
+
+// Класс спецификации из C4: «1» или «1 класс».
+function specClass(hint: string | null) {
+  const m = (hint || '').match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
 
 export default function WorkForm({ base, workId }: { base: string; workId?: number }) {
   const navigate = useNavigate();
@@ -39,6 +67,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [mismatch, setMismatch] = useState('');
 
   // Начальные значения: из работы при правке, иначе по умолчанию.
   useEffect(() => {
@@ -47,7 +76,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
       if (!work) return;
       if (yearId === null && work.academic_year_id !== o.year_id) { setYearId(work.academic_year_id); return; }
       setTypeId(work.type_id); setTitle(work.title); setTitleTouched(true); setParallels([work.parallel]);
-      setVersionId(work.spec_version_id); setScaleId(work.scale_id); setDates(work.dates || {});
+      setVersionId(work.spec_version_id); setScaleId(work.scale_id); setDates(Object.fromEntries(Object.entries(work.dates || {}).map(([k, v]) => [k, toDisplay(v)])));
       setGroups(work.groups.map(Number)); setStatus(work.status); setIsTest(work.is_test);
     } else {
       setTypeId(o.types.find(t => t.code === 'module')?.id || o.types[0]?.id);
@@ -79,11 +108,36 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
     setYearId(id); setParallels([]); setGroups([]);
   }
 
+  // Спецификация для одного класса, а выбрана другая параллель: спросить перед сохранением.
+  function datesIso() {
+    const parts = version?.parts || [];
+    const iso = Object.fromEntries(parts.map(p => [p.code, toIso(dates[p.code] || '')]));
+    const wrong = parts.find(p => iso[p.code] === undefined);
+    if (wrong) { setError(`Дата «${wrong.name.toLowerCase()}» в формате ДД.ММ.ГГГГ, например 20.10.2026`); return null; }
+    return iso;
+  }
+
+  function trySave() {
+    setError('');
+    if (!datesIso()) return;
+    const cls = specClass(version?.class_hint ?? null);
+    const changed = !work || work.spec_version_id !== versionId;
+    const other = cls === null || !changed ? [] : parallels.filter(p => p !== cls);
+    if (other.length) {
+      setMismatch(`Спецификация для ${cls} класса, а ${other.length > 1 ? `выбраны параллели ${other.join(', ')}` : `выбрана параллель ${other[0]}`}. Продолжить?`);
+      return;
+    }
+    save();
+  }
+
   async function save() {
+    setMismatch('');
+    const iso = datesIso();
+    if (!iso) return;
     setBusy(true); setError('');
     const body = {
       type_id: typeId, title, academic_year_id: yearId ?? o?.year_id, parallels, spec_version_id: versionId, scale_id: scaleId,
-      status, is_test: isTest, groups, dates: Object.fromEntries((version?.parts || []).map(p => [p.code, dates[p.code] || null])),
+      status, is_test: isTest, groups, dates: iso,
     };
     try {
       if (workId) {
@@ -120,7 +174,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
         <span className="mon-label">Спецификация</span>
         <select className="mon-input mon-select" value={versionId ?? ''} disabled={locked} onChange={e => chooseVersion(Number(e.target.value))}>
           <option value="" disabled>Выберите утверждённую версию</option>
-          {versions.map(v => <option key={v.id} value={v.id}>{v.title}, версия {v.version}, итого {v.max_points}</option>)}
+          {versions.map(v => <option key={v.id} value={v.id}>{versionLabel(v)}</option>)}
         </select>
         {locked ? <span className="mon-muted">Версию спецификации нельзя сменить: по работе уже есть результаты.</span> : null}
         {!versions.length ? <span className="mon-muted">Нет утверждённых спецификаций этого вида. Утвердите версию на вкладке «Спецификации».</span> : null}
@@ -151,7 +205,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
           {version.parts.map(p => (
             <label className="mon-field" key={p.code}>
               <span className="mon-label">Дата: {p.name.toLowerCase()}</span>
-              <input className="mon-input" type="date" value={dates[p.code] || ''} onChange={e => setDates({ ...dates, [p.code]: e.target.value })} />
+              <input className="mon-input mon-input--date" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" value={dates[p.code] || ''} onChange={e => setDates({ ...dates, [p.code]: typeDate(e.target.value) })} />
             </label>
           ))}
         </div>
@@ -204,11 +258,12 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
 
       {error ? <p className="mon-alert mon-alert--err" role="alert">{error}</p> : null}
       <div className="mon-actions">
-        <button type="button" className="mon-btn mon-btn--primary" disabled={busy || !versionId || !count || !title.trim()} onClick={save}>
+        <button type="button" className="mon-btn mon-btn--primary" disabled={busy || !versionId || !count || !title.trim()} onClick={trySave}>
           {workId ? 'Сохранить' : count > 1 ? `Создать работы: ${count}` : 'Создать работу'}
         </button>
         <button type="button" className="mon-btn" onClick={() => navigate(base)}>Отмена</button>
       </div>
+      {mismatch ? <Dialog title={mismatch} confirmLabel="Продолжить" busy={busy} onConfirm={save} onCancel={() => setMismatch('')} /> : null}
     </div>
   );
 }
