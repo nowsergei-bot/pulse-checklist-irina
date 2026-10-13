@@ -2,7 +2,12 @@ import { useApi } from './api';
 
 type SchemaColumn = { name: string; type: string; nullable: boolean };
 type SchemaView = { name: string; type: string; columns: SchemaColumn[] };
-type SchemaData = { views: SchemaView[]; user_fields: { name: string; type: string }[]; multi_group_students?: { full_name: string; groups: { title: string; parallel: number | null; campus: string | null }[] }[] };
+type SchemaData = {
+  views: SchemaView[];
+  user_fields: { name: string; type: string }[];
+  multi_group_students?: { full_name: string; groups: { title: string; parallel: number | null; campus: string | null }[] }[];
+  groups_without_account?: { title: string; parallel: number | null; campus: string | null; teachers: string[] }[];
+};
 
 const cell = { border: '1px solid #d0d7de', padding: '4px 8px', textAlign: 'left' as const };
 
@@ -45,6 +50,27 @@ function SchemaTables({ data }: { data: SchemaData }) {
               </tbody>
             </table>
           ) : <p>Таких учеников нет</p>}
+        </>
+      ) : null}
+      {data.groups_without_account ? (
+        <>
+          <h2>Группы без учителя с учётной записью Пульса</h2>
+          {data.groups_without_account.length ? (
+            <table style={{ borderCollapse: 'collapse', marginBottom: 24 }}>
+              <thead>
+                <tr><th style={cell}>Группа</th><th style={cell}>Параллель</th><th style={cell}>Учителя</th></tr>
+              </thead>
+              <tbody>
+                {data.groups_without_account.map((g, i) => (
+                  <tr key={i}>
+                    <td style={cell}>{g.campus === 'digital' ? `${g.title} (ЦГ)` : g.title}</td>
+                    <td style={cell}>{g.parallel ?? ''}</td>
+                    <td style={cell}>{g.teachers.length ? g.teachers.join(', ') : 'Учитель не назначен'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <p>Таких групп нет</p>}
         </>
       ) : null}
       <h2>Поля пользователя модуля</h2>

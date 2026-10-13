@@ -99,14 +99,15 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
-/* Главная кнопка: бордовый цвет Пульса. */
+/* Главная кнопка: бордовый цвет Пульса. Задан явно: --cab-red в кабинете ярко-красный. */
 .mon-btn--primary {
-  background: var(--mon-red);
-  border-color: var(--mon-red);
+  background: #7f0a10;
+  border-color: #7f0a10;
   color: #fff;
 }
 .mon-btn--primary:hover:not(:disabled) {
-  border-color: var(--mon-red);
+  background: #6a080d;
+  border-color: #6a080d;
   box-shadow: 0 2px 10px rgba(127, 10, 16, 0.28);
 }
 .mon-btn--ghost {
