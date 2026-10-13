@@ -3,6 +3,7 @@ import { useApi } from './api';
 import CabinetDirectoryPage from './CabinetDirectoryPage';
 import RolesPage from './RolesPage';
 import SchemaPage from './SchemaPage';
+import SheetPage from './SheetPage';
 import SpecsPage from './SpecsPage';
 import WorkForm from './WorkForm';
 import WorksPage from './WorksPage';
@@ -23,6 +24,7 @@ export default function MonitoringPage() {
   const tabs: { path: string; label: string }[] = [{ path: '/', label: 'Работы' }];
   if (manage) tabs.push({ path: '/specs', label: 'Спецификации' }, { path: '/roles', label: 'Роли' }, { path: '/directory', label: 'Кабинеты' });
   const workMatch = sub.match(/^\/works\/(\d+)$/);
+  const sheetMatch = sub.match(/^\/works\/(\d+)\/groups\/(\d+)$/);
   const current = sub.startsWith('/works') ? '/' : sub;
 
   let content;
@@ -34,6 +36,7 @@ export default function MonitoringPage() {
   else if (sub === '/specs' && manage) content = <SpecsPage />;
   else if (sub === '/works/new' && manage) content = <WorkForm base={BASE} />;
   else if (workMatch && manage) content = <WorkForm key={workMatch[1]} base={BASE} workId={Number(workMatch[1])} />;
+  else if (sheetMatch) content = <SheetPage key={sub} base={BASE} workId={Number(sheetMatch[1])} groupId={Number(sheetMatch[2])} />;
   else if (sub === '/') content = <WorksPage manage={manage} base={BASE} message={message} />;
   else content = <p className="mon-note">Страница не найдена</p>;
 

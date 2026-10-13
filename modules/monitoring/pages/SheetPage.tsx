@@ -1,0 +1,340 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from './api';
+import { GroupName, STATUS_NAMES, versionLabel } from './labels';
+
+type Part = { id: number; code: string; name: string; held_on: string | null };
+type Task = { id: number; part_id: number; sort: number; section: string; level: string; level_name: string | null; title: string; max_points: number };
+type Result = { total: number; percent: number; equivalent: number; mark: string | null; complete: boolean; missing: number; state: string };
+type Student = {
+  id: number; full_name: string; result: Result;
+  scores: Record<string, number | null>; absent: Record<string, boolean>; foreign: Record<string, string>;
+};
+type Sheet = {
+  work: { id: number; title: string; parallel: number; status: 'draft' | 'open' | 'closed'; spec_title: string; version: number; max_points: number };
+  group: { id: number; title: string; digital: boolean };
+  can_edit: boolean; reason: string; parts: Part[]; tasks: Task[]; students: Student[];
+};
+type Change = { student_id: number; task_id?: number; score?: number | null; part_id?: number; absent?: boolean };
+type SaveResult = { students: Student[]; errors: string[]; conflicts: { student_id: number; key: string; group: string }[] };
+type SaveState = 'saved' | 'pending' | 'saving' | 'offline' | 'blocked';
+
+const SAVE_TEXT: Record<SaveState, string> = {
+  saved: 'Все изменения сохранены',
+  pending: 'Есть изменения, сохраняем',
+  saving: 'Сохраняем…',
+  offline: 'Нет связи, не сохранено. Изменения хранятся в этом браузере, повторим сами',
+  blocked: 'Не сохранено',
+};
+
+// Название из спецификации часто повторяет раздел и уровень («Listening: базовый»); тогда оно только в подсказке.
+const norm = (v: string) => v.toLowerCase().replace(/[^a-zа-яё0-9]+/g, ' ').trim();
+const sameTitle = (t: Task) => norm(t.title) === norm(`${t.section} ${t.level_name || t.level}`);
+
+const comma = (value: number, digits: number) => value.toFixed(digits).replace('.', ',');
+
+function date(value: string | null) {
+  if (!value) return '';
+  const [y, m, d] = value.slice(0, 10).split('-');
+  return `${d}.${m}.${y}`;
+}
+
+// Несохранённые изменения лежат в браузере, пока сервер их не принял.
+function readStored(key: string): Record<string, Change> {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const value = raw ? JSON.parse(raw) : null;
+    return value && typeof value === 'object' ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStored(key: string, value: Record<string, Change>) {
+  try {
+    if (Object.keys(value).length) window.localStorage.setItem(key, JSON.stringify(value));
+    else window.localStorage.removeItem(key);
+  } catch {
+    // Хранилище недоступно: изменения остаются в памяти страницы.
+  }
+}
+
+export default function SheetPage({ base, workId, groupId }: { base: string; workId: number; groupId: number }) {
+  const storeKey = `mon-sheet-${workId}-${groupId}`;
+  const [sheet, setSheet] = useState<Sheet>();
+  const [loadError, setLoadError] = useState('');
+  const [save, setSave] = useState<{ state: SaveState; message?: string }>({ state: 'saved' });
+  const [notes, setNotes] = useState<string[]>([]);
+  const [hint, setHint] = useState('');
+  const [flash, setFlash] = useState('');
+  const [, setTick] = useState(0);
+  const pending = useRef<Record<string, Change>>({});
+  const saving = useRef(false);
+  const retry = useRef(0);
+  const timer = useRef<number>();
+
+  const flush = useCallback(async () => {
+    window.clearTimeout(timer.current);
+    if (saving.current) {
+      timer.current = window.setTimeout(() => { void flush(); }, 400);
+      return;
+    }
+    const entries = Object.entries(pending.current);
+    if (!entries.length) return;
+    saving.current = true;
+    setSave({ state: 'saving' });
+    try {
+      const r = await api<SaveResult>(`/works/${workId}/sheet`, { method: 'POST', body: { group_id: groupId, changes: entries.map(([, c]) => c) } });
+      // Снимаем только то, что не меняли во время сохранения.
+      for (const [key, change] of entries) if (pending.current[key] === change) delete pending.current[key];
+      writeStored(storeKey, pending.current);
+      retry.current = 0;
+      const byId = new Map(r.students.map(s => [s.id, s]));
+      setSheet(prev => prev && { ...prev, students: prev.students.map(s => byId.get(s.id) || s) });
+      const names = new Map(r.students.map(s => [s.id, s.full_name]));
+      const next = [
+        ...r.errors,
+        ...r.conflicts.map(c => `${names.get(c.student_id) || 'Ученик'}: ${c.key.startsWith('p') ? 'отметка «отсутствовал» или баллы части уже внесены' : 'балл уже внесён'} в другой группе (${c.group}), здесь не изменено`),
+      ];
+      if (next.length) setNotes(next);
+      const left = Object.keys(pending.current).length;
+      setSave({ state: left ? 'pending' : 'saved' });
+      if (left) timer.current = window.setTimeout(() => { void flush(); }, 300);
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      if (status && status < 500 && status !== 408 && status !== 429) {
+        setSave({ state: 'blocked', message: (e as Error).message });
+      } else {
+        setSave({ state: 'offline' });
+        const delay = Math.min(30000, 2000 * 2 ** retry.current);
+        retry.current += 1;
+        timer.current = window.setTimeout(() => { void flush(); }, delay);
+      }
+    } finally {
+      saving.current = false;
+      setTick(t => t + 1);
+    }
+  }, [workId, groupId, storeKey]);
+
+  useEffect(() => {
+    let active = true;
+    setLoadError('');
+    api<Sheet>(`/works/${workId}/sheet?group=${groupId}`)
+      .then(data => {
+        if (!active) return;
+        setSheet(data);
+        pending.current = readStored(storeKey);
+        if (Object.keys(pending.current).length) {
+          if (data.can_edit) { setSave({ state: 'pending' }); void flush(); }
+          else setSave({ state: 'blocked', message: data.reason || 'Нет права вносить результаты' });
+        }
+      })
+      .catch((e: Error) => { if (active) setLoadError(e.message); });
+    return () => {
+      active = false;
+      window.clearTimeout(timer.current);
+    };
+  }, [workId, groupId, storeKey, flush]);
+
+  // Перед уходом со страницы с несохранёнными изменениями браузер спросит подтверждение.
+  useEffect(() => {
+    const onLeave = (e: BeforeUnloadEvent) => {
+      if (Object.keys(pending.current).length) e.preventDefault();
+    };
+    window.addEventListener('beforeunload', onLeave);
+    return () => window.removeEventListener('beforeunload', onLeave);
+  }, []);
+
+  function change(key: string, value: Change) {
+    pending.current = { ...pending.current, [key]: value };
+    writeStored(storeKey, pending.current);
+    setSave({ state: 'pending' });
+    setTick(t => t + 1);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => { void flush(); }, 700);
+  }
+
+  function reject(cell: string, max: number) {
+    setHint(`Балл: целое число от 0 до ${max}`);
+    setFlash(cell);
+    window.setTimeout(() => setFlash(f => (f === cell ? '' : f)), 1200);
+  }
+
+  function move(e: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) {
+    const step = e.key === 'Enter' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = document.querySelector<HTMLInputElement>(`[data-cell="${row + step}:${col}"]`);
+    if (next) { next.focus(); next.select(); }
+  }
+
+  if (loadError) return <div><BackLink base={base} /><p className="mon-err" role="alert">{loadError}</p></div>;
+  if (!sheet) return <div><BackLink base={base} /><p className="mon-note">Загружаем…</p></div>;
+
+  const { work, parts, tasks, students } = sheet;
+  const editable = sheet.can_edit;
+  const scoreOf = (s: Student, t: Task) => {
+    const p = pending.current[`${s.id}:t${t.id}`];
+    return p ? p.score ?? null : s.scores[t.id] ?? null;
+  };
+  const absentOf = (s: Student, p: Part) => {
+    const c = pending.current[`${s.id}:p${p.id}`];
+    return c ? Boolean(c.absent) : Boolean(s.absent[p.id]);
+  };
+  const isPending = (s: Student) => Object.keys(pending.current).some(k => k.startsWith(`${s.id}:`));
+  const complete = students.filter(s => s.result.complete).length;
+  const absent = students.filter(s => parts.some(p => s.absent[p.id])).length;
+  const unfinished = students.length - complete - absent;
+  let col = 0;
+
+  return (
+    <div className="mon-sheet">
+      <BackLink base={base} />
+      <div className="mon-sheet__head">
+        <div>
+          <h2 className="mon-title">{work.title}, {work.parallel} параллель</h2>
+          <div className="mon-sheet__meta">
+            <GroupName group={sheet.group} />
+            <span className="mon-muted">{versionLabel({ title: work.spec_title, version: work.version, max_points: work.max_points })}</span>
+            <span className={`mon-status mon-status--${work.status}`}>{STATUS_NAMES[work.status]}</span>
+          </div>
+        </div>
+        {editable ? (
+          <div className={`mon-save mon-save--${save.state}`} role="status">
+            <span className="mon-save__dot" />
+            <span>{save.state === 'blocked' && save.message ? `Не сохранено: ${save.message}` : SAVE_TEXT[save.state]}</span>
+            {save.state === 'offline' || save.state === 'blocked' ? (
+              <button type="button" className="mon-btn mon-btn--ghost" onClick={() => { retry.current = 0; void flush(); }}>Повторить</button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {!editable ? <p className="mon-alert mon-alert--warn">{sheet.reason || 'Только просмотр'}</p> : null}
+      {!editable && save.state === 'blocked' ? <p className="mon-alert mon-alert--err">В этом браузере есть несохранённые изменения, но сейчас вносить результаты нельзя.</p> : null}
+      {notes.length ? (
+        <div className="mon-alert mon-alert--warn" role="alert">
+          <ul>{notes.map(n => <li key={n}>{n}</li>)}</ul>
+          <button type="button" className="mon-link" onClick={() => setNotes([])}>Скрыть</button>
+        </div>
+      ) : null}
+      <p className="mon-note mon-sheet__summary">
+        Учеников: {students.length} · полная работа: {complete} · отсутствовали: {absent} · не внесено полностью: {unfinished}
+        {hint ? <span className="mon-sheet__hint"> · {hint}</span> : null}
+      </p>
+
+      {!students.length ? <p className="mon-note">В группе нет учеников</p> : (
+        <div className="mon-sheet__wrap">
+          <table className="mon-table mon-sheet__table">
+            <thead>
+              <tr>
+                <th rowSpan={2} className="mon-sheet__name">Ученик</th>
+                {parts.map(p => (
+                  <th key={p.id} colSpan={tasks.filter(t => t.part_id === p.id).length + 1} className="mon-sheet__part">
+                    {p.name}{p.held_on ? <span className="mon-muted"> · {date(p.held_on)}</span> : null}
+                  </th>
+                ))}
+                <th colSpan={5} className="mon-sheet__part mon-sheet__res-start">Результат</th>
+              </tr>
+              <tr>
+                {parts.map(p => [
+                  <th key={`a${p.id}`} className="mon-sheet__absent mon-sheet__part-start">Отсут&shy;ствовал</th>,
+                  ...tasks.filter(t => t.part_id === p.id).map(t => (
+                    <th key={t.id} className="mon-sheet__task" title={t.title}>
+                      <span className="mon-sheet__section">{t.section}</span>
+                      <span>{t.level_name || t.level}</span>
+                      {sameTitle(t) ? null : <span className="mon-sheet__task-title">{t.title}</span>}
+                      <span className="mon-sheet__max">из {t.max_points}</span>
+                    </th>
+                  )),
+                ])}
+                <th className="mon-num mon-sheet__res-start">Итого<span className="mon-sheet__max">из {work.max_points}</span></th>
+                <th className="mon-num">%</th>
+                <th className="mon-num">Эквива&shy;лент</th>
+                <th className="mon-sheet__mark-head">Отметка</th>
+                <th>Состояние</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((s, row) => {
+                col = 0;
+                const r = s.result;
+                const wait = isPending(s);
+                const wasAbsent = r.state.startsWith('отсутствовал');
+                const foreignGroups = [...new Set(Object.values(s.foreign))];
+                const empty = r.missing === tasks.length && !wasAbsent;
+                return (
+                  <tr key={s.id}>
+                    <td className="mon-sheet__name">
+                      {s.full_name}
+                      {foreignGroups.length ? <span className="mon-sheet__foreign">внесено в другой группе: {foreignGroups.join(', ')}</span> : null}
+                    </td>
+                    {parts.map(p => {
+                      const isAbsent = absentOf(s, p);
+                      const foreignPart = s.foreign[`p${p.id}`];
+                      const partForeign = tasks.some(t => t.part_id === p.id && s.foreign[`t${t.id}`]);
+                      return [
+                        <td key={`a${p.id}`} className="mon-sheet__absent mon-sheet__part-start">
+                          <label className="mon-sheet__check" title={foreignPart ? `Отмечено в другой группе: ${foreignPart}` : partForeign ? 'Баллы этой части внесены в другой группе' : `${p.name}: отсутствовал`}>
+                            <input
+                              type="checkbox"
+                              checked={isAbsent}
+                              disabled={!editable || Boolean(foreignPart) || partForeign}
+                              aria-label={`${s.full_name}, ${p.name}: отсутствовал`}
+                              onChange={e => change(`${s.id}:p${p.id}`, { student_id: s.id, part_id: p.id, absent: e.target.checked })}
+                            />
+                          </label>
+                        </td>,
+                        ...tasks.filter(t => t.part_id === p.id).map(t => {
+                          const c = col++;
+                          const cell = `${row}:${c}`;
+                          const foreign = s.foreign[`t${t.id}`];
+                          const value = scoreOf(s, t);
+                          return (
+                            <td key={t.id} className={`mon-sheet__cell${isAbsent ? ' is-absent' : ''}`}>
+                              <input
+                                className={`mon-sheet__input${flash === cell ? ' is-wrong' : ''}${foreign ? ' is-foreign' : ''}`}
+                                data-cell={cell}
+                                inputMode="numeric"
+                                autoComplete="off"
+                                value={value === null ? '' : String(value)}
+                                disabled={!editable || isAbsent}
+                                readOnly={Boolean(foreign)}
+                                title={foreign ? `Внесено в другой группе: ${foreign}` : `${t.title}: от 0 до ${t.max_points}`}
+                                aria-label={`${s.full_name}, ${t.title}, из ${t.max_points}`}
+                                onFocus={e => e.target.select()}
+                                onKeyDown={e => move(e, row, c)}
+                                onChange={e => {
+                                  if (foreign) return;
+                                  const v = e.target.value.trim();
+                                  if (v === '') { change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: null }); return; }
+                                  if (!/^\d+$/.test(v) || Number(v) > t.max_points) { reject(cell, t.max_points); return; }
+                                  setHint('');
+                                  change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: Number(v) });
+                                }}
+                              />
+                            </td>
+                          );
+                        }),
+                      ];
+                    })}
+                    <td className={`mon-num mon-sheet__res-start${wait ? ' is-wait' : ''}`}><strong>{empty || parts.every(p => s.absent[p.id]) ? '' : r.total}</strong></td>
+                    <td className={`mon-num${wait || !r.complete ? ' is-wait' : ''}`}>{wasAbsent || empty ? '' : comma(r.percent, 1)}</td>
+                    <td className={`mon-num${wait || !r.complete ? ' is-wait' : ''}`}>{wasAbsent || empty ? '' : comma(r.equivalent, 2)}</td>
+                    <td className={`mon-sheet__mark${wait ? ' is-wait' : ''}`}>{r.mark || ''}</td>
+                    <td><span className={`mon-state mon-state--${r.complete ? 'ok' : wasAbsent ? 'absent' : 'missing'}`}>{r.state}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {editable ? <p className="mon-note">Баллы сохраняются сами. Enter и стрелки переводят к соседнему ученику. Пустое поле: балл не внесён.</p> : null}
+    </div>
+  );
+}
+
+function BackLink({ base }: { base: string }) {
+  return <p className="mon-back"><Link className="mon-link mon-link--muted" to={base}>← Все работы</Link></p>;
+}

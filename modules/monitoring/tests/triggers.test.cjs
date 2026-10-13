@@ -13,6 +13,8 @@ test('триггеры миграции 003', { skip: !url && 'нет MONITORING
   const db = new Client({ connectionString: url });
   await db.connect();
   t.after(() => db.end());
+  // Тесты с базой идут по очереди: обе проверки пересоздают схему monitoring.
+  await db.query('SELECT pg_advisory_lock(73001)');
 
   await db.query('DROP SCHEMA IF EXISTS monitoring CASCADE; CREATE SCHEMA monitoring');
   const dir = path.join(__dirname, '..', 'migrations');

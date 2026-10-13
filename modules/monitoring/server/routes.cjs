@@ -6,6 +6,7 @@ const { schema } = require('./schema.cjs');
 const roles = require('./roles.cjs');
 const specs = require('./specs.cjs');
 const works = require('./works.cjs');
+const sheet = require('./sheet.cjs');
 
 function parseBody(body) {
   if (body === null || body === undefined || body === '') return {};
@@ -37,6 +38,19 @@ module.exports = async function route({ path, method, query, body, user, db, fil
   }
 
   if (path === '/works' && method === 'GET') return works.listWorks(db, userId, caps);
+
+  // Ввод результатов: права по группе и статусу работы проверяет sheet.cjs.
+  const sheetMatch = path.match(/^\/works\/(\d+)\/sheet$/);
+  if (sheetMatch) {
+    const workId = Number(sheetMatch[1]);
+    if (method === 'GET') return sheet.getSheet(db, userId, caps, workId, Number(query && query.group));
+    if (method === 'POST') {
+      const data = parseBody(body);
+      if (!data) return { status: 400, body: { error: 'bad_request' } };
+      return sheet.saveSheet(db, userId, caps, workId, data);
+    }
+    return { status: 405, body: { error: 'method_not_allowed' } };
+  }
 
   // Всё ниже только для data_admin.
   if (path.startsWith('/specs') || path.startsWith('/works')) {

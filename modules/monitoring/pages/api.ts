@@ -18,7 +18,7 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
   });
   let data: unknown = null;
   try { data = await response.json(); } catch { data = null; }
-  if (!response.ok) throw new Error(errorText(response.status, data));
+  if (!response.ok) throw Object.assign(new Error(errorText(response.status, data)), { status: response.status });
   return data as T;
 }
 

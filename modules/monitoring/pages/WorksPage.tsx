@@ -26,6 +26,7 @@ export default function WorksPage({ manage, base, message }: { manage: boolean; 
         </div>
       ) : null}
       {message ? <p className="mon-note" role="status">{message}</p> : null}
+      {data && data.works.length ? <p className="mon-note mon-hint">Чтобы внести или посмотреть баллы, нажмите на группу.</p> : null}
       {error ? <p className="mon-err" role="alert">{error}</p> : null}
       {!data && !error ? <p className="mon-note">Загружаем…</p> : null}
       {data && !data.works.length ? <p className="mon-note">Работ пока нет</p> : null}
@@ -43,7 +44,15 @@ export default function WorksPage({ manage, base, message }: { manage: boolean; 
                 <td className="mon-num">{w.parallel}</td>
                 <td>{versionLabel({ title: w.spec, version: w.version, max_points: w.max_points })}</td>
                 <td>{w.parts.map(p => <div key={p.name}>{p.name}: <span className="mon-muted">{date(p.held_on)}</span></div>)}</td>
-                <td><span className="mon-group-list">{w.groups.map(g => <GroupName key={g.id} group={g} />)}</span></td>
+                <td>
+                  <span className="mon-group-list">
+                    {w.groups.map(g => (
+                      <Link key={g.id} className="mon-group-link" to={`${base}/works/${w.id}/groups/${g.id}`} onClick={e => e.stopPropagation()} title="Открыть таблицу баллов">
+                        <GroupName group={g} />
+                      </Link>
+                    ))}
+                  </span>
+                </td>
                 <td><span className={`mon-status mon-status--${w.status}`}>{STATUS_NAMES[w.status]}</span></td>
               </tr>
             ))}
