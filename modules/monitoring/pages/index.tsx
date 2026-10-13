@@ -1,19 +1,63 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { API_BASE, apiFetch } from '../../../frontend/src/api/http';
+
+type SchemaColumn = { name: string; type: string; nullable: boolean };
+type SchemaView = { name: string; type: string; columns: SchemaColumn[] };
+type SchemaData = { views: SchemaView[]; user_fields: { name: string; type: string }[] };
+
+const cell = { border: '1px solid #d0d7de', padding: '4px 8px', textAlign: 'left' as const };
+
+function SchemaPage({ data }: { data: SchemaData }) {
+  return (
+    <section>
+      <h1>Мониторинг результатов</h1>
+      <h2>Представления pulse_read</h2>
+      {data.views.length ? null : <p>Представления не найдены</p>}
+      {data.views.map(view => (
+        <div key={view.name} style={{ marginBottom: 24 }}>
+          <h3>{view.name}</h3>
+          <table style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr><th style={cell}>Поле</th><th style={cell}>Тип</th><th style={cell}>Может быть пустым</th></tr>
+            </thead>
+            <tbody>
+              {view.columns.map(c => (
+                <tr key={c.name}><td style={cell}>{c.name}</td><td style={cell}>{c.type}</td><td style={cell}>{c.nullable ? 'да' : 'нет'}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      <h2>Поля пользователя модуля</h2>
+      <table style={{ borderCollapse: 'collapse' }}>
+        <thead>
+          <tr><th style={cell}>Поле</th><th style={cell}>Тип</th></tr>
+        </thead>
+        <tbody>
+          {data.user_fields.map(f => (
+            <tr key={f.name}><td style={cell}>{f.name}</td><td style={cell}>{f.type}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 export default function MonitoringPage() {
   const location = useLocation();
   const [value, setValue] = useState<unknown>();
   const [error, setError] = useState('');
+  const suffix = location.pathname.split('/monitoring')[1] || '/ping';
   useEffect(() => {
     let active = true;
     setError(''); setValue(undefined);
-    const suffix = location.pathname.split('/monitoring')[1] || '/ping';
     apiFetch(`${API_BASE}/api/monitoring${suffix}`).then(async response => {
       if (!response.ok) throw new Error(response.status === 403 ? 'Доступ к мониторингу не назначен' : response.status === 401 ? 'Войдите в Пульс' : 'Среда мониторинга пока недоступна');
       const data: unknown = await response.json(); if (active) setValue(data);
     }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };
-  }, [location.pathname]);
+  }, [suffix]);
+  if (suffix === '/schema' && value && !error) return <SchemaPage data={value as SchemaData} />;
   return <section><h1>Мониторинг результатов</h1><p>Проверка среды модуля</p>{error ? <p role="alert">{error}</p> : value ? <pre>{JSON.stringify(value, null, 2)}</pre> : <p>Проверяем доступ…</p>}</section>;
 }
