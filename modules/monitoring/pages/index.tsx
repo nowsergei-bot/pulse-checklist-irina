@@ -4,7 +4,20 @@ import { API_BASE, apiFetch } from '../../../frontend/src/api/http';
 
 type SchemaColumn = { name: string; type: string; nullable: boolean };
 type SchemaView = { name: string; type: string; columns: SchemaColumn[] };
-type SchemaData = { views: SchemaView[]; user_fields: { name: string; type: string }[] };
+type SchemaData = { views: SchemaView[]; user_fields: { name: string; type: string }[]; memberships?: Record<string, number> };
+
+const MEMBERSHIP_LABELS: [string, string][] = [
+  ['groups_current', 'Неархивных групп текущего года'],
+  ['membership_rows', 'Записей в group_memberships'],
+  ['membership_students', 'Учеников в group_memberships'],
+  ['students_with_group', 'Учеников с students.group_id'],
+  ['both_same_group', 'Совпадают: та же группа в обоих источниках'],
+  ['different_group', 'Есть в обоих, но группы разные'],
+  ['only_students_group_id', 'Только в students.group_id'],
+  ['only_memberships', 'Только в group_memberships'],
+  ['students_in_several_groups', 'Учеников в нескольких группах (group_memberships)'],
+  ['max_groups_per_student', 'Наибольшее число групп у одного ученика'],
+];
 
 const cell = { border: '1px solid #d0d7de', padding: '4px 8px', textAlign: 'left' as const };
 
@@ -29,6 +42,18 @@ function SchemaPage({ data }: { data: SchemaData }) {
           </table>
         </div>
       ))}
+      {data.memberships ? (
+        <>
+          <h2>Состав групп: сверка источников</h2>
+          <table style={{ borderCollapse: 'collapse', marginBottom: 24 }}>
+            <tbody>
+              {MEMBERSHIP_LABELS.map(([key, label]) => (
+                <tr key={key}><td style={cell}>{label}</td><td style={cell}>{data.memberships?.[key] ?? ''}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : null}
       <h2>Поля пользователя модуля</h2>
       <table style={{ borderCollapse: 'collapse' }}>
         <thead>
