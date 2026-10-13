@@ -110,10 +110,12 @@ function frameRowsFromTasks(tasks) {
 }
 
 // Для вида module Writing относится к части «Письмо», остальное к «Тест».
-function splitParts(tasks) {
+// У других видов одна часть «Тест».
+function splitParts(tasks, typeCode = 'module') {
   const parts = [];
-  if (tasks.some(t => t.section === 'Writing')) parts.push({ code: 'writing', name: 'Письмо' });
-  if (tasks.some(t => t.section !== 'Writing')) parts.push({ code: 'test', name: 'Тест' });
+  const writing = (t) => typeCode === 'module' && t.section === 'Writing';
+  if (tasks.some(writing)) parts.push({ code: 'writing', name: 'Письмо' });
+  if (tasks.some(t => !writing(t))) parts.push({ code: 'test', name: 'Тест' });
   return parts.map((p, i) => ({ ...p, sort: i + 1 }));
 }
 

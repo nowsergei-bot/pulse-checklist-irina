@@ -43,7 +43,8 @@ async function groupsByUser(db, userIds) {
 
 async function withRoles(db, rows) {
   const ids = rows.map(u => u.id);
-  const [roles, groups] = await Promise.all([rolesByUser(db, ids), groupsByUser(db, ids)]);
+  const roles = await rolesByUser(db, ids);
+  const groups = await groupsByUser(db, ids);
   return rows.map(u => ({
     id: u.id,
     full_name: u.full_name,

@@ -401,3 +401,288 @@
 .mon-dialog__title + .mon-dialog__actions {
   margin-top: 1rem;
 }
+
+/* Общие элементы форм и списков. */
+a.mon-btn {
+  text-decoration: none;
+}
+.mon-h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.1rem;
+}
+.mon-muted {
+  color: #8a8079;
+  font-size: 0.86rem;
+}
+.mon-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+.mon-actions--tight {
+  margin: 0.3rem 0 0;
+}
+.mon-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mon-red);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mon-link:hover {
+  text-decoration: underline;
+}
+.mon-link--muted {
+  color: var(--mon-muted);
+}
+.mon-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  justify-content: flex-end;
+}
+.mon-select {
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235c5148' stroke-width='1.6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  cursor: pointer;
+}
+.mon-input:disabled {
+  background-color: rgba(26, 21, 18, 0.04);
+  color: var(--mon-muted);
+  cursor: not-allowed;
+}
+.mon-panel,
+.mon-card {
+  margin: 0 0 1.2rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--mon-line);
+  border-radius: var(--radius-md, 14px);
+  background: #fff;
+}
+.mon-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.mon-card__title {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+.mon-card__title .mon-muted {
+  margin-left: 0.4rem;
+  font-weight: 500;
+}
+.mon-form {
+  max-width: 46rem;
+}
+.mon-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+}
+.mon-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+}
+.mon-field-row .mon-field {
+  flex: 1 1 14rem;
+}
+.mon-field .mon-input {
+  min-width: 0;
+}
+.mon-label {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mon-muted);
+}
+.mon-label .mon-link {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.mon-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  border: 1px solid var(--mon-line);
+  border-radius: var(--radius-sm, 10px);
+  background: #fff;
+  overflow: hidden;
+}
+.mon-segmented button {
+  padding: 0.45rem 0.9rem;
+  border: 0;
+  border-right: 1px solid var(--mon-line);
+  background: transparent;
+  color: var(--mon-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mon-segmented button:last-child {
+  border-right: 0;
+}
+.mon-segmented button.is-current {
+  background: rgba(127, 10, 16, 0.08);
+  color: #7f0a10;
+}
+.mon-segmented button:disabled {
+  cursor: not-allowed;
+}
+.mon-chips,
+.mon-checks,
+.mon-group-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+}
+.mon-filter:disabled {
+  cursor: default;
+}
+.mon-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.65rem 0.3rem 0.45rem;
+  border: 1px solid var(--mon-line);
+  border-radius: var(--radius-sm, 10px);
+  background: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.mon-form > .mon-check {
+  margin: 0 0 1rem;
+}
+.mon-check input {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  border: 1.5px solid rgba(26, 21, 18, 0.35);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+.mon-check input:checked {
+  border-color: #7f0a10;
+  background: #7f0a10 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='10' viewBox='0 0 12 10'%3E%3Cpath d='M1 5l3.5 3.5L11 1.5' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E") center / 0.7rem no-repeat;
+}
+.mon-group-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+.mon-gtype {
+  padding: 0 0.35rem;
+  border-radius: 4px;
+  background: rgba(26, 21, 18, 0.06);
+  color: var(--mon-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.mon-gtype--digital {
+  background: #e8f0fa;
+  color: #2c4f7c;
+}
+.mon-alert {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius-sm, 10px);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.mon-alert ul {
+  margin: 0.35rem 0 0.2rem;
+  padding-left: 1.2rem;
+}
+.mon-alert--err {
+  background: #fbecec;
+  color: #7f0a10;
+}
+.mon-alert--warn {
+  background: #faf0dd;
+  color: #5e4214;
+}
+.mon-alert--ok {
+  background: #e6f3ea;
+  color: #2f6340;
+}
+.mon-alert .mon-input {
+  background: #fff;
+}
+.mon-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.75rem;
+  margin: 0 0 1rem;
+}
+.mon-facts dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mon-muted);
+}
+.mon-facts dd {
+  margin: 0.1rem 0 0;
+  font-weight: 600;
+}
+.mon-tasks {
+  margin: 0 0 1rem;
+}
+.mon-tasks tfoot td {
+  font-weight: 700;
+  border-bottom: 0;
+}
+.mon-status {
+  display: inline-block;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mon-status--draft { background: rgba(26, 21, 18, 0.07); color: var(--mon-muted); }
+.mon-status--approved,
+.mon-status--open { background: #e6f3ea; color: #2f6340; }
+.mon-status--closed { background: #eee9f7; color: #563f84; }
+.mon-flag {
+  margin-left: 0.45rem;
+  padding: 0 0.35rem;
+  border: 1px solid #cf9f4f;
+  border-radius: 4px;
+  color: #74521a;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.mon-clickable {
+  cursor: pointer;
+}
+.mon-clickable:hover td {
+  background: rgba(26, 21, 18, 0.025);
+}
+.mon-input[type='date'] {
+  max-width: 14rem;
+}
+.mon-works td:first-child,
+.mon-works td:nth-child(3) {
+  min-width: 11rem;
+}
+.mon-works td:first-child .mon-muted {
+  white-space: nowrap;
+}

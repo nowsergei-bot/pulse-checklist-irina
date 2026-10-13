@@ -73,3 +73,21 @@ test('ошибки строк', () => {
     'Строка 13: у Writing только базовый уровень',
   ]);
 });
+
+test('у вида не module одна часть «Тест», у module Writing уходит в «Письмо»', () => {
+  const tasks = [{ section: 'Writing' }, { section: 'Grammar' }];
+  assert.deepEqual(splitParts(tasks, 'module').map(p => p.name), ['Письмо', 'Тест']);
+  assert.deepEqual(splitParts(tasks, 'placement').map(p => p.name), ['Тест']);
+});
+
+test('сервер берёт из присланных ячеек только адреса шаблона', () => {
+  const { cellReader } = require('../server/specs.cjs');
+  const cell = cellReader({ C3: 'Модуль 1', B9: 'Listening', E28: 5, A1: 'лишнее', G9: 'лишнее', C7: 'лишнее', D9: { x: 1 } });
+  assert.equal(cell('C3'), 'Модуль 1');
+  assert.equal(cell('B9'), 'Listening');
+  assert.equal(cell('E28'), '5');
+  assert.equal(cell('A1'), undefined);
+  assert.equal(cell('G9'), undefined);
+  assert.equal(cell('C7'), undefined);
+  assert.equal(cell('D9'), undefined);
+});

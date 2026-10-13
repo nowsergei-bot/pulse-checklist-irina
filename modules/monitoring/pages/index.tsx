@@ -2,6 +2,9 @@ import { Link, useLocation } from 'react-router-dom';
 import { useApi } from './api';
 import RolesPage from './RolesPage';
 import SchemaPage from './SchemaPage';
+import SpecsPage from './SpecsPage';
+import WorkForm from './WorkForm';
+import WorksPage from './WorksPage';
 import './monitoring.css';
 
 const BASE = '/cabinet/monitoring';
@@ -14,15 +17,22 @@ export default function MonitoringPage() {
   const sub = (location.pathname.split('/monitoring')[1] || '/').replace(/\/+$/, '') || '/';
   const { data: me, error } = useApi<Me>('/me');
 
+  const manage = Boolean(me?.capabilities.manage);
+  const message = (location.state as { message?: string } | null)?.message;
   const tabs: { path: string; label: string }[] = [{ path: '/', label: 'Работы' }];
-  if (me?.capabilities.manage) tabs.push({ path: '/roles', label: 'Роли' });
+  if (manage) tabs.push({ path: '/specs', label: 'Спецификации' }, { path: '/roles', label: 'Роли' });
+  const workMatch = sub.match(/^\/works\/(\d+)$/);
+  const current = sub.startsWith('/works') ? '/' : sub;
 
   let content;
   if (error) content = <p className="mon-err" role="alert">{error}</p>;
   else if (!me) content = <p className="mon-note">Проверяем доступ…</p>;
-  else if (sub === '/roles' && me.capabilities.manage) content = <RolesPage />;
-  else if (sub === '/schema' && me.capabilities.manage) content = <SchemaPage />;
-  else if (sub === '/') content = <p className="mon-note">Работ пока нет</p>;
+  else if (sub === '/roles' && manage) content = <RolesPage />;
+  else if (sub === '/schema' && manage) content = <SchemaPage />;
+  else if (sub === '/specs' && manage) content = <SpecsPage />;
+  else if (sub === '/works/new' && manage) content = <WorkForm base={BASE} />;
+  else if (workMatch && manage) content = <WorkForm key={workMatch[1]} base={BASE} workId={Number(workMatch[1])} />;
+  else if (sub === '/') content = <WorksPage manage={manage} base={BASE} message={message} />;
   else content = <p className="mon-note">Страница не найдена</p>;
 
   return (
@@ -30,7 +40,7 @@ export default function MonitoringPage() {
       <p className="mon-kicker">Мониторинг результатов</p>
       <nav className="mon-nav">
         {tabs.map(t => (
-          <Link key={t.path} to={BASE + (t.path === '/' ? '' : t.path)} className={sub === t.path ? 'is-current' : undefined}>{t.label}</Link>
+          <Link key={t.path} to={BASE + (t.path === '/' ? '' : t.path)} className={current === t.path ? 'is-current' : undefined}>{t.label}</Link>
         ))}
       </nav>
       {content}
