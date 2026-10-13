@@ -1,0 +1,402 @@
+/* Стили модуля по образцу раздела английского (legacy/englishAssessment.css). */
+.mon-page {
+  --mon-ink: #1a1512;
+  --mon-muted: #5c5148;
+  --mon-line: rgba(26, 21, 18, 0.12);
+  --mon-red: var(--cab-red, #7f0a10);
+  color: var(--mon-ink);
+  font-family: 'Lato', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0.25rem 0 2.5rem;
+}
+.mon-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mon-red);
+}
+.mon-title {
+  margin: 0.2rem 0 0.4rem;
+  font-size: 1.35rem;
+}
+.mon-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.75rem 0 1.25rem;
+  border-bottom: 1px solid var(--mon-line);
+}
+.mon-nav a {
+  padding: 0.4rem 0;
+  font-weight: 600;
+  color: var(--mon-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.mon-nav a.is-current {
+  color: var(--mon-red);
+  border-bottom-color: var(--mon-red);
+}
+.mon-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.mon-table th,
+.mon-table td {
+  text-align: left;
+  padding: 0.45rem 0.4rem;
+  border-bottom: 1px solid var(--mon-line);
+  vertical-align: top;
+}
+.mon-table th {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mon-muted);
+}
+.mon-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  margin: 0.85rem 0;
+}
+.mon-note {
+  font-size: 0.86rem;
+  color: var(--mon-muted);
+}
+.mon-err {
+  color: var(--mon-red);
+}
+
+/* Кнопки и поля: как .btn раздела английского, без системного вида. */
+.mon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: var(--radius-sm, 10px);
+  background: #fff;
+  color: var(--mon-ink);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.mon-btn:hover:not(:disabled) {
+  border-color: rgba(227, 6, 19, 0.45);
+  box-shadow: 0 2px 8px rgba(26, 21, 18, 0.12);
+}
+.mon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* Главная кнопка: бордовый цвет Пульса. */
+.mon-btn--primary {
+  background: var(--mon-red);
+  border-color: var(--mon-red);
+  color: #fff;
+}
+.mon-btn--primary:hover:not(:disabled) {
+  border-color: var(--mon-red);
+  box-shadow: 0 2px 10px rgba(127, 10, 16, 0.28);
+}
+.mon-btn--ghost {
+  background: transparent;
+  color: var(--mon-muted);
+  font-weight: 600;
+  font-size: 0.88rem;
+  padding: 0.4rem 0.8rem;
+}
+.mon-input {
+  min-width: 16rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--mon-line);
+  border-radius: var(--radius-sm, 10px);
+  background: #fff;
+  color: var(--mon-ink);
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.mon-input:focus {
+  outline: none;
+  border-color: rgba(227, 6, 19, 0.45);
+  box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+}
+.mon-search {
+  position: relative;
+  display: flex;
+  flex: 1 1 18rem;
+  max-width: 26rem;
+}
+.mon-search .mon-input {
+  flex: 1;
+  min-width: 0;
+  padding-right: 2rem;
+}
+.mon-search__clear {
+  position: absolute;
+  top: 50%;
+  right: 0.45rem;
+  transform: translateY(-50%);
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mon-muted);
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.mon-search__clear:hover {
+  background: rgba(26, 21, 18, 0.06);
+}
+
+/* Экран «Роли». */
+.mon-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.25rem 0 0.35rem;
+}
+.mon-hint {
+  margin: 0 0 0.9rem;
+}
+.mon-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.6rem;
+}
+.mon-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--mon-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--mon-muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mon-filter.is-current {
+  border-color: var(--mon-ink);
+  color: var(--mon-ink);
+}
+.mon-filter__count {
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(26, 21, 18, 0.07);
+  font-size: 0.78rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.mon-roles__table {
+  table-layout: fixed;
+}
+.mon-roles__table th:first-child {
+  width: 50%;
+}
+.mon-roles__table td {
+  vertical-align: middle;
+}
+.mon-person {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+.mon-groups {
+  color: #8a8079;
+  font-size: 0.84rem;
+}
+.mon-group:not(:last-child)::after {
+  content: ', ';
+}
+.mon-group__type {
+  margin-left: 0.25rem;
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  background: rgba(26, 21, 18, 0.06);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.mon-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+/* Спокойные цвета ролей. */
+.mon-role--teacher { --role-bg: #e8f0fa; --role-ink: #2c4f7c; --role-dot: #6b93c4; }
+.mon-role--department_head { --role-bg: #e6f3ea; --role-ink: #2f6340; --role-dot: #6aa57c; }
+.mon-role--deputy { --role-bg: #faf0dd; --role-ink: #74521a; --role-dot: #cf9f4f; }
+.mon-role--data_admin { --role-bg: #eee9f7; --role-ink: #563f84; --role-dot: #9580c2; }
+.mon-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.35rem 0.18rem 0.6rem;
+  border-radius: 999px;
+  background: var(--role-bg);
+  color: var(--role-ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.mon-tag__x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.mon-tag__x:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.7);
+}
+.mon-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--role-dot);
+}
+.mon-menu {
+  position: relative;
+  display: inline-block;
+}
+.mon-add {
+  padding: 0.16rem 0.6rem;
+  border: 1px dashed rgba(26, 21, 18, 0.28);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mon-muted);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mon-add:hover:not(:disabled) {
+  border-color: var(--mon-red);
+  color: var(--mon-red);
+}
+.mon-menu__list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 13rem;
+  padding: 0.3rem;
+  border: 1px solid var(--mon-line);
+  border-radius: var(--radius-sm, 10px);
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(26, 21, 18, 0.14);
+}
+.mon-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mon-ink);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.mon-menu__item:hover {
+  background: rgba(26, 21, 18, 0.05);
+}
+
+/* Окна подтверждения, как в разделе английского. */
+.mon-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  font-family: 'Lato', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+.mon-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: rgba(26, 21, 18, 0.42);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+}
+.mon-dialog__panel {
+  position: relative;
+  z-index: 1;
+  width: min(28rem, 100%);
+  padding: 1.15rem 1.25rem 1.2rem;
+  border: 1px solid var(--mon-line, rgba(26, 21, 18, 0.12));
+  border-radius: var(--radius-md, 14px);
+  background: #fff;
+  color: var(--mon-ink, #1a1512);
+  box-shadow: 0 16px 40px rgba(26, 21, 18, 0.18);
+}
+.mon-dialog__title {
+  margin: 0 0 0.45rem;
+  font-size: 1.1rem;
+}
+.mon-dialog__body {
+  margin: 0 0 1rem;
+  color: var(--mon-muted, #5c5148);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.mon-dialog__body p {
+  margin: 0 0 0.55rem;
+}
+.mon-dialog__list {
+  max-height: 10rem;
+  overflow-y: auto;
+  margin: 0 0 0.55rem;
+  padding-left: 1.2rem;
+  color: var(--mon-ink, #1a1512);
+}
+.mon-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+.mon-dialog__title + .mon-dialog__actions {
+  margin-top: 1rem;
+}
