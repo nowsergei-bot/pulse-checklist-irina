@@ -25,6 +25,7 @@ import {
   discrepancies,
   displayScore,
   fullLessonCount,
+  lessonsRu,
   signalItems,
   blockAttentionPercent,
   growthCriteria,
@@ -164,6 +165,40 @@ function Score({ visit }: { visit: ReportVisit }) {
     </>
   );
 }
+/** Поле даты в формате ДД.ММ.ГГГГ независимо от языка браузера; наружу отдаёт ГГГГ-ММ-ДД или пустую строку. */
+function DateField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+}) {
+  const shown = value ? value.split("-").reverse().join(".") : "";
+  const [text, setText] = useState(shown);
+  useEffect(() => setText(shown), [shown]);
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="ДД.ММ.ГГГГ"
+      maxLength={10}
+      value={text}
+      onChange={(e) => {
+        const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+        const next = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)]
+          .filter(Boolean)
+          .join(".");
+        setText(next);
+        if (!digits) return onChange("");
+        if (digits.length < 8) return;
+        const iso = `${digits.slice(4)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
+        const parsed = new Date(`${iso}T00:00:00Z`);
+        if (!Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === iso)
+          onChange(iso);
+      }}
+    />
+  );
+}
 function Empty() {
   return <p className="vcr-empty">В выбранном отборе данных нет.</p>;
 }
@@ -172,10 +207,13 @@ function ListToggle({
   total,
   open,
   onToggle,
+  people = false,
 }: {
   total: number;
   open: boolean;
   onToggle: () => void;
+  /** Для списков людей «Показать всех», для остальных «Показать все». */
+  people?: boolean;
 }) {
   if (total <= COMPACT_LIST_SIZE) return null;
   return (
@@ -185,7 +223,7 @@ function ListToggle({
       aria-expanded={open}
       onClick={onToggle}
     >
-      {open ? "Свернуть" : `Показать всех (${total})`}
+      {open ? "Свернуть" : `${people ? "Показать всех" : "Показать все"} (${total})`}
     </button>
   );
 }
@@ -276,11 +314,18 @@ function LevelChart({
     without = lessons.filter(
       (v) => levelIndex(scorePercent(v) ?? preliminaryPercent(v)) < 0,
     ).length;
+  if (!lessons.length)
+    return (
+      <section className="vcr-panel vcr-panel--short">
+        <h3>{title}</h3>
+        <p className="vcr-empty">Нет уроков за этот период</p>
+      </section>
+    );
   return (
     <section className="vcr-panel">
       <h3>{title}</h3>
       <p>
-        {dates} · {lessons.length} уроков
+        {dates} · {lessonsRu(lessons.length)}
       </p>
       <div
         className="vcr-level-chart"
@@ -332,7 +377,6 @@ function LevelChart({
         <span>▨ Предварительный итог</span>
       </p>
       {without > 0 && <p>Без определённого уровня: {without}</p>}
-      {!lessons.length && <p>Нет уроков за этот период</p>}
     </section>
   );
 }
@@ -801,6 +845,7 @@ function DirectorSummary({
                   })}
                 </Table>
                 <ListToggle
+                  people
                   total={attentionList.length}
                   open={isOpen("attention")}
                   onToggle={() => toggleList("attention")}
@@ -829,9 +874,6 @@ function DirectorSummary({
                 />
               ) : null}
             </div>
-            <p className="vcr-note">
-              средний итог по полным урокам от 85% доступного максимума
-            </p>
             {veryHigh.length ? (
               <>
                 <Table
@@ -861,6 +903,7 @@ function DirectorSummary({
                   })}
                 </Table>
                 <ListToggle
+                  people
                   total={topList.length}
                   open={isOpen("top")}
                   onToggle={() => toggleList("top")}
@@ -947,6 +990,7 @@ function DirectorSummary({
                       })}
                     </Table>
                     <ListToggle
+                      people
                       total={newList.length}
                       open={isOpen("new")}
                       onToggle={() => toggleList("new")}
@@ -1283,6 +1327,14 @@ export default function VisitChecklistReportDashboard({
     currentParams.current = next;
     setParams(next);
   };
+  const openView = (id: string) =>
+    update({
+      reportView: id,
+      reportTeacher: null,
+      reportLesson: null,
+      reportLevel: null,
+      reportCriterion: null,
+    });
   const openLesson = (v: ReportVisit) =>
     update({ reportLesson: String(v.id), reportTeacher: null });
   const matchesSearch = (v: ReportVisit) =>
@@ -1383,12 +1435,16 @@ export default function VisitChecklistReportDashboard({
       (a, b) =>
         (a.percent ?? Infinity) - (b.percent ?? Infinity) || a.index - b.index,
     );
+  const attentionHasData = attentionBlocks.some((b) => b.percent != null);
   const veryHigh = veryHighTeachers(teachers);
   const topList = sortTeachers(veryHigh, sortTop, metricsOf, isNewTeacher);
   const allLessonsForLinks = lessonObservations(report.visits);
   const selfMatches = selfMatchReport(report.visits);
   const unlinked = selfMatches
     .filter((m) => rows.some((v) => v.id === m.self.id) && !m.lesson)
+    .sort((a, b) => a.self.date.localeCompare(b.self.date));
+  const selfAnalyses = selfMatches
+    .filter((m) => rows.some((v) => v.id === m.self.id))
     .sort((a, b) => a.self.date.localeCompare(b.self.date));
   // Сколько самоанализов однозначно привязываются к уроку того же учителя в тот же день.
   const sameDayLinkable = selfMatches.filter(
@@ -1520,6 +1576,7 @@ export default function VisitChecklistReportDashboard({
             discrepancies: "Расхождения в оценках",
             unlinked: "Самоанализы без урока",
             not_visited: "Не посещены за период",
+            self_analyses: "Самоанализы",
             lessons: "Уроки",
           } as Record<string, string>
         )[view] || "Сводка";
@@ -1795,6 +1852,19 @@ export default function VisitChecklistReportDashboard({
       ))}
     </Table>
   );
+  const renderSelfAnalyses = (list: typeof selfAnalyses) => (
+    <Table headers={["Учитель", "Дата · класс · предмет", "Урок"]}>
+      {list.map((m) => (
+        <tr key={m.self.id}>
+          <td>{shortName(m.self.teacher)}</td>
+          <td>
+            {dateText(m.self.date)} · {m.self.className} · {m.self.subject}
+          </td>
+          <td>{m.lesson ? lessonLink(m.lesson) : "Не привязан к уроку"}</td>
+        </tr>
+      ))}
+    </Table>
+  );
   const renderNotVisited = (list: typeof notVisited) => (
     <>
       <p>
@@ -1847,7 +1917,9 @@ export default function VisitChecklistReportDashboard({
                     ? unlinked.length
                     : view === "not_visited"
                       ? notVisited.length
-                      : filteredLessons.length;
+                      : view === "self_analyses"
+                        ? selfAnalyses.length
+                        : filteredLessons.length;
   const pages = size === "all" ? 1 : Math.max(1, Math.ceil(total / size)),
     currentPage = Math.min(page, pages);
   const paged = <T,>(list: T[]) => pageRows(list, currentPage, size);
@@ -2098,20 +2170,16 @@ export default function VisitChecklistReportDashboard({
               <>
                 <label>
                   С{" "}
-                  <input
-                    type="date"
+                  <DateField
                     value={from}
-                    onInput={(e) =>
-                      update({ reportFrom: e.currentTarget.value })
-                    }
+                    onChange={(iso) => update({ reportFrom: iso })}
                   />
                 </label>
                 <label>
                   По{" "}
-                  <input
-                    type="date"
+                  <DateField
                     value={to}
-                    onInput={(e) => update({ reportTo: e.currentTarget.value })}
+                    onChange={(iso) => update({ reportTo: iso })}
                   />
                 </label>
               </>
@@ -2146,12 +2214,12 @@ export default function VisitChecklistReportDashboard({
               </label>
             )}
             <label>
-              Итоги{" "}
+              Тип итога{" "}
               <select
                 value={resultGroup}
                 onChange={(e) => update({ reportGroup: e.target.value })}
               >
-                <option value="all">Все группы</option>
+                <option value="all">Все типы</option>
                 <option value="full">Полные из 100</option>
                 <option value="reduced">С уменьшенным максимумом</option>
                 <option value="preliminary">Предварительные</option>
@@ -2176,9 +2244,13 @@ export default function VisitChecklistReportDashboard({
               [
                 ["support", "Нужна методическая поддержка", support.length],
                 ["top", "Очень высокий уровень", veryHigh.length],
-                ["charts", "Уроки по уровням", null],
-                ["attention", "Критерии, требующие внимания", SECTION_NAMES.length],
-                ["priorities", "Зоны роста", null],
+                ["charts", "Уроки по уровням", lessons.length],
+                [
+                  "attention",
+                  "Критерии, требующие внимания",
+                  attentionHasData ? SECTION_NAMES.length : 0,
+                ],
+                ["priorities", "Зоны роста", priorities.length],
                 [
                   "discrepancies",
                   "Расхождения в оценках",
@@ -2191,7 +2263,7 @@ export default function VisitChecklistReportDashboard({
                 <span>{name}</span>
                 {count != null && (
                   <span
-                    className={`vcr-contents__count${count === 0 ? " vcr-contents__count--zero" : id === "support" ? " vcr-contents__count--warn" : ""}`}
+                    className={`vcr-contents__count${count === 0 ? " vcr-contents__count--zero" : ""}`}
                   >
                     {count}
                   </span>
@@ -2200,7 +2272,11 @@ export default function VisitChecklistReportDashboard({
             ))}
           </nav>
           <div className="vcr-metrics">
-            <div className="vcr-metric">
+            <button
+              type="button"
+              className="vcr-metric vcr-metric--link"
+              onClick={() => openView("teachers")}
+            >
               <strong>
                 {meanScore == null
                   ? "Нет полных итогов"
@@ -2208,41 +2284,46 @@ export default function VisitChecklistReportDashboard({
               </strong>
               <span>Средний итог гимназии</span>
               <Badge percent={meanScore} />
-            </div>
-            <div className="vcr-metric">
-              <strong>{lessons.length}</strong>
-              <span>Уникальных уроков</span>
-            </div>
+            </button>
             <button
               type="button"
               className="vcr-metric vcr-metric--link"
-              onClick={() =>
-                update({
-                  reportView: "not_visited",
-                  reportTeacher: null,
-                  reportLesson: null,
-                })
-              }
+              onClick={() => openView("lessons")}
+            >
+              <strong>{lessons.length}</strong>
+              <span>Уникальных уроков</span>
+            </button>
+            <button
+              type="button"
+              className="vcr-metric vcr-metric--link"
+              onClick={() => openView("not_visited")}
             >
               <strong className="vcr-metric__nowrap">
                 {coverage.visited} из {coverage.total}
               </strong>
               <span>Посещено учителей</span>
             </button>
-            <div className="vcr-metric">
+            <button
+              type="button"
+              className="vcr-metric vcr-metric--link"
+              onClick={() => openView("observers")}
+            >
               <strong>{rows.filter((v) => !v.self).length}</strong>
               <span>Наблюдений</span>
-            </div>
-            <div className="vcr-metric">
+            </button>
+            <button
+              type="button"
+              className="vcr-metric vcr-metric--link"
+              onClick={() => openView("self_analyses")}
+            >
               <strong>{rows.filter((v) => v.self).length}</strong>
               <span>Самоанализов</span>
-            </div>
+            </button>
           </div>
           <p>
-            {fullLessonCount(
-              lessons.filter((v) => v.score.total != null).length,
-            )}{" "}
-            · Предварительных:{" "}
+            Полных уроков:{" "}
+            {lessons.filter((v) => v.score.total != null).length} ·
+            Предварительных:{" "}
             {
               lessons.filter(
                 (v) => v.score.total == null && preliminaryPercent(v) != null,
@@ -2269,6 +2350,7 @@ export default function VisitChecklistReportDashboard({
               <>
                 {renderSupport(compactRows(supportList, isOpen("support")))}
                 <ListToggle
+                  people
                   total={supportList.length}
                   open={isOpen("support")}
                   onToggle={() => toggleList("support")}
@@ -2288,13 +2370,11 @@ export default function VisitChecklistReportDashboard({
                 />
               ) : null}
             </div>
-            <p className="vcr-note">
-              средний итог по полным урокам от 85% доступного максимума
-            </p>
             {veryHigh.length ? (
               <>
                 {renderTop(compactRows(topList, isOpen("top")))}
                 <ListToggle
+                  people
                   total={topList.length}
                   open={isOpen("top")}
                   onToggle={() => toggleList("top")}
@@ -2332,61 +2412,60 @@ export default function VisitChecklistReportDashboard({
           </div>
           <section id="vcr-attention" className="vcr-panel vcr-compact">
             <h3>Критерии, требующие внимания</h3>
-            <p className="vcr-note">
-              блоки от самого низкого результата к высокому, % от максимума по
-              гимназии
-            </p>
-            <Table headers={["Блок", ...departments]}>
-              {compactRows(attentionBlocks, isOpen("attention")).map(({ name, index }) => (
-                <tr key={name}>
-                  <th scope="row">{name}</th>
-                  {departments.map((d) => {
-                    const visits = lessons.filter((v) => v.department === d);
-                    const blocks = visits.map((v) =>
-                      v.score.items.filter(
-                        (i) => i.code.startsWith(`${index + 1}.`) && !i.na,
-                      ),
-                    );
-                    const valid = blocks.filter(
-                      (items) =>
-                        items.length && items.every((i) => i.value != null),
-                    );
-                    const value = mean(
-                      valid.map((items) =>
-                        items.reduce((n, i) => n + i.value!, 0),
-                      ),
-                    );
-                    const max = valid[0]?.reduce((n, i) => n + i.max, 0);
-                    const attention = blockAttentionPercent(blocks);
-                    return (
-                      <td
-                        key={d}
-                        className={
-                          attention != null && attention < 50
-                            ? "vcr-attention"
-                            : ""
-                        }
-                      >
-                        {value == null
-                          ? "Не оценено"
-                          : `${value.toLocaleString("ru", { maximumFractionDigits: 2 })} из ${max}`}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </Table>
-            <ListToggle
-              total={SECTION_NAMES.length}
-              open={isOpen("attention")}
-              onToggle={() => toggleList("attention")}
-            />
+            {attentionHasData ? (
+              <>
+                <Table headers={["Блок", ...departments]}>
+                  {compactRows(attentionBlocks, isOpen("attention")).map(({ name, index }) => (
+                    <tr key={name}>
+                      <th scope="row">{name}</th>
+                      {departments.map((d) => {
+                        const visits = lessons.filter((v) => v.department === d);
+                        const blocks = visits.map((v) =>
+                          v.score.items.filter(
+                            (i) => i.code.startsWith(`${index + 1}.`) && !i.na,
+                          ),
+                        );
+                        const valid = blocks.filter(
+                          (items) =>
+                            items.length && items.every((i) => i.value != null),
+                        );
+                        const value = mean(
+                          valid.map((items) =>
+                            items.reduce((n, i) => n + i.value!, 0),
+                          ),
+                        );
+                        const max = valid[0]?.reduce((n, i) => n + i.max, 0);
+                        const attention = blockAttentionPercent(blocks);
+                        return (
+                          <td
+                            key={d}
+                            className={
+                              attention != null && attention < 50
+                                ? "vcr-attention"
+                                : ""
+                            }
+                          >
+                            {value == null
+                              ? "Не оценено"
+                              : `${value.toLocaleString("ru", { maximumFractionDigits: 2 })} из ${max}`}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </Table>
+                <ListToggle
+                  total={SECTION_NAMES.length}
+                  open={isOpen("attention")}
+                  onToggle={() => toggleList("attention")}
+                />
+              </>
+            ) : (
+              <Empty />
+            )}
           </section>
           <section id="vcr-priorities" className="vcr-panel vcr-compact">
             <h3>Зоны роста</h3>
-            <p className="vcr-note">
-              пункты чек-листа с самым низким средним баллом по гимназии
-            </p>
             {priorities.length ? (
               renderCriteria(compactRows(priorities, isOpen("priorities")), true)
             ) : (
@@ -2397,14 +2476,11 @@ export default function VisitChecklistReportDashboard({
               open={isOpen("priorities")}
               onToggle={() => toggleList("priorities")}
             />
-            <small className="vcr-fine">
-              3.5, 5.2, 5.3 не учитываются, пока оцениваются по минимальному уровню
-            </small>
           </section>
           <section id="vcr-discrepancies" className="vcr-panel vcr-compact">
             <h3>
               Расхождения в оценках ·{" "}
-              {new Set(flags.map((f) => f.lesson.id)).size} уроков
+              {lessonsRu(new Set(flags.map((f) => f.lesson.id)).size)}
             </h3>
             <p>
               {Object.keys(DISCREPANCY_NAMES)
@@ -2546,7 +2622,7 @@ export default function VisitChecklistReportDashboard({
                           </td>
                           <td>
                             {group.preliminary
-                              ? `${row.count} предварительных уроков`
+                              ? `${row.count} ${pluralRu(row.count, ["предварительный урок", "предварительных урока", "предварительных уроков"])}`
                               : fullLessonCount(row.count)}
                           </td>
                         </tr>
@@ -2661,9 +2737,6 @@ export default function VisitChecklistReportDashboard({
           ) : view === "priorities" ? (
             <>
               {renderCriteria(paged(priorities), true)}
-              <small className="vcr-fine">
-                3.5, 5.2, 5.3 не учитываются, пока оцениваются по минимальному уровню
-              </small>
             </>
           ) : view === "support" ? (
             <>
@@ -2682,6 +2755,8 @@ export default function VisitChecklistReportDashboard({
               {linkAllButton}
               {renderUnlinked(paged(unlinked))}
             </>
+          ) : view === "self_analyses" ? (
+            renderSelfAnalyses(paged(selfAnalyses))
           ) : view === "not_visited" ? (
             renderNotVisited(paged(notVisited))
           ) : (

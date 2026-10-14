@@ -13,6 +13,7 @@ import {
   discrepancies,
   displayScore,
   fullLessonCount,
+  lessonsRu,
   LEVELS,
   levelIndex,
   losses,
@@ -226,6 +227,19 @@ test("A108: Russian full-lesson counts include teens and 21/22/25", () => {
     "21 полный урок",
     "22 полных урока",
     "25 полных уроков",
+  ]);
+});
+
+test("lesson counts agree with the number: 1, 2, 5, 11, 21, 72", () => {
+  assert.deepEqual([0, 1, 2, 5, 11, 21, 72, 111].map(lessonsRu), [
+    "0 уроков",
+    "1 урок",
+    "2 урока",
+    "5 уроков",
+    "11 уроков",
+    "21 урок",
+    "72 урока",
+    "111 уроков",
   ]);
 });
 

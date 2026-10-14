@@ -175,13 +175,15 @@
   margin-top: 15px;
   min-width: 0;
 }
+.vcr-panel--short {
+  align-self: start;
+}
 .vcr-empty {
-  padding: 38px 20px;
-  text-align: center;
+  margin: 4px 0 0;
+  padding: 0;
   color: #6d7d76;
-  background: #f7f9f7;
-  border-radius: 12px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.4;
 }
 .vcr-score {
   font-size: 11px;
@@ -282,6 +284,38 @@
   margin: 16px 0;
 }
 .vcr-filters label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.vcr-dashboard .vcr-filters select,
+.vcr-dashboard .vcr-filters input,
+.vcr-dashboard .vcr-pagination select {
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid #bacbd8;
+  border-radius: 6px;
+  background-color: #fff;
+  color: var(--vcr-ink);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.vcr-dashboard .vcr-filters input[type="search"],
+.vcr-dashboard .vcr-filters input[type="text"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.vcr-dashboard .vcr-filters input[type="search"] {
+  min-width: 220px;
+}
+.vcr-dashboard .vcr-filters input[type="text"] {
+  width: 130px;
+}
+.vcr-pagination label {
   display: flex;
   align-items: center;
   gap: 6px;

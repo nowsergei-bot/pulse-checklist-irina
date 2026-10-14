@@ -697,6 +697,10 @@ export const ATTENTION_GROUP_NAMES: Record<AttentionGroup, string> = {
   A: "Требуют внимания",
   B: "Есть уроки ниже 70",
 };
+/** «1 урок», «2 урока», «5 уроков», «21 урок». */
+export function lessonsRu(count: number): string {
+  return `${count} ${pluralRu(count, ["урок", "урока", "уроков"])}`;
+}
 export function lessonsGenitive(count: number): string {
   const last = count % 10,
     two = count % 100;
