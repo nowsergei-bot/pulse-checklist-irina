@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useApi } from './api';
+import CabinetDirectoryPage from './CabinetDirectoryPage';
 import RolesPage from './RolesPage';
 import SchemaPage from './SchemaPage';
 import SpecsPage from './SpecsPage';
@@ -20,13 +21,14 @@ export default function MonitoringPage() {
   const manage = Boolean(me?.capabilities.manage);
   const message = (location.state as { message?: string } | null)?.message;
   const tabs: { path: string; label: string }[] = [{ path: '/', label: 'Работы' }];
-  if (manage) tabs.push({ path: '/specs', label: 'Спецификации' }, { path: '/roles', label: 'Роли' });
+  if (manage) tabs.push({ path: '/specs', label: 'Спецификации' }, { path: '/roles', label: 'Роли' }, { path: '/directory', label: 'Кабинеты' });
   const workMatch = sub.match(/^\/works\/(\d+)$/);
   const current = sub.startsWith('/works') ? '/' : sub;
 
   let content;
   if (error) content = <p className="mon-err" role="alert">{error}</p>;
   else if (!me) content = <p className="mon-note">Проверяем доступ…</p>;
+  else if (sub === '/directory' && manage) content = <CabinetDirectoryPage />;
   else if (sub === '/roles' && manage) content = <RolesPage />;
   else if (sub === '/schema' && manage) content = <SchemaPage />;
   else if (sub === '/specs' && manage) content = <SpecsPage />;
