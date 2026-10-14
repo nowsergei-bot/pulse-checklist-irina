@@ -25,6 +25,8 @@ module.exports = async function route({ path, method, query, body, user, db, fil
   const { userId, roles: own } = await loadRoles(db, user);
   const caps = capabilities(own);
 
+  if (path === '/directory/cabinets') return require('./cabinet-directory.cjs').directory({ db, user, method, query });
+
   if (path === '/me' && method === 'GET') {
     return { status: 200, body: { full_name: user && user.full_name, roles: visibleRoles(own, caps.manage), capabilities: caps } };
   }
