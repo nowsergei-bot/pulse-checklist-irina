@@ -27,7 +27,7 @@ async function schema(db, user) {
   }
   // Field names of the gateway user object, without values.
   const userFields = Object.keys(user || {}).sort().map(key => ({ name: key, type: describeShape(user[key]) }));
-  return { status: 200, body: { views: [...byView.values()], user_fields: userFields, multi_group_students: await multiGroupStudents(db), groups_without_account: await groupsWithoutAccount(db) } };
+  return { status: 200, body: { views: [...byView.values()], user_fields: userFields, multi_group_students: await multiGroupStudents(db), groups_without_account: await groupsWithoutAccount(db), current_groups: await currentGroups(db) } };
 }
 
 // Ученики, которые состоят в нескольких неархивных группах текущего года.
@@ -72,6 +72,18 @@ async function groupsWithoutAccount(db) {
      GROUP BY g.id, g.title, g.parallel, g.campus
      HAVING NOT coalesce(bool_or(t.has_account), false)
      ORDER BY g.parallel NULLS LAST, g.title`,
+  );
+  return result.rows;
+}
+
+// Все текущие группы с уровнем и типом: по этому списку выбираются группы для щадящего расчёта.
+async function currentGroups(db) {
+  const result = await db.query(
+    `SELECT coalesce(g.title, g.code) AS title, g.parallel, g.level_code, g.campus
+     FROM pulse_read.groups g
+     JOIN pulse_read.academic_years y ON y.id = g.academic_year_id
+     WHERE y.is_current AND g.archived_at IS NULL
+     ORDER BY g.parallel NULLS LAST, g.campus = 'digital', coalesce(g.title, g.code)`,
   );
   return result.rows;
 }

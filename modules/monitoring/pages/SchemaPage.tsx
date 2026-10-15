@@ -7,6 +7,7 @@ type SchemaData = {
   user_fields: { name: string; type: string }[];
   multi_group_students?: { full_name: string; groups: { title: string; parallel: number | null; campus: string | null }[] }[];
   groups_without_account?: { title: string; parallel: number | null; campus: string | null; teachers: string[] }[];
+  current_groups?: { title: string; parallel: number | null; level_code: string | null; campus: string | null }[];
 };
 
 const cell = { border: '1px solid #d0d7de', padding: '4px 8px', textAlign: 'left' as const };
@@ -71,6 +72,27 @@ function SchemaTables({ data }: { data: SchemaData }) {
               </tbody>
             </table>
           ) : <p>Таких групп нет</p>}
+        </>
+      ) : null}
+      {data.current_groups ? (
+        <>
+          <h2>Текущие группы: уровень и тип</h2>
+          <p>Групп: {data.current_groups.length}</p>
+          <table style={{ borderCollapse: 'collapse', marginBottom: 24 }}>
+            <thead>
+              <tr><th style={cell}>Группа</th><th style={cell}>Параллель</th><th style={cell}>level_code</th><th style={cell}>Тип</th></tr>
+            </thead>
+            <tbody>
+              {data.current_groups.map((g, i) => (
+                <tr key={i}>
+                  <td style={cell}>{g.title}</td>
+                  <td style={cell}>{g.parallel ?? ''}</td>
+                  <td style={cell}>{g.level_code === null ? 'не указан' : g.level_code === '' ? 'пустая строка' : g.level_code}</td>
+                  <td style={cell}>{g.campus === 'digital' ? 'digital (ЦГ)' : g.campus || 'не указан'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </>
       ) : null}
       <h2>Поля пользователя модуля</h2>
