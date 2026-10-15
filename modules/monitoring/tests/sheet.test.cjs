@@ -161,6 +161,9 @@ test('ввод баллов по группе', { skip: !url && 'нет MONITORI
     const fixed = await saveSheet(db, 104, head, work.id, { group_id: 1, changes: [{ student_id: 2, task_id: tasks[0].id, score: 4 }] });
     assert.equal(fixed.status, 200);
     assert.equal(student(fixed, 2).scores[tasks[0].id], 4);
+    const byAdmin = await saveSheet(db, 100, admin, work.id, { group_id: 1, changes: [{ student_id: 2, task_id: tasks[1].id, score: 5 }] });
+    assert.equal(byAdmin.status, 200);
+    assert.equal(student(byAdmin, 2).scores[tasks[1].id], 5);
 
     await setStatus('draft');
     assert.equal((await getSheet(db, 101, teacher, work.id, 1)).status, 403);
@@ -168,5 +171,18 @@ test('ввод баллов по группе', { skip: !url && 'нет MONITORI
     assert.equal((await getSheet(db, 100, admin, work.id, 1)).status, 200);
     await setStatus('open');
     assert.equal((await getSheet(db, 100, admin, work.id, 99)).status, 404);
+  });
+
+  await t.test('выбывший ученик внизу таблицы: баллы видны и сохранены, вносить нельзя', async () => {
+    await db.query('DELETE FROM pulse_read.group_memberships WHERE student_id = 2 AND group_id = 1');
+    const r = await getSheet(db, 101, teacher, work.id, 1);
+    assert.equal(r.body.students.some(s => s.id === 2), false);
+    assert.deepEqual(r.body.left_students.map(s => [s.id, s.full_name, s.result.total]), [[2, 'Ученик 2', 41]]);
+    assert.equal(r.body.left_students[0].scores[tasks[0].id], 4);
+    const save = await saveSheet(db, 101, teacher, work.id, { group_id: 1, changes: [{ student_id: 2, task_id: tasks[0].id, score: 1 }] });
+    assert.deepEqual(save.body.errors, ['Ученик не из этой группы']);
+    const kept = await one('SELECT score FROM monitoring.task_scores WHERE work_id = $1 AND student_id = 2 AND task_id = $2', [work.id, tasks[0].id]);
+    assert.equal(kept.score, 4);
+    assert.deepEqual((await getSheet(db, 102, teacher, work.id, 2)).body.left_students, []);
   });
 });

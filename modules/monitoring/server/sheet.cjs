@@ -91,19 +91,41 @@ async function buildStudents(db, work, groupId, students, struct) {
   });
 }
 
+// Выбывшие: в группе есть их баллы или отметки, но в текущем составе их нет. Только просмотр.
+async function leftStudents(db, workId, groupId, memberIds) {
+  const r = await db.query(
+    `SELECT student_id FROM monitoring.task_scores WHERE work_id = $1 AND group_id = $2 AND score IS NOT NULL
+     UNION
+     SELECT student_id FROM monitoring.part_status WHERE work_id = $1 AND group_id = $2 AND status = 'absent'`,
+    [workId, groupId],
+  );
+  const ids = r.rows.map(row => Number(row.student_id)).filter(id => !memberIds.has(id));
+  if (!ids.length) return [];
+  const names = new Map((await db.query(
+    'SELECT DISTINCT ON (id) id, full_name FROM pulse_read.students WHERE id = ANY($1::int[]) ORDER BY id, full_name',
+    [ids],
+  )).rows.map(row => [Number(row.id), row.full_name]));
+  return ids.map(id => ({ id, full_name: names.get(id) || 'Ученик' }))
+    .sort((x, y) => String(x.full_name).localeCompare(String(y.full_name), 'ru'));
+}
+
 async function getSheet(db, userId, caps, workId, groupId) {
   if (!Number.isInteger(groupId)) return bad('Не указана группа');
   const a = await access(db, userId, caps, workId, groupId);
   if (a.error) return a.error;
   const struct = await structure(db, a.work);
   const group = (await groupTitles(db, [groupId])).get(groupId) || { id: groupId, title: '', digital: false };
-  const students = await buildStudents(db, a.work, groupId, await groupStudents(db, groupId), struct);
+  const members = await groupStudents(db, groupId);
+  const students = await buildStudents(db, a.work, groupId, members, struct);
+  const left = await leftStudents(db, a.work.id, groupId, new Set(members.map(m => Number(m.id))));
+  const leftRows = await buildStudents(db, a.work, groupId, left, struct);
   const w = a.work;
   return {
     status: 200,
     body: {
       work: { id: w.id, title: w.title, parallel: w.parallel, status: w.status, spec_title: w.spec_title, version: w.version, max_points: w.max_points },
-      group, can_edit: a.canEdit, reason: a.reason, parts: struct.parts, tasks: struct.tasks, students,
+      group, can_edit: a.canEdit, reason: a.reason, parts: struct.parts, tasks: struct.tasks, scale: struct.scale,
+      students, left_students: leftRows,
     },
   };
 }

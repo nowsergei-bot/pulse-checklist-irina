@@ -912,3 +912,19 @@ a.mon-btn {
 .mon-state--ok { background: #e6f3ea; color: #2f6340; }
 .mon-state--absent { background: #faf0dd; color: #74521a; }
 .mon-state--missing { background: rgba(26, 21, 18, 0.07); color: var(--mon-muted); }
+/* Выбывшие из группы: внизу таблицы, только просмотр. */
+.mon-sheet__table tbody tr.is-left td,
+.mon-sheet__table tbody tr.is-left .mon-sheet__name {
+  background: #f6f3ef;
+  color: #8a8079;
+}
+.mon-sheet__table tbody tr.is-left .mon-sheet__input:disabled {
+  color: #8a8079;
+}
+.mon-sheet__table tbody tr:not(.is-left) + tr.is-left td {
+  border-top: 2px solid var(--mon-line);
+}
+.mon-sheet__table tbody tr.is-left .mon-state {
+  background: rgba(26, 21, 18, 0.06);
+  color: #8a8079;
+}

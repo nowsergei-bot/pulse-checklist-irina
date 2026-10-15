@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from './api';
+import { type Result, type ScaleRow, studentResult } from './calc';
 import { GroupName, STATUS_NAMES, versionLabel } from './labels';
 
 type Part = { id: number; code: string; name: string; held_on: string | null };
 type Task = { id: number; part_id: number; sort: number; section: string; level: string; level_name: string | null; title: string; max_points: number };
-type Result = { total: number; percent: number; equivalent: number; mark: string | null; complete: boolean; missing: number; state: string };
 type Student = {
   id: number; full_name: string; result: Result;
   scores: Record<string, number | null>; absent: Record<string, boolean>; foreign: Record<string, string>;
@@ -13,7 +13,8 @@ type Student = {
 type Sheet = {
   work: { id: number; title: string; parallel: number; status: 'draft' | 'open' | 'closed'; spec_title: string; version: number; max_points: number };
   group: { id: number; title: string; digital: boolean };
-  can_edit: boolean; reason: string; parts: Part[]; tasks: Task[]; students: Student[];
+  can_edit: boolean; reason: string; parts: Part[]; tasks: Task[]; scale: ScaleRow[];
+  students: Student[]; left_students: Student[];
 };
 type Change = { student_id: number; task_id?: number; score?: number | null; part_id?: number; absent?: boolean };
 type SaveResult = { students: Student[]; errors: string[]; conflicts: { student_id: number; key: string; group: string }[] };
@@ -181,11 +182,91 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
     const c = pending.current[`${s.id}:p${p.id}`];
     return c ? Boolean(c.absent) : Boolean(s.absent[p.id]);
   };
-  const isPending = (s: Student) => Object.keys(pending.current).some(k => k.startsWith(`${s.id}:`));
-  const complete = students.filter(s => s.result.complete).length;
-  const absent = students.filter(s => parts.some(p => s.absent[p.id])).length;
+  // Итог, процент, эквивалент и отметка по тому, что сейчас в полях, включая ещё не отправленное.
+  const resultOf = (s: Student) => studentResult({
+    parts, tasks, maxPoints: work.max_points, scale: sheet.scale,
+    absentPartIds: new Set(parts.filter(p => absentOf(s, p)).map(p => p.id)),
+    scoreOf: taskId => scoreOf(s, tasks.find(t => t.id === taskId) as Task),
+  });
+  const results = new Map(students.map(s => [s.id, resultOf(s)]));
+  const left = sheet.left_students || [];
+  const complete = students.filter(s => results.get(s.id)?.complete).length;
+  const absent = students.filter(s => results.get(s.id)?.state.startsWith('отсутствовал')).length;
   const unfinished = students.length - complete - absent;
   let col = 0;
+
+  function row(s: Student, rowIndex: number, isLeft: boolean) {
+    col = 0;
+    const r = isLeft ? s.result : results.get(s.id) as Result;
+    const rowEditable = editable && !isLeft;
+    const wasAbsent = r.state.startsWith('отсутствовал');
+    const foreignGroups = [...new Set(Object.values(s.foreign))];
+    const empty = r.missing === tasks.length && !wasAbsent;
+    const allAbsent = parts.every(p => absentOf(s, p));
+    return (
+      <tr key={s.id} className={isLeft ? 'is-left' : undefined}>
+        <td className="mon-sheet__name">
+          {s.full_name}
+          {isLeft ? <span className="mon-sheet__foreign">выбыл из группы</span> : null}
+          {foreignGroups.length ? <span className="mon-sheet__foreign">внесено в другой группе: {foreignGroups.join(', ')}</span> : null}
+        </td>
+        {parts.map(p => {
+          const isAbsent = absentOf(s, p);
+          const foreignPart = s.foreign[`p${p.id}`];
+          const partForeign = tasks.some(t => t.part_id === p.id && s.foreign[`t${t.id}`]);
+          return [
+            <td key={`a${p.id}`} className="mon-sheet__absent mon-sheet__part-start">
+              <label className="mon-sheet__check" title={foreignPart ? `Отмечено в другой группе: ${foreignPart}` : partForeign ? 'Баллы этой части внесены в другой группе' : `${p.name}: отсутствовал`}>
+                <input
+                  type="checkbox"
+                  checked={isAbsent}
+                  disabled={!rowEditable || Boolean(foreignPart) || partForeign}
+                  aria-label={`${s.full_name}, ${p.name}: отсутствовал`}
+                  onChange={e => change(`${s.id}:p${p.id}`, { student_id: s.id, part_id: p.id, absent: e.target.checked })}
+                />
+              </label>
+            </td>,
+            ...tasks.filter(t => t.part_id === p.id).map(t => {
+              const c = col++;
+              const cell = `${rowIndex}:${c}`;
+              const foreign = s.foreign[`t${t.id}`];
+              const value = scoreOf(s, t);
+              return (
+                <td key={t.id} className={`mon-sheet__cell${isAbsent ? ' is-absent' : ''}`}>
+                  <input
+                    className={`mon-sheet__input${flash === cell ? ' is-wrong' : ''}${foreign ? ' is-foreign' : ''}`}
+                    data-cell={isLeft ? undefined : cell}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={value === null ? '' : String(value)}
+                    disabled={!rowEditable || isAbsent}
+                    readOnly={Boolean(foreign)}
+                    title={foreign ? `Внесено в другой группе: ${foreign}` : `${t.title}: от 0 до ${t.max_points}`}
+                    aria-label={`${s.full_name}, ${t.title}, из ${t.max_points}`}
+                    onFocus={e => e.target.select()}
+                    onKeyDown={e => move(e, rowIndex, c)}
+                    onChange={e => {
+                      if (foreign) return;
+                      const v = e.target.value.trim();
+                      if (v === '') { change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: null }); return; }
+                      if (!/^\d+$/.test(v) || Number(v) > t.max_points) { reject(cell, t.max_points); return; }
+                      setHint('');
+                      change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: Number(v) });
+                    }}
+                  />
+                </td>
+              );
+            }),
+          ];
+        })}
+        <td className="mon-num mon-sheet__res-start"><strong>{empty || allAbsent ? '' : r.total}</strong></td>
+        <td className={`mon-num${r.complete ? '' : ' is-wait'}`}>{wasAbsent || empty ? '' : comma(r.percent, 1)}</td>
+        <td className={`mon-num${r.complete ? '' : ' is-wait'}`}>{wasAbsent || empty ? '' : comma(r.equivalent, 2)}</td>
+        <td className="mon-sheet__mark">{r.mark || ''}</td>
+        <td><span className={`mon-state mon-state--${r.complete ? 'ok' : wasAbsent ? 'absent' : 'missing'}`}>{r.state}</span></td>
+      </tr>
+    );
+  }
 
   return (
     <div className="mon-sheet">
@@ -220,10 +301,11 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
       ) : null}
       <p className="mon-note mon-sheet__summary">
         Учеников: {students.length} · полная работа: {complete} · отсутствовали: {absent} · не внесено полностью: {unfinished}
+        {left.length ? ` · выбыли из группы: ${left.length}` : ''}
         {hint ? <span className="mon-sheet__hint"> · {hint}</span> : null}
       </p>
 
-      {!students.length ? <p className="mon-note">В группе нет учеников</p> : (
+      {!students.length && !left.length ? <p className="mon-note">В группе нет учеников</p> : (
         <div className="mon-sheet__wrap">
           <table className="mon-table mon-sheet__table">
             <thead>
@@ -256,76 +338,8 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
               </tr>
             </thead>
             <tbody>
-              {students.map((s, row) => {
-                col = 0;
-                const r = s.result;
-                const wait = isPending(s);
-                const wasAbsent = r.state.startsWith('отсутствовал');
-                const foreignGroups = [...new Set(Object.values(s.foreign))];
-                const empty = r.missing === tasks.length && !wasAbsent;
-                return (
-                  <tr key={s.id}>
-                    <td className="mon-sheet__name">
-                      {s.full_name}
-                      {foreignGroups.length ? <span className="mon-sheet__foreign">внесено в другой группе: {foreignGroups.join(', ')}</span> : null}
-                    </td>
-                    {parts.map(p => {
-                      const isAbsent = absentOf(s, p);
-                      const foreignPart = s.foreign[`p${p.id}`];
-                      const partForeign = tasks.some(t => t.part_id === p.id && s.foreign[`t${t.id}`]);
-                      return [
-                        <td key={`a${p.id}`} className="mon-sheet__absent mon-sheet__part-start">
-                          <label className="mon-sheet__check" title={foreignPart ? `Отмечено в другой группе: ${foreignPart}` : partForeign ? 'Баллы этой части внесены в другой группе' : `${p.name}: отсутствовал`}>
-                            <input
-                              type="checkbox"
-                              checked={isAbsent}
-                              disabled={!editable || Boolean(foreignPart) || partForeign}
-                              aria-label={`${s.full_name}, ${p.name}: отсутствовал`}
-                              onChange={e => change(`${s.id}:p${p.id}`, { student_id: s.id, part_id: p.id, absent: e.target.checked })}
-                            />
-                          </label>
-                        </td>,
-                        ...tasks.filter(t => t.part_id === p.id).map(t => {
-                          const c = col++;
-                          const cell = `${row}:${c}`;
-                          const foreign = s.foreign[`t${t.id}`];
-                          const value = scoreOf(s, t);
-                          return (
-                            <td key={t.id} className={`mon-sheet__cell${isAbsent ? ' is-absent' : ''}`}>
-                              <input
-                                className={`mon-sheet__input${flash === cell ? ' is-wrong' : ''}${foreign ? ' is-foreign' : ''}`}
-                                data-cell={cell}
-                                inputMode="numeric"
-                                autoComplete="off"
-                                value={value === null ? '' : String(value)}
-                                disabled={!editable || isAbsent}
-                                readOnly={Boolean(foreign)}
-                                title={foreign ? `Внесено в другой группе: ${foreign}` : `${t.title}: от 0 до ${t.max_points}`}
-                                aria-label={`${s.full_name}, ${t.title}, из ${t.max_points}`}
-                                onFocus={e => e.target.select()}
-                                onKeyDown={e => move(e, row, c)}
-                                onChange={e => {
-                                  if (foreign) return;
-                                  const v = e.target.value.trim();
-                                  if (v === '') { change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: null }); return; }
-                                  if (!/^\d+$/.test(v) || Number(v) > t.max_points) { reject(cell, t.max_points); return; }
-                                  setHint('');
-                                  change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: Number(v) });
-                                }}
-                              />
-                            </td>
-                          );
-                        }),
-                      ];
-                    })}
-                    <td className={`mon-num mon-sheet__res-start${wait ? ' is-wait' : ''}`}><strong>{empty || parts.every(p => s.absent[p.id]) ? '' : r.total}</strong></td>
-                    <td className={`mon-num${wait || !r.complete ? ' is-wait' : ''}`}>{wasAbsent || empty ? '' : comma(r.percent, 1)}</td>
-                    <td className={`mon-num${wait || !r.complete ? ' is-wait' : ''}`}>{wasAbsent || empty ? '' : comma(r.equivalent, 2)}</td>
-                    <td className={`mon-sheet__mark${wait ? ' is-wait' : ''}`}>{r.mark || ''}</td>
-                    <td><span className={`mon-state mon-state--${r.complete ? 'ok' : wasAbsent ? 'absent' : 'missing'}`}>{r.state}</span></td>
-                  </tr>
-                );
-              })}
+              {students.map((s, i) => row(s, i, false))}
+              {left.map((s, i) => row(s, students.length + i, true))}
             </tbody>
           </table>
         </div>
