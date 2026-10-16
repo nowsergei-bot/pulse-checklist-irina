@@ -8,7 +8,7 @@ import { GroupName, STATUS_NAMES, versionLabel } from './labels';
 type Part = { id: number; code: string; name: string; held_on: string | null };
 type Task = { id: number; part_id: number; sort: number; section: string; level: string; level_name: string | null; title: string; max_points: number };
 type Student = {
-  id: number; full_name: string; result: Result;
+  id: number; full_name: string; result: Result; gentle: boolean;
   scores: Record<string, number | null>; absent: Record<string, boolean>; foreign: Record<string, string>;
 };
 type Sheet = {
@@ -226,7 +226,8 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
     parts, tasks, maxPoints: work.max_points, scale: sheet.scale,
     absentPartIds: new Set(parts.filter(p => absentOf(s, p)).map(p => p.id)),
     scoreOf: taskId => scoreOf(s, tasks.find(t => t.id === taskId) as Task),
-    gentle: gentle.enabled,
+    // Режим группы, где внесены баллы ученика (у ученика из двух групп может отличаться).
+    gentle: s.gentle,
   });
   const results = new Map(students.map(s => [s.id, resultOf(s)]));
   const left = sheet.left_students || [];

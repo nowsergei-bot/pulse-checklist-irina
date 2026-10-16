@@ -159,6 +159,29 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
     ]);
   });
 
+  await t.test('ученик из двух групп: режим группы, где внесены его баллы', async () => {
+    // Ученик А в составе обеих групп, его баллы внесены в группе А.
+    await db.query('INSERT INTO pulse_read.group_memberships VALUES (9, 1, 2)');
+    const pupil = (r, id) => r.body.students.find(x => x.id === id);
+    const preview = await setGentle(db, {}, 100, admin, work.id, { group_id: 2, enabled: true });
+    assert.deepEqual(preview.body, { groups: 1, changed: 0, higher: 0, lower: 0 });
+    await setGentle(db, {}, 100, admin, work.id, { group_id: 2, enabled: true, confirm: true });
+    let second = await getSheet(db, 100, admin, work.id, 2);
+    assert.equal(second.body.gentle.enabled, true);
+    assert.deepEqual([pupil(second, 1).gentle, pupil(second, 1).result.mark], [false, '2']);
+    // Ученик без баллов получает режим группы, в таблице которой он сейчас.
+    assert.equal(pupil(second, 6).gentle, true);
+    const counted = await setGentle(db, {}, 100, admin, work.id, { group_id: 1, enabled: true });
+    assert.deepEqual(counted.body, { groups: 1, changed: 2, higher: 1, lower: 1 });
+    await setGentle(db, {}, 100, admin, work.id, { group_id: 1, enabled: true, confirm: true });
+    await setGentle(db, {}, 100, admin, work.id, { group_id: 2, enabled: false, confirm: true });
+    second = await getSheet(db, 100, admin, work.id, 2);
+    assert.equal(second.body.gentle.enabled, false);
+    assert.deepEqual([pupil(second, 1).gentle, pupil(second, 1).result.gentle_percent, pupil(second, 1).result.mark], [true, 57, '3']);
+    assert.deepEqual([pupil(await getSheet(db, 100, admin, work.id, 1), 1).result.mark], ['3']);
+    await setGentle(db, {}, 100, admin, work.id, { group_id: 1, scope: 'parallel', enabled: false, confirm: true });
+  });
+
   await t.test('закрытая работа: заведующая может, черновик только data_admin', async () => {
     await setStatus('closed');
     assert.equal((await setGentle(db, {}, 104, head, work.id, { group_id: 1, enabled: true })).status, 200);
