@@ -181,7 +181,7 @@ function Upload({ types, onSaved, onClose }: { types: Type[]; onSaved: (text: st
 
       {askFrame && preview ? (
         <Dialog title={`Сохранить схему «${frameName.trim()}»?`} confirmLabel="Сохранить схему" busy={busy} onConfirm={saveFrame} onCancel={() => setAskFrame(false)}>
-          <p>Итого {preview.max_points} баллов. Процент, эквивалент и отметка по работам с этой схемой считаются от {preview.max_points}.</p>
+          <p>Итого {preview.max_points} баллов. Процент и отметка по работам с этой схемой считаются от {preview.max_points}.</p>
         </Dialog>
       ) : null}
     </section>

@@ -32,8 +32,6 @@ const SAVE_TEXT: Record<SaveState, string> = {
 const norm = (v: string) => v.toLowerCase().replace(/[^a-zа-яё0-9]+/g, ' ').trim();
 const sameTitle = (t: Task) => norm(t.title) === norm(`${t.section} ${t.level_name || t.level}`);
 
-const comma = (value: number, digits: number) => value.toFixed(digits).replace('.', ',');
-
 function date(value: string | null) {
   if (!value) return '';
   const [y, m, d] = value.slice(0, 10).split('-');
@@ -182,7 +180,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
     const c = pending.current[`${s.id}:p${p.id}`];
     return c ? Boolean(c.absent) : Boolean(s.absent[p.id]);
   };
-  // Итог, процент, эквивалент и отметка по тому, что сейчас в полях, включая ещё не отправленное.
+  // Итог, процент и отметка по тому, что сейчас в полях, включая ещё не отправленное.
   const resultOf = (s: Student) => studentResult({
     parts, tasks, maxPoints: work.max_points, scale: sheet.scale,
     absentPartIds: new Set(parts.filter(p => absentOf(s, p)).map(p => p.id)),
@@ -260,8 +258,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
           ];
         })}
         <td className="mon-num mon-sheet__res-start"><strong>{empty || allAbsent ? '' : r.total}</strong></td>
-        <td className={`mon-num${r.complete ? '' : ' is-wait'}`}>{wasAbsent || empty ? '' : comma(r.percent, 1)}</td>
-        <td className={`mon-num${r.complete ? '' : ' is-wait'}`}>{wasAbsent || empty ? '' : comma(r.equivalent, 2)}</td>
+        <td className={`mon-num${r.complete ? '' : ' is-wait'}`}>{wasAbsent || empty ? '' : r.percent}</td>
         <td className="mon-sheet__mark">{r.mark || ''}</td>
         <td><span className={`mon-state mon-state--${r.complete ? 'ok' : wasAbsent ? 'absent' : 'missing'}`}>{r.state}</span></td>
       </tr>
@@ -316,7 +313,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                     {p.name}{p.held_on ? <span className="mon-muted"> · {date(p.held_on)}</span> : null}
                   </th>
                 ))}
-                <th colSpan={5} className="mon-sheet__part mon-sheet__res-start">Результат</th>
+                <th colSpan={4} className="mon-sheet__part mon-sheet__res-start">Результат</th>
               </tr>
               <tr>
                 {parts.map(p => [
@@ -332,7 +329,6 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                 ])}
                 <th className="mon-num mon-sheet__res-start">Итого<span className="mon-sheet__max">из {work.max_points}</span></th>
                 <th className="mon-num">%</th>
-                <th className="mon-num">Эквива&shy;лент</th>
                 <th className="mon-sheet__mark-head">Отметка</th>
                 <th>Состояние</th>
               </tr>

@@ -1,12 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { studentResult } = require('../server/lib/calc.cjs');
+const { percentOf, markFor, studentResult } = require('../server/lib/calc.cjs');
 
+// Шкала по Положению о системе оценивания (миграция 004).
 const scale = [
-  { mark: '5', min_equivalent: '4.60' },
-  { mark: '4', min_equivalent: '3.70' },
-  { mark: '3', min_equivalent: '2.80' },
-  { mark: '2', min_equivalent: '0' },
+  { mark: '5', min_percent: 90 },
+  { mark: '4', min_percent: 75 },
+  { mark: '3', min_percent: 50 },
+  { mark: '2', min_percent: 0 },
 ];
 const parts = [{ id: 1, name: 'Письмо' }, { id: 2, name: 'Тест' }];
 // Максимум 50: письмо 5 баллов, тест 45 баллов в одном задании.
@@ -17,16 +18,38 @@ function run(total, extra = {}) {
   return studentResult({ parts, tasks, maxPoints: 50, scale, absentPartIds: new Set(), scores, ...extra });
 }
 
+function single(total, maxPoints) {
+  const one = [{ id: 20, part_id: 2, max_points: maxPoints }];
+  return studentResult({ parts: [parts[1]], tasks: one, maxPoints, scale, absentPartIds: new Set(), scores: new Map([[20, total]]) });
+}
+
 test('пример из задания: 41, 46, 28, 27 из 50', () => {
-  const cases = [[41, 82, 4.1, '4'], [46, 92, 4.6, '5'], [28, 56, 2.8, '3'], [27, 54, 2.7, '2']];
-  for (const [total, percent, equivalent, mark] of cases) {
+  const cases = [[41, 82, '4'], [46, 92, '5'], [28, 56, '3'], [27, 54, '3']];
+  for (const [total, percent, mark] of cases) {
     const r = run(total);
     assert.equal(r.total, total);
-    assert.equal(Math.round(r.percent), percent);
-    assert.equal(r.equivalent, equivalent);
+    assert.equal(r.percent, percent);
     assert.equal(r.mark, mark);
     assert.equal(r.state, 'полная работа');
+    assert.equal('equivalent' in r, false);
   }
+});
+
+test('процент округляется до целого, половина вверх', () => {
+  // 37 из 41 = 90,24 % -> 90 % -> «5».
+  assert.deepEqual([single(37, 41).percent, single(37, 41).mark], [90, '5']);
+  // 30 из 40 = 75 % -> «4».
+  assert.deepEqual([single(30, 40).percent, single(30, 40).mark], [75, '4']);
+  // Граница 74,5 % (149 из 200) -> 75 % -> «4».
+  assert.deepEqual([single(149, 200).percent, single(149, 200).mark], [75, '4']);
+  // 74,4 % -> 74 % -> «3».
+  assert.deepEqual([single(372, 500).percent, single(372, 500).mark], [74, '3']);
+  // Границы «5» и «3»: 89,5 % -> 90 %, 49,5 % -> 50 %, 49,4 % -> 49 %.
+  assert.equal(markFor(percentOf(179, 200), scale), '5');
+  assert.equal(markFor(percentOf(99, 200), scale), '3');
+  assert.equal(markFor(percentOf(247, 500), scale), '2');
+  assert.equal(percentOf(0, 50), 0);
+  assert.equal(percentOf(50, 50), 100);
 });
 
 test('отсутствовал по части: отметки нет', () => {
@@ -45,8 +68,7 @@ test('пропущенные баллы: отметки нет', () => {
 });
 
 test('схема с другим максимумом: считается от её максимума', () => {
-  const one = [{ id: 20, part_id: 2, max_points: 38 }];
-  const r = studentResult({ parts: [parts[1]], tasks: one, maxPoints: 38, scale, absentPartIds: new Set(), scores: new Map([[20, 35]]) });
-  assert.equal(r.equivalent, 4.61);
-  assert.equal(r.mark, '5');
+  // 34 из 38 = 89,47 % -> 89 % -> «4»; 35 из 38 = 92,1 % -> 92 % -> «5».
+  assert.deepEqual([single(34, 38).percent, single(34, 38).mark], [89, '4']);
+  assert.deepEqual([single(35, 38).percent, single(35, 38).mark], [92, '5']);
 });

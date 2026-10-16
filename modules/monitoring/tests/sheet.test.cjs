@@ -90,13 +90,13 @@ test('ввод баллов по группе', { skip: !url && 'нет MONITORI
     });
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.errors, []);
-    const pick = (id) => { const x = student(r, id).result; return [x.total, x.equivalent, x.mark, x.state]; };
-    assert.deepEqual(pick(2), [41, 4.1, '4', 'полная работа']);
-    assert.deepEqual(pick(3), [46, 4.6, '5', 'полная работа']);
-    assert.deepEqual(pick(4), [28, 2.8, '3', 'полная работа']);
-    assert.deepEqual(pick(5), [27, 2.7, '2', 'полная работа']);
-    assert.deepEqual(pick(6), [28, 2.8, null, 'отсутствовал: письмо']);
-    assert.deepEqual(pick(1), [8, 0.8, null, 'не внесено баллов: 4']);
+    const pick = (id) => { const x = student(r, id).result; return [x.total, x.percent, x.mark, x.state]; };
+    assert.deepEqual(pick(2), [41, 82, '4', 'полная работа']);
+    assert.deepEqual(pick(3), [46, 92, '5', 'полная работа']);
+    assert.deepEqual(pick(4), [28, 56, '3', 'полная работа']);
+    assert.deepEqual(pick(5), [27, 54, '3', 'полная работа']);
+    assert.deepEqual(pick(6), [28, 56, null, 'отсутствовал: письмо']);
+    assert.deepEqual(pick(1), [8, 16, null, 'не внесено баллов: 4']);
   });
 
   await t.test('балл только целое число от 0 до максимума задания, ученик только из группы', async () => {

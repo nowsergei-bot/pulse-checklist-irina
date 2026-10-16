@@ -51,7 +51,7 @@ async function structure(db, work) {
      WHERE t.version_id = $1 ORDER BY t.sort`,
     [work.spec_version_id],
   )).rows;
-  const scale = (await db.query('SELECT mark, min_equivalent FROM monitoring.grade_scale_rows WHERE scale_id = $1', [work.scale_id])).rows;
+  const scale = (await db.query('SELECT mark, min_percent FROM monitoring.grade_scale_rows WHERE scale_id = $1', [work.scale_id])).rows;
   return { parts, tasks, scale };
 }
 
