@@ -8,6 +8,7 @@ type SchemaData = {
   multi_group_students?: { full_name: string; groups: { title: string; parallel: number | null; campus: string | null }[] }[];
   groups_without_account?: { title: string; parallel: number | null; campus: string | null; teachers: string[] }[];
   current_groups?: { title: string; parallel: number | null; level_code: string | null; campus: string | null }[];
+  roster_discrepancies?: { group_title: string | null; parallel: number | null; digital: boolean | null; full_name: string; action: 'add' | 'remove'; kind: 'fix' | 'transfer'; from_date: string | null; future: boolean; same_in_pulse: boolean }[];
   result_counts?: {
     current_year: string | null;
     tables: { table: string; kind: string; total: number | null; current_year: number | null; year_by: string | null; error: string | null }[];
@@ -16,9 +17,50 @@ type SchemaData = {
 
 const cell = { border: '1px solid #d0d7de', padding: '4px 8px', textAlign: 'left' as const };
 
+function shortDate(iso: string) {
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${d}.${m}.${y}`;
+}
+
+// Действующие поправки модуля к составам групп: где наш состав отличается от pulse_read.
+function RosterDiscrepancies({ rows }: { rows: NonNullable<SchemaData['roster_discrepancies']> }) {
+  const differ = rows.filter(r => !r.same_in_pulse);
+  const same = rows.filter(r => r.same_in_pulse);
+  return (
+    <>
+      <h2>Расхождения с Пульсом</h2>
+      <p>Группы и ученики, где состав в модуле отличается от pulse_read из-за поправок на вкладке «Составы групп». Отличий: {differ.length}.</p>
+      {rows.length ? (
+        <table style={{ borderCollapse: 'collapse', marginBottom: 24 }}>
+          <thead>
+            <tr><th style={cell}>Параллель</th><th style={cell}>Группа</th><th style={cell}>Ученик</th><th style={cell}>В модуле</th><th style={cell}>Состояние</th></tr>
+          </thead>
+          <tbody>
+            {[...differ, ...same].map((r, i) => (
+              <tr key={i}>
+                <td style={cell}>{r.parallel ?? ''}</td>
+                <td style={cell}>{r.group_title ? (r.digital ? `${r.group_title} (ЦГ)` : r.group_title) : 'группа не найдена в pulse_read'}</td>
+                <td style={cell}>{r.full_name}</td>
+                <td style={cell}>{r.action === 'add' ? 'добавлен' : 'убран'} {r.kind === 'transfer' && r.from_date ? `с ${shortDate(r.from_date)} (перевод)` : '(исправление состава)'}</td>
+                <td style={cell}>
+                  {r.same_in_pulse
+                    ? 'в Пульсе уже так, поправку можно отменить'
+                    : r.action === 'add' ? 'в pulse_read не в этой группе' : 'в pulse_read в этой группе'}
+                  {r.future ? '; дата ещё не наступила' : ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p>Поправок нет, составы в модуле как в Пульсе</p>}
+    </>
+  );
+}
+
 function SchemaTables({ data }: { data: SchemaData }) {
   return (
     <section>
+      {data.roster_discrepancies ? <RosterDiscrepancies rows={data.roster_discrepancies} /> : null}
       {data.result_counts ? (
         <>
           <h2>Результаты старого раздела в pulse_read</h2>

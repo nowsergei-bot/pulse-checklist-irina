@@ -7,6 +7,7 @@ const roles = require('./roles.cjs');
 const specs = require('./specs.cjs');
 const works = require('./works.cjs');
 const sheet = require('./sheet.cjs');
+const rosters = require('./rosters.cjs');
 
 function parseBody(body) {
   if (body === null || body === undefined || body === '') return {};
@@ -83,6 +84,25 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (m && method === 'GET') return works.getWork(db, Number(m[1]));
     if (m && method === 'POST') return works.updateWork(db, Number(m[1]), data);
     return { status: 405, body: { error: 'method_not_allowed' } };
+  }
+  // Поправки к составам групп: только data_admin, и чтение, и запись.
+  if (path === '/rosters' || path.startsWith('/rosters/')) {
+    if (!caps.manage) return forbidden;
+    if (method === 'GET') {
+      if (path === '/rosters') return rosters.listGroups(db);
+      if (path === '/rosters/search') return rosters.search(db, query && query.q);
+      const g = path.match(/^\/rosters\/(\d+)$/);
+      if (g) return rosters.getRoster(db, Number(g[1]));
+      return { status: 404, body: { error: 'not_found' } };
+    }
+    if (method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
+    const data = parseBody(body);
+    if (!data) return { status: 400, body: { error: 'bad_request' } };
+    const g = path.match(/^\/rosters\/(\d+)$/);
+    if (g) return rosters.addOverride(db, user, userId, Number(g[1]), data);
+    const c = path.match(/^\/rosters\/overrides\/(\d+)\/cancel$/);
+    if (c) return rosters.cancelOverride(db, user, userId, Number(c[1]));
+    return { status: 404, body: { error: 'not_found' } };
   }
   if (path === '/schema' || path.startsWith('/roles')) {
     if (!caps.manage) return forbidden;

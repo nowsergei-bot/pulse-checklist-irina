@@ -140,7 +140,7 @@ async function getSheet(db, userId, caps, workId, groupId) {
   const group = (await groupTitles(db, [groupId])).get(groupId) || { id: groupId, title: '', digital: false };
   const gentleIds = await gentleGroupIds(db, a.work.id);
   const gentle = gentleIds.has(groupId);
-  const members = await groupStudents(db, groupId);
+  const members = await groupStudents(db, groupId, a.work.id);
   const students = await buildStudents(db, a.work, groupId, members, struct, gentleIds);
   const left = await leftStudents(db, a.work.id, groupId, new Set(members.map(m => Number(m.id))));
   const leftRows = await buildStudents(db, a.work, groupId, left, struct, gentleIds);
@@ -218,7 +218,7 @@ async function saveSheet(db, userId, caps, workId, data) {
   const struct = await structure(db, a.work);
   const tasks = new Map(struct.tasks.map(t => [t.id, t]));
   const parts = new Set(struct.parts.map(p => p.id));
-  const members = await groupStudents(db, groupId);
+  const members = await groupStudents(db, groupId, a.work.id);
   const memberIds = new Set(members.map(s => Number(s.id)));
 
   // Что уже внесено в других группах: баллы части и отметки «отсутствовал».
@@ -292,7 +292,7 @@ async function markChanges(db, work, struct, groupIds, on, enabled) {
   let higher = 0;
   let lower = 0;
   for (const groupId of groupIds) {
-    const members = await groupStudents(db, groupId);
+    const members = await groupStudents(db, groupId, work.id);
     const left = await leftStudents(db, work.id, groupId, new Set(members.map(m => Number(m.id))));
     const before = await buildStudents(db, work, groupId, [...members, ...left], struct, on);
     const after = new Map((await buildStudents(db, work, groupId, [...members, ...left], struct, next)).map(s => [s.id, s.result.mark]));

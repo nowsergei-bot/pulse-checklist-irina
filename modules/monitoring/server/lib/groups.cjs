@@ -30,15 +30,25 @@ async function parallelGroups(db, academicYearId, parallel) {
   return r.rows;
 }
 
-// Текущий состав группы: основной источник group_memberships.
-async function groupStudents(db, groupId) {
+// Состав группы для работы: group_memberships из Пульса с поправками модуля (monitoring.roster_overrides).
+// «Исправить состав» (fix) действует на все работы. «Перевод с даты» (transfer) действует, если дата
+// не позже даты работы (первая дата проведения частей); без работы или без дат берётся сегодняшний день.
+async function groupStudents(db, groupId, workId = null) {
   const r = await db.query(
-    `SELECT DISTINCT s.id, s.full_name
-     FROM pulse_read.group_memberships m
-     JOIN pulse_read.students s ON s.id = m.student_id
-     WHERE m.group_id = $1
+    `WITH d AS (
+       SELECT coalesce((SELECT min(held_on) FROM monitoring.work_parts WHERE work_id = $2), current_date) AS on_date
+     ), o AS (
+       SELECT o.student_id, o.action FROM monitoring.roster_overrides o, d
+       WHERE o.group_id = $1 AND o.cancelled_at IS NULL AND (o.kind = 'fix' OR o.from_date <= d.on_date)
+     ), ids AS (
+       (SELECT student_id FROM pulse_read.group_memberships WHERE group_id = $1
+        EXCEPT SELECT student_id FROM o WHERE action = 'remove')
+       UNION SELECT student_id FROM o WHERE action = 'add'
+     )
+     SELECT DISTINCT s.id, s.full_name
+     FROM ids JOIN pulse_read.students s ON s.id = ids.student_id
      ORDER BY s.full_name`,
-    [groupId],
+    [groupId, workId],
   );
   return r.rows;
 }

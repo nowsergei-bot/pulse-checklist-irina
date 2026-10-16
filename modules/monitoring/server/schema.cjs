@@ -1,5 +1,7 @@
 // Служебная страница schema для data_admin: поля pulse_read без строк с данными.
 
+const { discrepancies } = require('./rosters.cjs');
+
 function describeShape(value) {
   if (Array.isArray(value)) return 'array';
   if (value === null) return 'null';
@@ -27,7 +29,7 @@ async function schema(db, user) {
   }
   // Field names of the gateway user object, without values.
   const userFields = Object.keys(user || {}).sort().map(key => ({ name: key, type: describeShape(user[key]) }));
-  return { status: 200, body: { views: [...byView.values()], user_fields: userFields, multi_group_students: await multiGroupStudents(db), groups_without_account: await groupsWithoutAccount(db), current_groups: await currentGroups(db), result_counts: await resultCounts(db) } };
+  return { status: 200, body: { views: [...byView.values()], user_fields: userFields, multi_group_students: await multiGroupStudents(db), groups_without_account: await groupsWithoutAccount(db), current_groups: await currentGroups(db), result_counts: await resultCounts(db), roster_discrepancies: await discrepancies(db) } };
 }
 
 // Ученики, которые состоят в нескольких неархивных группах текущего года.

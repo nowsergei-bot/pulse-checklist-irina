@@ -1,0 +1,121 @@
+/* Экран «Составы групп» (только data_admin). */
+.mon-rost .mon-toolbar {
+  align-items: flex-end;
+}
+.mon-rost .mon-toolbar .mon-field {
+  margin: 0;
+}
+.mon-rost .mon-select {
+  min-width: 18rem;
+  max-width: 100%;
+}
+.mon-rost__summary {
+  margin: 0.9rem 0 0.4rem;
+  color: var(--mon-muted);
+  font-size: 0.9rem;
+}
+.mon-rost__table tr.is-removed .mon-person {
+  color: var(--mon-muted);
+  text-decoration: line-through;
+}
+.mon-rost__act {
+  text-align: right;
+  white-space: nowrap;
+}
+.mon-rost__tag {
+  display: inline-block;
+  padding: 0.05rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.mon-rost__tag--removed {
+  background: #f1ebe6;
+  color: #6b5d52;
+}
+.mon-rost__tag--added {
+  background: #e6f3ea;
+  color: #2f6340;
+}
+.mon-rost__from {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--mon-muted);
+  font-size: 0.8rem;
+}
+.mon-rost__history {
+  margin-top: 1rem;
+  color: var(--mon-muted);
+  font-size: 0.84rem;
+}
+.mon-rost__history summary {
+  cursor: pointer;
+}
+.mon-rost__history ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+}
+.mon-rost__search {
+  display: flex;
+  width: 100%;
+  max-width: none;
+}
+.mon-rost__search .mon-input {
+  flex: 1;
+}
+.mon-rost__found {
+  max-height: 14rem;
+  margin: 0.5rem 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--mon-line);
+  border-radius: 8px;
+}
+.mon-rost__pick {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 0;
+  border-bottom: 1px solid var(--mon-line);
+  background: none;
+  color: var(--mon-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mon-rost__found li:last-child .mon-rost__pick {
+  border-bottom: 0;
+}
+.mon-rost__pick:hover {
+  background: #faf6f2;
+}
+.mon-rost__pick:disabled {
+  color: var(--mon-muted);
+  cursor: default;
+}
+.mon-rost__pick:disabled:hover {
+  background: none;
+}
+.mon-rost__pick.is-picked {
+  background: #f6e9e9;
+  box-shadow: inset 3px 0 0 var(--mon-red);
+}
+.mon-rost__kind {
+  margin-top: 0.7rem;
+}
+.mon-rost__kind .mon-note {
+  margin: 0.45rem 0 0;
+}
+.mon-rost__date {
+  margin: 0.6rem 0 0;
+}
+@media (max-width: 600px) {
+  .mon-rost .mon-select {
+    min-width: 0;
+    width: 100%;
+  }
+  .mon-rost__act {
+    white-space: normal;
+  }
+}
