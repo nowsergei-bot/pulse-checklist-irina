@@ -42,6 +42,28 @@ const sameTitle = (t: Task) => norm(t.title) === norm(`${t.section} ${t.level_na
 
 // «у 1 ученика», «у 2 учеников», «у 21 ученика».
 const pupils = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'ученика' : 'учеников');
+// «из 1 группы», «из 3 групп».
+const groupsWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'группы' : 'групп');
+
+// Фамилия и имя крупно, отчество (всё после второго слова) мельче.
+function splitName(full: string) {
+  const words = full.trim().split(/\s+/);
+  return [words.slice(0, 2).join(' '), words.slice(2).join(' ')];
+}
+
+// Подряд идущие задания одного раздела: название раздела над их столбцами.
+function bySection(list: Task[]) {
+  const out: { section: string; tasks: Task[] }[] = [];
+  for (const t of list) {
+    const last = out[out.length - 1];
+    if (last && last.section === t.section) last.tasks.push(t);
+    else out.push({ section: t.section, tasks: [t] });
+  }
+  return out;
+}
+
+const decimal = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
+const MARKS = ['5', '4', '3', '2'];
 
 function when(value: string) {
   const d = new Date(value);
@@ -80,8 +102,9 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   const [loadError, setLoadError] = useState('');
   const [save, setSave] = useState<{ state: SaveState; message?: string }>({ state: 'saved' });
   const [notes, setNotes] = useState<string[]>([]);
-  const [hint, setHint] = useState('');
-  const [flash, setFlash] = useState('');
+  // Неверное значение в клетке: показываем его красным с подсказкой, на сервер не отправляем.
+  const [wrong, setWrong] = useState<{ cell: string; text: string; message: string } | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [gentleAsk, setGentleAsk] = useState<GentleAsk>();
   const [, setTick] = useState(0);
   const pending = useRef<Record<string, Change>>({});
@@ -193,18 +216,27 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
     }
   }
 
-  function reject(cell: string, max: number) {
-    setHint(`Балл: целое число от 0 до ${max}`);
-    setFlash(cell);
-    window.setTimeout(() => setFlash(f => (f === cell ? '' : f)), 1200);
-  }
-
-  function move(e: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) {
-    const step = e.key === 'Enter' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
-    if (!step) return;
+  // Enter и Tab: следующая клетка в строке, в конце строки первая клетка следующего ученика; Shift назад.
+  // Стрелки вверх и вниз: тот же столбец у соседнего ученика. Пока в клетке неверное значение, курсор не уходит.
+  function move(e: React.KeyboardEvent<HTMLInputElement>, cell: string) {
+    const along = e.key === 'Enter' || e.key === 'Tab';
+    const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+    if (!along && !step) return;
+    if (wrong && wrong.cell === cell) { e.preventDefault(); return; }
+    const inputs = [...document.querySelectorAll<HTMLInputElement>('input[data-cell]:not(:disabled)')];
+    let next: HTMLInputElement | undefined;
+    if (along) next = inputs[inputs.indexOf(e.currentTarget) + (e.shiftKey ? -1 : 1)];
+    else {
+      const [r, c] = cell.split(':').map(Number);
+      next = inputs.find(i => i.dataset.cell === `${r + step}:${c}`);
+    }
+    if (!next) {
+      if (e.key !== 'Tab') e.preventDefault();
+      return;
+    }
     e.preventDefault();
-    const next = document.querySelector<HTMLInputElement>(`[data-cell="${row + step}:${col}"]`);
-    if (next) { next.focus(); next.select(); }
+    next.focus();
+    next.select();
   }
 
   if (loadError) return <div><BackLink base={base} /><p className="mon-err" role="alert">{loadError}</p></div>;
@@ -233,7 +265,16 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   const left = sheet.left_students || [];
   const complete = students.filter(s => results.get(s.id)?.complete).length;
   const absent = students.filter(s => results.get(s.id)?.state.startsWith('отсутствовал')).length;
-  const unfinished = students.length - complete - absent;
+  const present = students.length - absent;
+  // Среднее по группе: только полные работы; процент тот, по которому ставится отметка.
+  const done = students.map(s => results.get(s.id) as Result).filter(r => r.complete);
+  const avgTotal = done.length ? done.reduce((a, r) => a + r.total, 0) / done.length : null;
+  const avgPercent = done.length ? done.reduce((a, r) => a + (r.gentle_percent ?? r.percent), 0) / done.length : null;
+  const partTasks = (p: Part) => tasks.filter(t => t.part_id === p.id);
+  // Первое задание каждого раздела, кроме первого в части: тонкая линия между разделами.
+  const sectionStart = new Set(parts.flatMap(p => bySection(partTasks(p)).slice(1).map(g => g.tasks[0].id)));
+  // Кнопки щадящего режима и полный подзаголовок видит только data_admin (переключение доступно только ему).
+  const admin = gentle.can_change;
   let col = 0;
 
   function row(s: Student, rowIndex: number, isLeft: boolean) {
@@ -244,10 +285,12 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
     const foreignGroups = [...new Set(Object.values(s.foreign))];
     const empty = r.missing === tasks.length && !wasAbsent;
     const allAbsent = parts.every(p => absentOf(s, p));
+    const [name, patronymic] = splitName(s.full_name);
     return (
       <tr key={s.id} className={isLeft ? 'is-left' : undefined}>
         <td className="mon-sheet__name">
-          {s.full_name}
+          <span className="mon-sheet__fio">{name}</span>
+          {patronymic ? <span className="mon-sheet__patronymic">{patronymic}</span> : null}
           {isLeft ? <span className="mon-sheet__foreign">выбыл из группы</span> : null}
           {foreignGroups.length ? <span className="mon-sheet__foreign">внесено в другой группе: {foreignGroups.join(', ')}</span> : null}
         </td>
@@ -267,48 +310,56 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                 />
               </label>
             </td>,
-            ...tasks.filter(t => t.part_id === p.id).map(t => {
+            ...partTasks(p).map(t => {
               const c = col++;
               const cell = `${rowIndex}:${c}`;
               const foreign = s.foreign[`t${t.id}`];
               const value = scoreOf(s, t);
+              const bad = wrong && wrong.cell === cell ? wrong : null;
               return (
-                <td key={t.id} className={`mon-sheet__cell${isAbsent ? ' is-absent' : ''}`}>
+                <td key={t.id} className={`mon-sheet__cell${sectionStart.has(t.id) ? ' is-sec-start' : ''}${isAbsent ? ' is-absent' : ''}${bad ? ' is-wrong' : ''}`}>
                   <input
-                    className={`mon-sheet__input${flash === cell ? ' is-wrong' : ''}${foreign ? ' is-foreign' : ''}`}
+                    className={`mon-sheet__input${bad ? ' is-wrong' : ''}${foreign ? ' is-foreign' : ''}`}
                     data-cell={isLeft ? undefined : cell}
                     inputMode="numeric"
                     autoComplete="off"
-                    value={value === null ? '' : String(value)}
+                    value={bad ? bad.text : value === null ? '' : String(value)}
                     disabled={!rowEditable || isAbsent}
                     readOnly={Boolean(foreign)}
                     title={foreign ? `Внесено в другой группе: ${foreign}` : `${t.title}: от 0 до ${t.max_points}`}
                     aria-label={`${s.full_name}, ${t.title}, из ${t.max_points}`}
+                    aria-invalid={bad ? true : undefined}
                     onFocus={e => e.target.select()}
-                    onKeyDown={e => move(e, rowIndex, c)}
+                    onBlur={() => { if (bad) setWrong(null); }}
+                    onKeyDown={e => move(e, cell)}
                     onChange={e => {
                       if (foreign) return;
                       const v = e.target.value.trim();
-                      if (v === '') { change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: null }); return; }
-                      if (!/^\d+$/.test(v) || Number(v) > t.max_points) { reject(cell, t.max_points); return; }
-                      setHint('');
+                      if (v === '') { setWrong(null); change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: null }); return; }
+                      if (!/^\d+$/.test(v)) { setWrong({ cell, text: e.target.value, message: `целое число от 0 до ${t.max_points}` }); return; }
+                      if (Number(v) > t.max_points) { setWrong({ cell, text: v, message: `максимум ${t.max_points}` }); return; }
+                      setWrong(null);
                       change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: Number(v) });
                     }}
                   />
+                  {bad ? <span className="mon-sheet__tip" role="alert">{bad.message}</span> : null}
                 </td>
               );
             }),
           ];
         })}
-        <td className="mon-num mon-sheet__res-start"><strong>{empty || allAbsent ? '' : r.total}</strong></td>
+        <td className="mon-num mon-sheet__res-start mon-sheet__total">{empty || allAbsent ? '' : r.total}</td>
         <td
-          className={`mon-num${r.complete ? '' : ' is-wait'}`}
+          className={`mon-num mon-sheet__pct${r.complete ? '' : ' is-wait'}`}
           title={r.gentle && !(wasAbsent || empty) ? `Щадящий режим. Обычный процент: ${r.percent}` : undefined}
         >
-          {wasAbsent || empty ? '' : r.gentle ? <>{r.gentle_percent}<span className="mon-gentle-tag">щадящий</span></> : r.percent}
+          {wasAbsent || empty ? '' : r.gentle ? r.gentle_percent : r.percent}
         </td>
-        <td className="mon-sheet__mark">{r.mark || ''}</td>
-        <td><span className={`mon-state mon-state--${r.complete ? 'ok' : wasAbsent ? 'absent' : 'missing'}`}>{r.state}</span></td>
+        {/* Отметка плашкой; пока работа не полная, вместо отметки её состояние. */}
+        <td className="mon-sheet__mark">
+          {r.mark ? <span className={`mon-mark mon-mark--${MARKS.includes(r.mark) ? r.mark : 'other'}`} title={r.state}>{r.mark}</span>
+            : <span className={`mon-sheet__state${wasAbsent ? ' is-absent' : ''}`} title={r.state}>{r.complete ? 'нет отметки' : wasAbsent ? (parts.length > 1 ? r.state : 'отсутствовал') : `не внесено: ${r.missing}`}</span>}
+        </td>
       </tr>
     );
   }
@@ -320,8 +371,10 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
         <div>
           <h2 className="mon-title">{work.title}, {work.parallel} параллель</h2>
           <div className="mon-sheet__meta">
-            <GroupName group={sheet.group} />
-            <span className="mon-muted">{versionLabel({ title: work.spec_title, version: work.version, max_points: work.max_points })}</span>
+            {admin ? <GroupName group={sheet.group} /> : (
+              <span className="mon-group-name">{sheet.group.title}{sheet.group.digital ? <span className="mon-gtype mon-gtype--digital">ЦГ</span> : null}</span>
+            )}
+            <span className="mon-muted">{admin ? versionLabel({ title: work.spec_title, version: work.version, max_points: work.max_points }) : `${work.spec_title} · итого ${work.max_points}`}</span>
             <span className={`mon-status mon-status--${work.status}`}>{STATUS_NAMES[work.status]}</span>
           </div>
         </div>
@@ -344,46 +397,52 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
           <button type="button" className="mon-link" onClick={() => setNotes([])}>Скрыть</button>
         </div>
       ) : null}
-      <p className="mon-note mon-sheet__summary">
-        Учеников: {students.length} · полная работа: {complete} · отсутствовали: {absent} · не внесено полностью: {unfinished}
-        {left.length ? ` · выбыли из группы: ${left.length}` : ''}
-        {hint ? <span className="mon-sheet__hint"> · {hint}</span> : null}
-      </p>
+      {students.length ? (
+        <div className="mon-sheet__progress">
+          <span className="mon-progress" role="progressbar" aria-valuemin={0} aria-valuemax={present} aria-valuenow={complete} aria-label="Внесено работ">
+            <span className="mon-progress__bar" style={{ width: `${present ? Math.round((100 * complete) / present) : 0}%` }} />
+          </span>
+          <span className="mon-sheet__progress-text">Внесено {complete} из {present}</span>
+          <span className="mon-muted">отсутствовали: {absent}</span>
+        </div>
+      ) : null}
 
-      {/* Строку с кнопками и историей видит только тот, кто может переключать режим; остальные видят метку у процента. */}
-      {gentle.can_change ? (
+      {/* Строку с кнопками и историей видит только тот, кто может переключать режим; остальные видят «% (щадящий)» в шапке. */}
+      {admin ? (
         <div className={`mon-gentle${gentle.enabled ? ' is-on' : ''}`}>
-          <div className="mon-gentle__state">
-            <strong>Щадящий режим: {gentle.enabled ? 'включён' : 'выключен'}</strong>
-            <span className="mon-muted">
-              Задания повышенного уровня считаются с коэффициентом 0,5, отметка ставится по этому проценту.
-              {gentle.groups_total > 1 ? ` Включён в группах работы: ${gentle.groups_on} из ${gentle.groups_total}.` : ''}
-            </span>
-          </div>
-          <div className="mon-gentle__actions">
-            <button type="button" className="mon-btn" onClick={() => { void askGentle(!gentle.enabled, 'group'); }}>
+          <span className="mon-gentle__line" title="Задания повышенного уровня считаются с коэффициентом 0,5, отметка ставится по этому проценту.">
+            <strong>Щадящий режим {gentle.enabled ? 'включён' : 'выключен'}</strong>
+            {gentle.groups_total > 1 || gentle.enabled
+              ? ` · ${gentle.enabled ? '' : 'включён в '}${gentle.groups_on} из ${gentle.groups_total} ${groupsWord(gentle.groups_total)}`
+              : ''}
+          </span>
+          {gentle.history.length ? (
+            <button type="button" className="mon-link mon-link--muted mon-gentle__history-link" aria-expanded={showHistory} onClick={() => setShowHistory(v => !v)}>
+              История изменений
+            </button>
+          ) : null}
+          <span className="mon-gentle__actions">
+            <button type="button" className="mon-btn mon-btn--sm" title={`Только группа ${sheet.group.title}`} onClick={() => { void askGentle(!gentle.enabled, 'group'); }}>
               {gentle.enabled ? 'Выключить' : 'Включить'}
             </button>
-            {gentle.groups_total > 1 && gentle.groups_on < gentle.groups_total ? (
-              <button type="button" className="mon-btn mon-btn--ghost" title="Все группы этой работы" onClick={() => { void askGentle(true, 'parallel'); }}>
-                Включить для всех групп параллели
-              </button>
+            {gentle.groups_total > 1 ? (
+              <span className="mon-gentle__all" title="Все группы этой работы">
+                <span className="mon-muted">Вся параллель:</span>
+                {gentle.groups_on < gentle.groups_total ? (
+                  <button type="button" className="mon-btn mon-btn--sm mon-btn--ghost" onClick={() => { void askGentle(true, 'parallel'); }}>включить</button>
+                ) : null}
+                {gentle.groups_on > 0 ? (
+                  <button type="button" className="mon-btn mon-btn--sm mon-btn--ghost" onClick={() => { void askGentle(false, 'parallel'); }}>выключить</button>
+                ) : null}
+              </span>
             ) : null}
-            {gentle.groups_total > 1 && gentle.groups_on > 0 ? (
-              <button type="button" className="mon-btn mon-btn--ghost" title="Все группы этой работы" onClick={() => { void askGentle(false, 'parallel'); }}>
-                Выключить для всех групп параллели
-              </button>
-            ) : null}
-          </div>
-          {gentle.history.length ? (
-            <details className="mon-gentle__history">
-              <summary>История изменений</summary>
-              <ul>
-                {gentle.history.map(h => (
-                  <li key={`${h.changed_at}-${h.enabled}`}>{when(h.changed_at)} · {h.changed_by_name || 'автор не указан'} · {h.enabled ? 'включён' : 'выключен'}</li>
-                ))}
-              </ul>
-            </details>
+          </span>
+          {showHistory && gentle.history.length ? (
+            <ul className="mon-gentle__history">
+              {gentle.history.map(h => (
+                <li key={`${h.changed_at}-${h.enabled}`}>{when(h.changed_at)} · {h.changed_by_name || 'автор не указан'} · {h.enabled ? 'включён' : 'выключен'}</li>
+              ))}
+            </ul>
           ) : null}
         </div>
       ) : null}
@@ -417,40 +476,64 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
           <table className="mon-table mon-sheet__table">
             <thead>
               <tr>
-                <th rowSpan={2} className="mon-sheet__name">Ученик</th>
+                <th rowSpan={3} className="mon-sheet__name mon-sheet__corner">Ученик</th>
                 {parts.map(p => (
-                  <th key={p.id} colSpan={tasks.filter(t => t.part_id === p.id).length + 1} className="mon-sheet__part">
-                    {p.name}{p.held_on ? <span className="mon-muted"> · {date(p.held_on)}</span> : null}
+                  <th key={p.id} colSpan={partTasks(p).length + 1} className="mon-sheet__part mon-sheet__part-start">
+                    {parts.length === 1 ? work.title : p.name}{p.held_on ? ` · ${date(p.held_on)}` : ''}
                   </th>
                 ))}
-                <th colSpan={4} className="mon-sheet__part mon-sheet__res-start">Результат</th>
+                <th colSpan={3} className="mon-sheet__part mon-sheet__res-start">Результат</th>
               </tr>
               <tr>
                 {parts.map(p => [
-                  <th key={`a${p.id}`} className="mon-sheet__absent mon-sheet__part-start">Отсут&shy;ствовал</th>,
-                  ...tasks.filter(t => t.part_id === p.id).map(t => (
-                    <th key={t.id} className="mon-sheet__task" title={t.title}>
-                      <span className="mon-sheet__section">{t.section}</span>
-                      <span>{t.level_name || t.level}</span>
-                      {sameTitle(t) ? null : <span className="mon-sheet__task-title">{t.title}</span>}
-                      <span className="mon-sheet__max">из {t.max_points}</span>
-                    </th>
+                  <th key={`a${p.id}`} rowSpan={2} className="mon-sheet__absent mon-sheet__part-start" title="Отсутствовал">Отс.</th>,
+                  ...bySection(partTasks(p)).map((g, i) => (
+                    <th key={`${p.id}-${i}`} colSpan={g.tasks.length} className="mon-sheet__section">{g.section}</th>
                   )),
                 ])}
-                <th className="mon-num mon-sheet__res-start">Итого<span className="mon-sheet__max">из {work.max_points}</span></th>
-                <th className="mon-num">%</th>
-                <th className="mon-sheet__mark-head">Отметка</th>
-                <th>Состояние</th>
+                <th rowSpan={2} className="mon-num mon-sheet__res-start mon-sheet__res-head">Итого<span className="mon-sheet__max">из {work.max_points}</span></th>
+                <th rowSpan={2} className="mon-num mon-sheet__res-head" title={gentle.enabled ? 'Щадящий режим: задания повышенного уровня считаются с коэффициентом 0,5' : undefined}>
+                  %{gentle.enabled ? <span className="mon-sheet__pct-mode">(щадящий)</span> : null}
+                </th>
+                <th rowSpan={2} className="mon-sheet__mark-head mon-sheet__res-head">Отметка</th>
+              </tr>
+              <tr>
+                {parts.map(p => partTasks(p).map(t => (
+                  <th key={t.id} className={`mon-sheet__task${sectionStart.has(t.id) ? ' is-sec-start' : ''}`} title={t.title}>
+                    <span className="mon-sheet__level">{t.level_name || t.level}</span>
+                    {sameTitle(t) ? null : <span className="mon-sheet__task-title">{t.title}</span>}
+                    <span className="mon-sheet__max">из {t.max_points}</span>
+                  </th>
+                )))}
               </tr>
             </thead>
             <tbody>
               {students.map((s, i) => row(s, i, false))}
               {left.map((s, i) => row(s, students.length + i, true))}
             </tbody>
+            {students.length ? (
+              <tfoot>
+                <tr>
+                  <td className="mon-sheet__name">
+                    <span className="mon-sheet__fio">Среднее по группе</span>
+                    <span className="mon-sheet__patronymic">полных работ: {done.length}</span>
+                  </td>
+                  <td colSpan={tasks.length + parts.length} className="mon-sheet__marks">
+                    <span className="mon-muted">Отметки:</span>
+                    {MARKS.map(m => (
+                      <span key={m} className="mon-sheet__mark-count"><span className={`mon-mark mon-mark--${m}`}>{m}</span>{done.filter(r => r.mark === m).length}</span>
+                    ))}
+                  </td>
+                  <td className="mon-num mon-sheet__res-start mon-sheet__total">{avgTotal === null ? '' : decimal(avgTotal)}</td>
+                  <td className="mon-num mon-sheet__pct">{avgPercent === null ? '' : decimal(avgPercent)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            ) : null}
           </table>
         </div>
       )}
-      {editable ? <p className="mon-note">Баллы сохраняются сами. Enter и стрелки переводят к соседнему ученику. Пустое поле: балл не внесён.</p> : null}
+      {editable ? <p className="mon-note">Баллы сохраняются сами. Enter и Tab переводят к следующей клетке, Shift+Tab назад, стрелки вверх и вниз к соседнему ученику. Пустое поле: балл не внесён.</p> : null}
     </div>
   );
 }

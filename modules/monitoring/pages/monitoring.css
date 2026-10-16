@@ -737,93 +737,175 @@ a.mon-btn {
 .mon-save--blocked .mon-save__dot { background: #7f0a10; }
 .mon-save--offline,
 .mon-save--blocked { color: #7f0a10; font-weight: 600; }
-.mon-sheet__summary {
-  margin: 0.6rem 0;
+/* Полоска «Внесено X из N» вместо строки счётчиков. */
+.mon-sheet__progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.8rem;
+  margin: 0.6rem 0 0.7rem;
+  font-size: 0.92rem;
 }
-.mon-sheet__hint {
-  color: #7f0a10;
-  font-weight: 600;
+.mon-progress {
+  position: relative;
+  display: inline-block;
+  width: 14rem;
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(26, 21, 18, 0.08);
 }
+.mon-progress__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: #6aa57c;
+  transition: width 0.2s ease;
+}
+.mon-sheet__progress-text {
+  font-weight: 700;
+}
+/* Таблица прокручивается внутри рамки: шапка и столбец учеников закреплены. */
 .mon-sheet__wrap {
-  overflow-x: auto;
+  max-height: calc(100vh - 7rem);
+  overflow: auto;
   border: 1px solid var(--mon-line);
   border-radius: var(--radius-sm, 10px);
   background: #fff;
+  scroll-padding: 8.5rem 0 3.5rem 12rem;
 }
 .mon-sheet__table {
-  font-size: 0.88rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.95rem;
 }
 .mon-sheet__table th,
 .mon-sheet__table td {
-  padding: 0.3rem 0.25rem;
+  padding: 0.3rem 0.18rem;
   vertical-align: middle;
+  border-bottom: 1px solid var(--mon-line);
+}
+.mon-sheet__table thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 .mon-sheet__table thead th {
   vertical-align: bottom;
   background: #faf8f6;
+  color: var(--mon-ink);
+  font-size: 0.875rem;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .mon-sheet__name {
   position: sticky;
   left: 0;
   z-index: 1;
-  min-width: 8.5rem;
+  min-width: 7rem;
+  max-width: 9rem;
+  padding-left: 0.6rem !important;
+  border-right: 1px solid var(--mon-line);
   background: #fff;
-  font-weight: 600;
 }
-.mon-sheet__table thead .mon-sheet__name {
+.mon-sheet__table thead .mon-sheet__corner {
+  z-index: 4;
   background: #faf8f6;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.mon-sheet__fio {
+  display: block;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.mon-sheet__patronymic {
+  display: block;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  color: #8a8079;
 }
 .mon-sheet__part {
   text-align: center !important;
-  color: var(--mon-ink) !important;
-  border-left: 2px solid var(--mon-line);
+  font-size: 0.9375rem !important;
+  font-weight: 700;
 }
 .mon-sheet__part-start,
 .mon-sheet__res-start {
   border-left: 2px solid var(--mon-line);
 }
+/* Раздел над своими столбцами «Базовый» и «Повышенный». */
+.mon-sheet__section {
+  text-align: center !important;
+  font-size: 0.9375rem !important;
+  font-weight: 700;
+  border-bottom: 1px solid var(--mon-line);
+  white-space: nowrap;
+}
 .mon-sheet__absent {
   text-align: center !important;
-  font-size: 0.62rem !important;
-  letter-spacing: 0.02em !important;
+  white-space: nowrap;
+  width: 2.6rem;
+}
+.mon-sheet__table thead .mon-sheet__absent {
+  font-weight: 600;
 }
 .mon-sheet__task {
-  min-width: 3.3rem;
+  min-width: 3.2rem;
+  padding: 0.3rem 0.1rem !important;
   text-align: center !important;
-  text-transform: none !important;
-  letter-spacing: 0 !important;
-  font-size: 0.68rem !important;
+  font-weight: 400;
   line-height: 1.2;
 }
 .mon-sheet__task > span {
   display: block;
 }
-.mon-sheet__section {
-  color: var(--mon-ink);
-  font-weight: 700;
+/* Линии между разделами; внутри раздела между уровнями пунктир в шапке. */
+.mon-sheet__table .is-sec-start,
+.mon-sheet__section + .mon-sheet__section {
+  border-left: 1px solid var(--mon-line);
+}
+.mon-sheet__task + .mon-sheet__task:not(.is-sec-start) {
+  border-left: 1px dashed rgba(26, 21, 18, 0.1);
+}
+.mon-sheet__level {
+  color: #3d342e;
 }
 .mon-sheet__task-title {
+  font-size: 0.75rem;
   font-weight: 400;
   color: #8a8079;
 }
 .mon-sheet__max {
   display: block;
+  font-weight: 600;
+  color: #6f655e;
+}
+.mon-sheet__res-head {
   font-weight: 700;
-  color: #7f0a10;
-  text-transform: none;
-  letter-spacing: 0;
+  white-space: nowrap;
+}
+.mon-sheet__pct-mode {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #2c4f7c;
 }
 .mon-sheet__cell {
+  position: relative;
   text-align: center;
 }
 .mon-sheet__input {
-  width: 2.4rem;
-  padding: 0.3rem 0.25rem;
+  width: 2.9rem;
+  padding: 0.25rem 0.2rem;
   border: 1px solid var(--mon-line);
   border-radius: 6px;
   background: #fff;
   color: var(--mon-ink);
   font: inherit;
+  font-size: 1.125rem;
+  line-height: 1.3;
   font-variant-numeric: tabular-nums;
   text-align: center;
   -webkit-appearance: none;
@@ -839,9 +921,30 @@ a.mon-btn {
   border-color: transparent;
   color: var(--mon-ink);
 }
+/* Число больше максимума: клетка красная, значение не сохраняется. */
+.mon-sheet__cell.is-wrong {
+  background: #fbe9e9 !important;
+}
 .mon-sheet__input.is-wrong {
-  border-color: #7f0a10;
-  box-shadow: 0 0 0 3px rgba(127, 10, 16, 0.18);
+  border-color: #b3261e;
+  background: #fff5f5;
+  color: #b3261e;
+  box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.16);
+}
+.mon-sheet__tip {
+  position: absolute;
+  top: calc(100% - 0.2rem);
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: #b3261e;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .mon-sheet__input.is-foreign {
   background: #f3f0ec;
@@ -855,7 +958,7 @@ a.mon-btn {
 }
 .mon-sheet__foreign {
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 400;
   color: #8a8079;
 }
@@ -866,8 +969,8 @@ a.mon-btn {
 .mon-sheet__check input {
   -webkit-appearance: none;
   appearance: none;
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.1rem;
+  height: 1.1rem;
   margin: 0;
   border: 1.5px solid rgba(26, 21, 18, 0.35);
   border-radius: 4px;
@@ -882,6 +985,16 @@ a.mon-btn {
   opacity: 0.5;
   cursor: not-allowed;
 }
+.mon-sheet__total {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mon-sheet__pct {
+  padding-left: 0.4rem !important;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
 .mon-sheet__table td.is-wait {
   color: #b3aaa2;
 }
@@ -889,29 +1002,43 @@ a.mon-btn {
 .mon-sheet__mark-head {
   text-align: center !important;
 }
-.mon-sheet__mark {
+/* Отметка цветной плашкой, мягкие тона. */
+.mon-mark {
+  display: inline-block;
+  min-width: 1.9rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
   font-size: 1rem;
   font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  background: rgba(26, 21, 18, 0.07);
+  color: var(--mon-ink);
 }
-.mon-state {
+.mon-mark--5 { background: #e3f1e6; color: #2f6340; }
+.mon-mark--4 { background: #e3eef9; color: #2c4f7c; }
+.mon-mark--3 { background: #fbf1d6; color: #7a5a12; }
+.mon-mark--2 { background: #f9e3e1; color: #8c2a22; }
+.mon-sheet__mark {
+  width: 4.6rem;
+  padding-right: 0.5rem !important;
+}
+.mon-sheet__state {
   display: inline-block;
-  padding: 0.1rem 0.5rem;
-  border-radius: 10px;
-  font-size: 0.74rem;
-  font-weight: 600;
-  line-height: 1.3;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: #8a8079;
 }
-.mon-sheet__table td:last-child {
-  min-width: 6.5rem;
-  padding-right: 0.5rem;
+.mon-sheet__state.is-absent {
+  color: #74521a;
 }
-.mon-sheet__table thead tr:last-child th {
-  font-size: 0.66rem;
-  letter-spacing: 0.02em;
+/* Строки через одну другого оттенка, строка под курсором подсвечена. */
+.mon-sheet__table tbody tr:nth-child(even) td {
+  background: #fbf9f7;
 }
-.mon-state--ok { background: #e6f3ea; color: #2f6340; }
-.mon-state--absent { background: #faf0dd; color: #74521a; }
-.mon-state--missing { background: rgba(26, 21, 18, 0.07); color: var(--mon-muted); }
+.mon-sheet__table tbody tr:hover td {
+  background: #f5eee6;
+}
 /* Выбывшие из группы: внизу таблицы, только просмотр. */
 .mon-sheet__table tbody tr.is-left td,
 .mon-sheet__table tbody tr.is-left .mon-sheet__name {
@@ -924,19 +1051,42 @@ a.mon-btn {
 .mon-sheet__table tbody tr:not(.is-left) + tr.is-left td {
   border-top: 2px solid var(--mon-line);
 }
-.mon-sheet__table tbody tr.is-left .mon-state {
-  background: rgba(26, 21, 18, 0.06);
-  color: #8a8079;
+/* Среднее по группе под таблицей. */
+.mon-sheet__table tfoot .mon-sheet__fio {
+  font-size: 0.95rem;
 }
-/* Щадящий режим: строка над таблицей и пометка у процента. */
+.mon-sheet__table tfoot td {
+  border-top: 2px solid var(--mon-line);
+  border-bottom: 0;
+  background: #faf8f6;
+}
+.mon-sheet__marks {
+  padding-left: 0.6rem !important;
+  white-space: nowrap;
+}
+.mon-sheet__marks .mon-muted {
+  margin-right: 0.5rem;
+}
+.mon-sheet__mark-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 0.55rem;
+  font-weight: 600;
+}
+.mon-sheet__mark-count .mon-mark {
+  min-width: 1.5rem;
+  padding: 0 0.3rem;
+  font-size: 0.85rem;
+}
+/* Щадящий режим у data_admin: одна строка, кнопки справа. */
 .mon-gentle {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem 1rem;
-  margin: 0.6rem 0;
-  padding: 0.6rem 0.9rem;
+  gap: 0.4rem 0.9rem;
+  margin: 0 0 0.7rem;
+  padding: 0.4rem 0.6rem 0.4rem 0.9rem;
   border: 1px solid var(--mon-line);
   border-radius: var(--radius-sm, 10px);
   background: #fff;
@@ -946,38 +1096,28 @@ a.mon-btn {
   background: #eef3fa;
   border-color: #d3dfef;
 }
-.mon-gentle__state {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
 .mon-gentle__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+.mon-gentle__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.4rem;
+}
+.mon-btn--sm {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.82rem;
 }
 .mon-gentle__history {
   flex-basis: 100%;
+  margin: 0;
+  padding-left: 1.2rem;
   color: var(--mon-muted);
   font-size: 0.82rem;
-}
-.mon-gentle__history summary {
-  cursor: pointer;
-}
-.mon-gentle__history ul {
-  margin: 0.35rem 0 0;
-  padding-left: 1.2rem;
-}
-.mon-gentle-tag {
-  display: inline-block;
-  margin-left: 0.3rem;
-  padding: 0 0.35rem;
-  border-radius: 8px;
-  background: #e1e9f5;
-  color: #2c4f7c;
-  font-size: 0.64rem;
-  font-weight: 600;
-  vertical-align: middle;
 }
 /* «Работы» для учителя: карточки групп по параллелям. */
 .mon-tcards__summary {
