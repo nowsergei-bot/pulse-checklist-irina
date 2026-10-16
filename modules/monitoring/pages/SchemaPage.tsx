@@ -14,7 +14,11 @@ type SchemaData = {
     current_year: string | null;
     tables: { table: string; kind: string; total: number | null; current_year: number | null; year_by: string | null; error: string | null }[];
   };
+  placement_views?: SchemaView[];
+  placement_breakdown?: PlacementBreakdown;
 };
+type PlacementGroup = { parallel: number | null; title: string | null; digital: boolean | null; sessions: number; students: number; scores: number };
+type PlacementBreakdown = { links: string[]; missing: string[]; groups: PlacementGroup[]; scores_without_session: number | null };
 
 const cell = { border: '1px solid #d0d7de', padding: '4px 8px', textAlign: 'left' as const };
 
@@ -54,6 +58,76 @@ function RosterDiscrepancies({ rows }: { rows: NonNullable<SchemaData['roster_di
           </tbody>
         </table>
       ) : <p>Поправок по отдельным ученикам нет</p>}
+    </>
+  );
+}
+
+// Входное тестирование текущего года по параллелям и группам: только числа, без ФИО.
+function PlacementByGroups({ data, year }: { data: PlacementBreakdown; year: string | null }) {
+  const parallels = [...new Set(data.groups.map(g => g.parallel))];
+  const sum = (rows: PlacementGroup[], key: 'sessions' | 'students' | 'scores') => rows.reduce((a, g) => a + g[key], 0);
+  const num = { ...cell, textAlign: 'right' as const };
+  return (
+    <>
+      <h3>Входное тестирование {year || 'текущего года'} по параллелям и группам</h3>
+      <p>Только числа. Ученик считается один раз в группе, если у него есть хотя бы один заполненный балл.</p>
+      {data.links.length ? <ul>{data.links.map(l => <li key={l}>{l}</li>)}</ul> : null}
+      {data.missing.length ? <p className="mon-err">Разбивку построить нельзя: {data.missing.join('; ')}.</p> : null}
+      {data.groups.length ? (
+        <table style={{ borderCollapse: 'collapse', marginBottom: 12 }}>
+          <thead>
+            <tr><th style={cell}>Параллель</th><th style={cell}>Группа</th><th style={num}>Сессий</th><th style={num}>Учеников с баллами</th><th style={num}>Баллов</th></tr>
+          </thead>
+          <tbody>
+            {parallels.map(p => {
+              const rows = data.groups.filter(g => g.parallel === p);
+              return [
+                ...rows.map((g, i) => (
+                  <tr key={`${p}-${i}`}>
+                    <td style={cell}>{p ?? ''}</td>
+                    <td style={cell}>{g.title ? (g.digital ? `${g.title} (ЦГ)` : g.title) : 'группа не найдена в pulse_read'}</td>
+                    <td style={num}>{g.sessions}</td>
+                    <td style={num}>{g.students}</td>
+                    <td style={num}>{g.scores}</td>
+                  </tr>
+                )),
+                <tr key={`${p}-sum`} style={{ fontWeight: 600 }}>
+                  <td style={cell}>{p ?? 'без параллели'}</td>
+                  <td style={cell}>Итого по параллели</td>
+                  <td style={num}>{sum(rows, 'sessions')}</td>
+                  <td style={num}>{sum(rows, 'students')}</td>
+                  <td style={num}>{sum(rows, 'scores')}</td>
+                </tr>,
+              ];
+            })}
+            <tr style={{ fontWeight: 700 }}>
+              <td style={cell} colSpan={2}>Всего</td>
+              <td style={num}>{sum(data.groups, 'sessions')}</td>
+              <td style={num}>{sum(data.groups, 'students')}</td>
+              <td style={num}>{sum(data.groups, 'scores')}</td>
+            </tr>
+          </tbody>
+        </table>
+      ) : data.missing.length ? null : <p>Сессий входного тестирования в текущем году нет.</p>}
+      {data.scores_without_session ? <p>Баллов без найденной сессии (все годы): {data.scores_without_session}.</p> : null}
+    </>
+  );
+}
+
+function PlacementViews({ views }: { views: SchemaView[] }) {
+  return (
+    <>
+      <h3>Поля представлений входного тестирования</h3>
+      {views.length ? null : <p>В pulse_read нет представлений placement_*</p>}
+      {views.map(view => (
+        <div key={view.name} style={{ marginBottom: 16 }}>
+          <h4 style={{ margin: '8px 0 4px' }}>{view.name}{view.type === 'MATERIALIZED VIEW' ? ' (материализованное представление)' : ''}</h4>
+          <table style={{ borderCollapse: 'collapse' }}>
+            <thead><tr><th style={cell}>Поле</th><th style={cell}>Тип</th></tr></thead>
+            <tbody>{view.columns.map(c => <tr key={c.name}><td style={cell}>{c.name}</td><td style={cell}>{c.type}</td></tr>)}</tbody>
+          </table>
+        </div>
+      ))}
     </>
   );
 }
@@ -107,6 +181,8 @@ function SchemaTables({ data }: { data: SchemaData }) {
               </tbody>
             </table>
           ) : <p>В pulse_read нет представлений placement_* и section_scores</p>}
+          {data.placement_breakdown ? <PlacementByGroups data={data.placement_breakdown} year={data.result_counts.current_year} /> : null}
+          {data.placement_views ? <PlacementViews views={data.placement_views} /> : null}
         </>
       ) : null}
       <h2>Представления pulse_read</h2>
