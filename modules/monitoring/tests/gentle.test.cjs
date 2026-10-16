@@ -18,11 +18,6 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
   // Тесты с базой идут по очереди: все проверки пересоздают схему monitoring.
   await db.query('SELECT pg_advisory_lock(73001)');
 
-  await db.query('DROP SCHEMA IF EXISTS monitoring CASCADE; CREATE SCHEMA monitoring');
-  const dir = path.join(__dirname, '..', 'migrations');
-  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
-    await db.query(fs.readFileSync(path.join(dir, file), 'utf8'));
-  }
   await db.query(`
     DROP SCHEMA IF EXISTS pulse_read CASCADE; CREATE SCHEMA pulse_read;
     CREATE TABLE pulse_read.academic_years (id int, label text, is_current boolean, starts_on date);
@@ -41,6 +36,12 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
     INSERT INTO pulse_read.group_memberships SELECT i, i, 1 FROM generate_series(1, 5) i;
     INSERT INTO pulse_read.group_memberships VALUES (6, 6, 2);
   `);
+  // Миграции после pulse_read: миграция 006 читает справочник учителей.
+  await db.query('DROP SCHEMA IF EXISTS monitoring CASCADE; CREATE SCHEMA monitoring');
+  const dir = path.join(__dirname, '..', 'migrations');
+  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
+    await db.query(fs.readFileSync(path.join(dir, file), 'utf8'));
+  }
 
   const one = async (sql, params) => (await db.query(sql, params)).rows[0];
   const type = await one("SELECT id FROM monitoring.assessment_types WHERE code = 'module'");

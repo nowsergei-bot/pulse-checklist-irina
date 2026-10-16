@@ -16,6 +16,12 @@ test('триггеры миграции 003', { skip: !url && 'нет MONITORING
   // Тесты с базой идут по очереди: обе проверки пересоздают схему monitoring.
   await db.query('SELECT pg_advisory_lock(73001)');
 
+  // Миграция 006 читает справочник учителей: пустые представления pulse_read.
+  await db.query(`
+    DROP SCHEMA IF EXISTS pulse_read CASCADE; CREATE SCHEMA pulse_read;
+    CREATE TABLE pulse_read.users (id int, full_name text);
+    CREATE TABLE pulse_read.english_teachers (id int, user_id int, full_name text, archived_at timestamptz);
+  `);
   await db.query('DROP SCHEMA IF EXISTS monitoring CASCADE; CREATE SCHEMA monitoring');
   const dir = path.join(__dirname, '..', 'migrations');
   for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {

@@ -18,16 +18,12 @@ test('ввод баллов по группе', { skip: !url && 'нет MONITORI
   // Тесты с базой идут по очереди: обе проверки пересоздают схему monitoring.
   await db.query('SELECT pg_advisory_lock(73001)');
 
-  await db.query('DROP SCHEMA IF EXISTS monitoring CASCADE; CREATE SCHEMA monitoring');
-  const dir = path.join(__dirname, '..', 'migrations');
-  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
-    await db.query(fs.readFileSync(path.join(dir, file), 'utf8'));
-  }
   await db.query(`
     DROP SCHEMA IF EXISTS pulse_read CASCADE; CREATE SCHEMA pulse_read;
     CREATE TABLE pulse_read.academic_years (id int, label text, is_current boolean, starts_on date);
     CREATE TABLE pulse_read.groups (id int, title text, code text, campus text, parallel int, academic_year_id int, archived_at timestamptz);
     CREATE TABLE pulse_read.english_teachers (id int, user_id int, full_name text, archived_at timestamptz);
+    CREATE TABLE pulse_read.users (id int, full_name text);
     CREATE TABLE pulse_read.group_teachers (teacher_id int, group_id int);
     CREATE TABLE pulse_read.students (id int, full_name text);
     CREATE TABLE pulse_read.group_memberships (id int, student_id int, group_id int);
@@ -39,6 +35,12 @@ test('ввод баллов по группе', { skip: !url && 'нет MONITORI
     INSERT INTO pulse_read.group_memberships SELECT i, i, 1 FROM generate_series(1, 6) i;
     INSERT INTO pulse_read.group_memberships VALUES (7, 1, 2), (8, 7, 2);
   `);
+  // Миграции после pulse_read: миграция 006 читает справочник учителей.
+  await db.query('DROP SCHEMA IF EXISTS monitoring CASCADE; CREATE SCHEMA monitoring');
+  const dir = path.join(__dirname, '..', 'migrations');
+  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
+    await db.query(fs.readFileSync(path.join(dir, file), 'utf8'));
+  }
 
   const one = async (sql, params) => (await db.query(sql, params)).rows[0];
   const type = await one("SELECT id FROM monitoring.assessment_types WHERE code = 'module'");
