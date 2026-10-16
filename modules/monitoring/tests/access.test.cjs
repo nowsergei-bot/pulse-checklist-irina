@@ -28,3 +28,9 @@ test('роль data_admin видна только самим data_admin', () => 
   assert.deepEqual(visibleRoles(roles, false), ['teacher']);
   assert.deepEqual(visibleRoles(roles, true), ['teacher', 'data_admin']);
 });
+
+test('щадящий режим переключает только data_admin, право заведующей задаётся одной настройкой', () => {
+  assert.equal(capabilities(new Set(['data_admin'])).switchGentle, true);
+  for (const role of ['department_head', 'deputy', 'teacher']) assert.equal(capabilities(new Set([role])).switchGentle, false);
+  assert.equal(capabilities(new Set(['department_head']), ['data_admin', 'department_head']).switchGentle, true);
+});

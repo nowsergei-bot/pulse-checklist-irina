@@ -145,7 +145,7 @@ async function getSheet(db, userId, caps, workId, groupId) {
   const left = await leftStudents(db, a.work.id, groupId, new Set(members.map(m => Number(m.id))));
   const leftRows = await buildStudents(db, a.work, groupId, left, struct, gentleIds);
   const groupCount = (await db.query('SELECT count(*)::int AS n FROM monitoring.work_groups WHERE work_id = $1', [a.work.id])).rows[0].n;
-  const history = caps.seeHistory ? (await db.query(
+  const history = caps.switchGentle ? (await db.query(
     `SELECT enabled, changed_by_name, changed_at FROM monitoring.gentle_history
      WHERE work_id = $1 AND group_id = $2 ORDER BY id DESC LIMIT 20`,
     [a.work.id, groupId],
@@ -278,9 +278,9 @@ async function saveSheet(db, userId, caps, workId, data) {
   };
 }
 
-// Щадящий режим меняют только заведующая кафедрой и data_admin; черновик работы только data_admin.
+// Щадящий режим меняют роли из GENTLE_SWITCH_ROLES (lib/access.cjs); черновик работы только data_admin.
 function canChangeGentle(caps, work) {
-  return Boolean(caps.editAnyGroup && (caps.manage || work.status !== 'draft'));
+  return Boolean(caps.switchGentle && (caps.manage || work.status !== 'draft'));
 }
 
 // Сколько отметок изменится, если в группах groupIds режим станет enabled; on: где включён сейчас.

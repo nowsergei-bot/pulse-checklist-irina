@@ -350,32 +350,31 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
         {hint ? <span className="mon-sheet__hint"> · {hint}</span> : null}
       </p>
 
-      {gentle.can_change || gentle.enabled ? (
+      {/* Строку с кнопками и историей видит только тот, кто может переключать режим; остальные видят метку у процента. */}
+      {gentle.can_change ? (
         <div className={`mon-gentle${gentle.enabled ? ' is-on' : ''}`}>
           <div className="mon-gentle__state">
             <strong>Щадящий режим: {gentle.enabled ? 'включён' : 'выключен'}</strong>
             <span className="mon-muted">
               Задания повышенного уровня считаются с коэффициентом 0,5, отметка ставится по этому проценту.
-              {gentle.can_change && gentle.groups_total > 1 ? ` Включён в группах работы: ${gentle.groups_on} из ${gentle.groups_total}.` : ''}
+              {gentle.groups_total > 1 ? ` Включён в группах работы: ${gentle.groups_on} из ${gentle.groups_total}.` : ''}
             </span>
           </div>
-          {gentle.can_change ? (
-            <div className="mon-gentle__actions">
-              <button type="button" className="mon-btn" onClick={() => { void askGentle(!gentle.enabled, 'group'); }}>
-                {gentle.enabled ? 'Выключить' : 'Включить'}
+          <div className="mon-gentle__actions">
+            <button type="button" className="mon-btn" onClick={() => { void askGentle(!gentle.enabled, 'group'); }}>
+              {gentle.enabled ? 'Выключить' : 'Включить'}
+            </button>
+            {gentle.groups_total > 1 && gentle.groups_on < gentle.groups_total ? (
+              <button type="button" className="mon-btn mon-btn--ghost" title="Все группы этой работы" onClick={() => { void askGentle(true, 'parallel'); }}>
+                Включить для всех групп параллели
               </button>
-              {gentle.groups_total > 1 && gentle.groups_on < gentle.groups_total ? (
-                <button type="button" className="mon-btn mon-btn--ghost" title="Все группы этой работы" onClick={() => { void askGentle(true, 'parallel'); }}>
-                  Включить для всех групп параллели
-                </button>
-              ) : null}
-              {gentle.groups_total > 1 && gentle.groups_on > 0 ? (
-                <button type="button" className="mon-btn mon-btn--ghost" title="Все группы этой работы" onClick={() => { void askGentle(false, 'parallel'); }}>
-                  Выключить для всех групп параллели
-                </button>
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
+            {gentle.groups_total > 1 && gentle.groups_on > 0 ? (
+              <button type="button" className="mon-btn mon-btn--ghost" title="Все группы этой работы" onClick={() => { void askGentle(false, 'parallel'); }}>
+                Выключить для всех групп параллели
+              </button>
+            ) : null}
+          </div>
           {gentle.history.length ? (
             <details className="mon-gentle__history">
               <summary>История изменений</summary>

@@ -2,6 +2,10 @@
 
 const ROLES = ['teacher', 'department_head', 'deputy', 'data_admin'];
 
+// Кто включает и выключает щадящий режим и видит историю переключений.
+// Чтобы вернуть это право заведующей кафедрой, добавьте сюда 'department_head'.
+const GENTLE_SWITCH_ROLES = ['data_admin'];
+
 async function loadRoles(db, user) {
   const userId = Number(user && user.id);
   if (!Number.isInteger(userId)) return { userId: null, roles: new Set() };
@@ -9,7 +13,7 @@ async function loadRoles(db, user) {
   return { userId, roles: new Set(result.rows.map(r => r.role)) };
 }
 
-function capabilities(roles) {
+function capabilities(roles, gentleSwitchRoles = GENTLE_SWITCH_ROLES) {
   const has = (r) => roles.has(r);
   return {
     seeAll: has('department_head') || has('deputy') || has('data_admin'),
@@ -18,6 +22,7 @@ function capabilities(roles) {
     editOwnGroups: has('teacher'),
     seeHistory: has('department_head') || has('data_admin'),
     manage: has('data_admin'),
+    switchGentle: gentleSwitchRoles.some(has),
   };
 }
 
@@ -26,4 +31,4 @@ function visibleRoles(roles, viewerIsAdmin) {
   return [...roles].filter(r => r !== 'data_admin' || viewerIsAdmin).sort((a, b) => ROLES.indexOf(a) - ROLES.indexOf(b));
 }
 
-module.exports = { ROLES, loadRoles, capabilities, visibleRoles };
+module.exports = { ROLES, GENTLE_SWITCH_ROLES, loadRoles, capabilities, visibleRoles };

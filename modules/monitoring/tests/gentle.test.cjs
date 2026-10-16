@@ -69,6 +69,8 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
 
   const teacher = capabilities(new Set(['teacher']));
   const head = capabilities(new Set(['department_head']));
+  // Заведующая, если право вернуть настройкой GENTLE_SWITCH_ROLES.
+  const headSwitch = capabilities(new Set(['department_head']), ['data_admin', 'department_head']);
   const deputy = capabilities(new Set(['deputy']));
   const admin = capabilities(new Set(['data_admin']));
   const setStatus = (status) => db.query('UPDATE monitoring.works SET status = $2 WHERE id = $1', [work.id, status]);
@@ -93,36 +95,44 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
     });
   });
 
-  await t.test('менять могут только заведующая кафедрой и data_admin', async () => {
-    for (const caps of [teacher, deputy, capabilities(new Set())]) {
+  await t.test('менять может только data_admin; заведующая, учитель и завуч не могут', async () => {
+    for (const caps of [teacher, deputy, head, capabilities(new Set())]) {
       const r = await setGentle(db, { full_name: 'Учитель 1' }, 101, caps, work.id, { group_id: 1, enabled: true, confirm: true });
       assert.equal(r.status, 403);
     }
-    assert.equal((await getSheet(db, 104, head, work.id, 1)).body.gentle.can_change, true);
+    const byHead = (await getSheet(db, 104, head, work.id, 1)).body.gentle;
+    assert.deepEqual([byHead.can_change, byHead.history], [false, []]);
     assert.equal((await getSheet(db, 100, admin, work.id, 1)).body.gentle.can_change, true);
     const none = await one('SELECT count(*)::int AS n FROM monitoring.gentle_groups');
     assert.equal(none.n, 0);
-    assert.equal((await setGentle(db, {}, 104, head, work.id, { group_id: 1, enabled: 'да' })).status, 400);
-    assert.equal((await setGentle(db, {}, 104, head, work.id, { group_id: 99, enabled: true })).status, 404);
+    assert.equal((await setGentle(db, {}, 100, admin, work.id, { group_id: 1, enabled: 'да' })).status, 400);
+    assert.equal((await setGentle(db, {}, 100, admin, work.id, { group_id: 99, enabled: true })).status, 404);
+  });
+
+  await t.test('право заведующей возвращается одной настройкой ролей', async () => {
+    assert.equal(head.switchGentle, false);
+    assert.equal(headSwitch.switchGentle, true);
+    assert.equal((await getSheet(db, 104, headSwitch, work.id, 1)).body.gentle.can_change, true);
   });
 
   await t.test('перед включением: у скольких учеников изменится отметка, ничего не записано', async () => {
-    const r = await setGentle(db, {}, 104, head, work.id, { group_id: 1, enabled: true });
+    const r = await setGentle(db, {}, 104, headSwitch, work.id, { group_id: 1, enabled: true });
     assert.deepEqual(r.body, { groups: 1, changed: 2, higher: 1, lower: 1 });
     assert.equal((await one('SELECT count(*)::int AS n FROM monitoring.gentle_groups')).n, 0);
   });
 
   await t.test('включение: отметка по щадящему проценту, итог и обычный процент прежние, история с ФИО', async () => {
-    const r = await setGentle(db, { full_name: 'Другое имя' }, 104, head, work.id, { group_id: 1, enabled: true, confirm: true });
+    const r = await setGentle(db, { full_name: 'Другое имя' }, 104, headSwitch, work.id, { group_id: 1, enabled: true, confirm: true });
     assert.equal(r.body.done, true);
     const sheet = await getSheet(db, 101, teacher, work.id, 1);
     assert.equal(sheet.body.gentle.enabled, true);
     assert.deepEqual(results(sheet), {
       А: [24, 48, 57, '3'], Б: [33, 66, 73, '3'], В: [39, 78, 83, '4'], Г: [45, 90, 93, '5'], Д: [38, 76, 71, '3'],
     });
-    // Учителю история не видна, заведующей видна.
+    // Учителю и заведующей история не видна, data_admin видна.
     assert.deepEqual(sheet.body.gentle.history, []);
-    const h = (await getSheet(db, 104, head, work.id, 1)).body.gentle.history;
+    assert.deepEqual((await getSheet(db, 104, head, work.id, 1)).body.gentle.history, []);
+    const h = (await getSheet(db, 100, admin, work.id, 1)).body.gentle.history;
     assert.deepEqual(h.map(x => [x.enabled, x.changed_by_name]), [[true, 'Заведующий 1']]);
     const raw = await one('SELECT changed_by FROM monitoring.gentle_history');
     assert.equal(raw.changed_by, 104);
@@ -135,7 +145,7 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
   });
 
   await t.test('повторное включение ничего не меняет и не пишет в историю', async () => {
-    const r = await setGentle(db, {}, 104, head, work.id, { group_id: 1, enabled: true, confirm: true });
+    const r = await setGentle(db, {}, 100, admin, work.id, { group_id: 1, enabled: true, confirm: true });
     assert.deepEqual([r.body.groups, r.body.changed], [0, 0]);
     assert.equal((await one('SELECT count(*)::int AS n FROM monitoring.gentle_history')).n, 1);
   });
@@ -183,11 +193,12 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
     await setGentle(db, {}, 100, admin, work.id, { group_id: 1, scope: 'parallel', enabled: false, confirm: true });
   });
 
-  await t.test('закрытая работа: заведующая может, черновик только data_admin', async () => {
+  await t.test('закрытая работа: можно с правом переключения, черновик только data_admin', async () => {
     await setStatus('closed');
-    assert.equal((await setGentle(db, {}, 104, head, work.id, { group_id: 1, enabled: true })).status, 200);
-    await setStatus('draft');
+    assert.equal((await setGentle(db, {}, 104, headSwitch, work.id, { group_id: 1, enabled: true })).status, 200);
     assert.equal((await setGentle(db, {}, 104, head, work.id, { group_id: 1, enabled: true })).status, 403);
+    await setStatus('draft');
+    assert.equal((await setGentle(db, {}, 104, headSwitch, work.id, { group_id: 1, enabled: true })).status, 403);
     assert.equal((await setGentle(db, {}, 100, admin, work.id, { group_id: 1, enabled: true })).status, 200);
     await setStatus('open');
   });
