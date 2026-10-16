@@ -8,6 +8,7 @@ type SchemaData = {
   multi_group_students?: { full_name: string; groups: { title: string; parallel: number | null; campus: string | null }[] }[];
   groups_without_account?: { title: string; parallel: number | null; campus: string | null; teachers: string[] }[];
   current_groups?: { title: string; parallel: number | null; level_code: string | null; campus: string | null }[];
+  import_discrepancies?: { group_title: string | null; parallel: number | null; digital: boolean | null; in_file: number; in_pulse: number; only_file: string[]; only_pulse: string[] }[];
   roster_discrepancies?: { group_title: string | null; parallel: number | null; digital: boolean | null; full_name: string; action: 'add' | 'remove'; kind: 'fix' | 'transfer'; from_date: string | null; future: boolean; same_in_pulse: boolean }[];
   result_counts?: {
     current_year: string | null;
@@ -29,7 +30,7 @@ function RosterDiscrepancies({ rows }: { rows: NonNullable<SchemaData['roster_di
   return (
     <>
       <h2>Расхождения с Пульсом</h2>
-      <p>Группы и ученики, где состав в модуле отличается от pulse_read из-за поправок на вкладке «Составы групп». Отличий: {differ.length}.</p>
+      <p>Поправки по отдельным ученикам на вкладке «Составы групп», где состав в модуле отличается от pulse_read. Отличий: {differ.length}.</p>
       {rows.length ? (
         <table style={{ borderCollapse: 'collapse', marginBottom: 24 }}>
           <thead>
@@ -52,7 +53,7 @@ function RosterDiscrepancies({ rows }: { rows: NonNullable<SchemaData['roster_di
             ))}
           </tbody>
         </table>
-      ) : <p>Поправок нет, составы в модуле как в Пульсе</p>}
+      ) : <p>Поправок по отдельным ученикам нет</p>}
     </>
   );
 }
@@ -61,6 +62,29 @@ function SchemaTables({ data }: { data: SchemaData }) {
   return (
     <section>
       {data.roster_discrepancies ? <RosterDiscrepancies rows={data.roster_discrepancies} /> : null}
+      {data.import_discrepancies && data.import_discrepancies.length ? (
+        <>
+          <h3>Группы из загруженного файла</h3>
+          <p>Где состав по файлу отличается от pulse_read. Групп: {data.import_discrepancies.length}.</p>
+          <table style={{ borderCollapse: 'collapse', marginBottom: 24 }}>
+            <thead>
+              <tr><th style={cell}>Параллель</th><th style={cell}>Группа</th><th style={cell}>По файлу</th><th style={cell}>В pulse_read</th><th style={cell}>Только в файле</th><th style={cell}>Только в pulse_read</th></tr>
+            </thead>
+            <tbody>
+              {data.import_discrepancies.map((g, i) => (
+                <tr key={i}>
+                  <td style={cell}>{g.parallel ?? ''}</td>
+                  <td style={cell}>{g.group_title ? (g.digital ? `${g.group_title} (ЦГ)` : g.group_title) : 'группа не найдена в pulse_read'}</td>
+                  <td style={cell}>{g.in_file}</td>
+                  <td style={cell}>{g.in_pulse}</td>
+                  <td style={cell}>{g.only_file.join(', ')}</td>
+                  <td style={cell}>{g.only_pulse.join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : null}
       {data.result_counts ? (
         <>
           <h2>Результаты старого раздела в pulse_read</h2>

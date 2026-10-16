@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, useApi } from './api';
 import Dialog from './Dialog';
+import RosterImport from './RosterImport';
 import './rosters.css';
 
-type Group = { id: number; title: string; parallel: number | null; digital: boolean; pulse_count?: number; overrides?: number };
+type Group = { id: number; title: string; parallel: number | null; digital: boolean; base_count?: number; from_file?: boolean; overrides?: number };
 type Kind = 'fix' | 'transfer';
 type Override = { id: number; action: 'add' | 'remove'; kind: Kind; from_date: string | null };
-type Student = { id: number; full_name: string; in_pulse: boolean; override: Override | null; pulse_groups?: Group[] };
+type Student = { id: number; full_name: string; in_base: boolean; override: Override | null; pulse_groups?: Group[] };
 type HistoryRow = { action: 'add' | 'remove' | 'cancel'; kind: Kind; from_date: string | null; changed_by_name: string; changed_at: string; student: string };
 type Roster = { group: Group; students: Student[]; history: HistoryRow[] };
 type Found = { id: number; full_name: string; groups: Group[] };
@@ -178,8 +179,9 @@ export default function RostersPage() {
 
   const roster = data && data.group.id === groupId ? data : null;
   // Состав на сегодня: поправки с будущей даты ещё не действуют.
-  const inModule = roster ? roster.students.filter(s => (s.override && inForce(s.override) ? s.override.action === 'add' : s.in_pulse)).length : 0;
-  const inPulse = roster ? roster.students.filter(s => s.in_pulse).length : 0;
+  const inModule = roster ? roster.students.filter(s => (s.override && inForce(s.override) ? s.override.action === 'add' : s.in_base)).length : 0;
+  const inBase = roster ? roster.students.filter(s => s.in_base).length : 0;
+  const source = roster?.group.from_file ? 'из файла' : 'из Пульса';
 
   function done(text: string) {
     setMessage(text);
@@ -209,7 +211,8 @@ export default function RostersPage() {
 
   return (
     <div className="mon-rost">
-      <p className="mon-note mon-hint">Состав берётся из Пульса. Здесь можно поправить его для модуля: в Пульсе составы не меняются. Поправки видны только администраторам данных.</p>
+      <p className="mon-note mon-hint">Состав берётся из Пульса или из загруженного файла. Здесь можно поправить его для модуля: в Пульсе составы не меняются. Поправки и загрузки видны только администраторам данных.</p>
+      <RosterImport onApplied={() => { reload(); reloadList(); }} />
       <div className="mon-toolbar">
         <label className="mon-field">
           <span className="mon-label">Группа</span>
@@ -218,7 +221,7 @@ export default function RostersPage() {
             {byParallel.map(([label, groups]) => (
               <optgroup key={label} label={label}>
                 {groups.map(g => (
-                  <option key={g.id} value={g.id}>{groupName(g)} · {g.pulse_count} уч.{g.overrides ? ` · поправок: ${g.overrides}` : ''}</option>
+                  <option key={g.id} value={g.id}>{groupName(g)} · {g.base_count} уч.{g.from_file ? ' · из файла' : ''}{g.overrides ? ` · поправок: ${g.overrides}` : ''}</option>
                 ))}
               </optgroup>
             ))}
@@ -235,9 +238,9 @@ export default function RostersPage() {
       {roster ? (
         <>
           <p className="mon-rost__summary">
-            В Пульсе: {inPulse}. В модуле сегодня: {inModule}.
+            Основной состав {source}: {inBase}. В модуле сегодня: {inModule}.
             {roster.students.some(s => s.override?.kind === 'transfer') ? ' Переводы с даты учитываются по дате проведения каждой работы.' : ''}
-            {roster.students.some(s => s.override) ? '' : ' Поправок нет, состав как в Пульсе.'}
+            {roster.students.some(s => s.override) ? '' : ` Поправок нет, состав ${source === 'из файла' ? 'как в файле' : 'как в Пульсе'}.`}
           </p>
           {roster.students.length ? (
             <table className="mon-table mon-rost__table">
@@ -247,7 +250,7 @@ export default function RostersPage() {
                   <tr key={s.id} className={s.override?.action === 'remove' && inForce(s.override) ? 'is-removed' : undefined}>
                     <td><span className="mon-person">{s.full_name}</span></td>
                     <td>
-                      {!s.override ? <span className="mon-muted">из Пульса</span> : null}
+                      {!s.override ? <span className="mon-muted">{source}</span> : null}
                       {s.override?.action === 'remove' ? <span className="mon-rost__tag mon-rost__tag--removed">{inForce(s.override) ? 'убран' : 'будет убран'} {sinceText(s.override)}</span> : null}
                       {s.override?.action === 'add' ? (
                         <>

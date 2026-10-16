@@ -2,6 +2,8 @@
 // Составы в Пульсе не меняются: поправки хранятся в monitoring.roster_overrides,
 // каждое действие пишется в monitoring.roster_history с автором. Почты не читаются.
 
+const { baseRosterSql, fromFileSql } = require('./lib/groups.cjs');
+
 const bad = (message) => ({ status: 400, body: { error: 'bad_request', message } });
 const conflict = (message) => ({ status: 409, body: { error: 'conflict', message } });
 
@@ -24,13 +26,15 @@ function validDate(text) {
 }
 
 const GROUP_FIELDS = `g.id, coalesce(g.title, g.code) AS title, g.parallel, g.campus = 'digital' AS digital`;
+// Основной состав группы взят из загруженного файла, а не из Пульса.
+const FROM_FILE = `${fromFileSql('g.id')} AS from_file`;
 const CURRENT = `JOIN pulse_read.academic_years y ON y.id = g.academic_year_id WHERE y.is_current AND g.archived_at IS NULL`;
 
-// Текущие группы с числом учеников в Пульсе и действующих поправок.
+// Текущие группы с числом учеников в основном составе (файл или Пульс) и действующих поправок.
 async function listGroups(db) {
   const r = await db.query(
-    `SELECT ${GROUP_FIELDS},
-            (SELECT count(DISTINCT m.student_id) FROM pulse_read.group_memberships m WHERE m.group_id = g.id)::int AS pulse_count,
+    `SELECT ${GROUP_FIELDS}, ${FROM_FILE},
+            (SELECT count(*) FROM ${baseRosterSql('g.id')} b)::int AS base_count,
             (SELECT count(*) FROM monitoring.roster_overrides o WHERE o.group_id = g.id AND o.cancelled_at IS NULL)::int AS overrides
      FROM pulse_read.groups g ${CURRENT}
      ORDER BY g.parallel NULLS LAST, g.campus = 'digital', coalesce(g.title, g.code)`,
@@ -39,7 +43,7 @@ async function listGroups(db) {
 }
 
 async function currentGroup(db, groupId) {
-  const r = await db.query(`SELECT ${GROUP_FIELDS} FROM pulse_read.groups g ${CURRENT} AND g.id = $1`, [groupId]);
+  const r = await db.query(`SELECT ${GROUP_FIELDS}, ${FROM_FILE} FROM pulse_read.groups g ${CURRENT} AND g.id = $1`, [groupId]);
   return r.rows[0] || null;
 }
 
@@ -61,19 +65,19 @@ async function pulseGroups(db, studentIds) {
   return map;
 }
 
-// Состав группы: ученики из Пульса и добавленные поправками; у каждого действующая поправка, если есть.
+// Состав группы: основной состав (файл или Пульс) и добавленные поправками; у каждого действующая поправка, если есть.
 async function getRoster(db, groupId) {
   const group = await currentGroup(db, groupId);
   if (!group) return { status: 404, body: { error: 'not_found' } };
   const r = await db.query(
     `WITH p AS (
-       SELECT DISTINCT student_id FROM pulse_read.group_memberships WHERE group_id = $1
+       SELECT DISTINCT student_id FROM ${baseRosterSql('$1')} b
      ), o AS (
        SELECT id, student_id, action, kind, from_date FROM monitoring.roster_overrides WHERE group_id = $1 AND cancelled_at IS NULL
      ), ids AS (
        SELECT student_id FROM p UNION SELECT student_id FROM o
      )
-     SELECT ids.student_id AS id, s.full_name, (p.student_id IS NOT NULL) AS in_pulse,
+     SELECT ids.student_id AS id, s.full_name, (p.student_id IS NOT NULL) AS in_base,
             o.id AS override_id, o.action, o.kind, o.from_date::text AS from_date
      FROM ids
      LEFT JOIN (SELECT DISTINCT ON (id) id, full_name FROM pulse_read.students ORDER BY id, full_name) s ON s.id = ids.student_id
@@ -87,7 +91,7 @@ async function getRoster(db, groupId) {
   const students = r.rows.map(row => ({
     id: Number(row.id),
     full_name: row.full_name || 'Ученик',
-    in_pulse: row.in_pulse,
+    in_base: row.in_base,
     override: row.override_id ? { id: row.override_id, action: row.action, kind: row.kind, from_date: row.from_date } : null,
     pulse_groups: row.action === 'add' ? (from.get(Number(row.id)) || []).filter(g => g.id !== groupId) : undefined,
   }));
@@ -135,7 +139,7 @@ async function addOverride(db, user, userId, groupId, data) {
   if (!(await currentGroup(db, groupId))) return { status: 404, body: { error: 'not_found' } };
   const student = (await db.query('SELECT 1 FROM pulse_read.students WHERE id = $1 LIMIT 1', [studentId])).rows[0];
   if (!student) return bad('Ученик не найден');
-  const inPulse = Boolean((await db.query('SELECT 1 FROM pulse_read.group_memberships WHERE group_id = $1 AND student_id = $2 LIMIT 1', [groupId, studentId])).rows[0]);
+  const inBase = Boolean((await db.query(`SELECT 1 FROM ${baseRosterSql('$1')} b WHERE b.student_id = $2 LIMIT 1`, [groupId, studentId])).rows[0]);
   const active = (await db.query(
     'SELECT action, kind, from_date::text AS from_date FROM monitoring.roster_overrides WHERE group_id = $1 AND student_id = $2 AND cancelled_at IS NULL',
     [groupId, studentId],
@@ -144,8 +148,8 @@ async function addOverride(db, user, userId, groupId, data) {
     if (active.action === action) return conflict(action === 'add' ? `Ученик уже добавлен в группу${since(active)}` : `Ученик уже убран из группы${since(active)}`);
     return conflict(active.action === 'add' ? 'Ученик добавлен поправкой: отмените её' : 'Ученик убран поправкой: отмените её');
   }
-  if (action === 'add' && inPulse) return conflict('Ученик уже в этой группе по данным Пульса');
-  if (action === 'remove' && !inPulse) return conflict('Этого ученика нет в группе по данным Пульса');
+  if (action === 'add' && inBase) return conflict('Ученик уже в этой группе');
+  if (action === 'remove' && !inBase) return conflict('Этого ученика нет в группе');
   const name = await authorName(db, user, userId);
   try {
     const r = await db.query(

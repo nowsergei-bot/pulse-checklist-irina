@@ -30,7 +30,23 @@ async function parallelGroups(db, academicYearId, parallel) {
   return r.rows;
 }
 
-// Состав группы для работы: group_memberships из Пульса с поправками модуля (monitoring.roster_overrides).
+// Основной состав группы $n: из действующей загрузки файла, если группа в ней есть, иначе из Пульса.
+// Возвращает подзапрос со столбцом student_id.
+function baseRosterSql(param) {
+  const fromFile = `SELECT 1 FROM monitoring.roster_import_groups ig JOIN monitoring.roster_imports i ON i.id = ig.import_id AND i.active WHERE ig.group_id = ${param}`;
+  return `(SELECT im.student_id FROM monitoring.roster_import_members im JOIN monitoring.roster_imports i ON i.id = im.import_id AND i.active
+           WHERE im.group_id = ${param}
+           UNION
+           SELECT gm.student_id FROM pulse_read.group_memberships gm
+           WHERE gm.group_id = ${param} AND NOT EXISTS (${fromFile}))`;
+}
+
+// Группа $n входит в действующую загрузку файла.
+function fromFileSql(param) {
+  return `EXISTS (SELECT 1 FROM monitoring.roster_import_groups ig JOIN monitoring.roster_imports i ON i.id = ig.import_id AND i.active WHERE ig.group_id = ${param})`;
+}
+
+// Состав группы для работы: основной состав (файл или Пульс) с поправками модуля (monitoring.roster_overrides).
 // «Исправить состав» (fix) действует на все работы. «Перевод с даты» (transfer) действует, если дата
 // не позже даты работы (первая дата проведения частей); без работы или без дат берётся сегодняшний день.
 async function groupStudents(db, groupId, workId = null) {
@@ -41,7 +57,7 @@ async function groupStudents(db, groupId, workId = null) {
        SELECT o.student_id, o.action FROM monitoring.roster_overrides o, d
        WHERE o.group_id = $1 AND o.cancelled_at IS NULL AND (o.kind = 'fix' OR o.from_date <= d.on_date)
      ), ids AS (
-       (SELECT student_id FROM pulse_read.group_memberships WHERE group_id = $1
+       (SELECT student_id FROM ${baseRosterSql('$1')} b
         EXCEPT SELECT student_id FROM o WHERE action = 'remove')
        UNION SELECT student_id FROM o WHERE action = 'add'
      )
@@ -53,4 +69,4 @@ async function groupStudents(db, groupId, workId = null) {
   return r.rows;
 }
 
-module.exports = { currentYear, teacherGroupIds, parallelGroups, groupStudents };
+module.exports = { currentYear, teacherGroupIds, parallelGroups, groupStudents, baseRosterSql, fromFileSql };

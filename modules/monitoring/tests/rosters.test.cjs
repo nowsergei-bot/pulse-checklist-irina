@@ -102,7 +102,7 @@ test('поправки к составам групп', { skip: !url && 'нет 
     assert.equal((await one('SELECT count(*)::int AS n FROM monitoring.roster_overrides')).n, 0);
     const list = await call(admin, 'GET', '/rosters');
     assert.equal(list.status, 200);
-    assert.deepEqual(list.body.groups.map(g => [g.title, g.pulse_count, g.digital]), [['Группа А', 3, false], ['Группа Б', 2, true]]);
+    assert.deepEqual(list.body.groups.map(g => [g.title, g.base_count, g.digital]), [['Группа А', 3, false], ['Группа Б', 2, true]]);
   });
 
   await t.test('проверки поправки', async () => {
@@ -167,7 +167,7 @@ test('поправки к составам групп', { skip: !url && 'нет 
   await t.test('состав, история с автором, отмена', async () => {
     const r = await call(admin, 'GET', '/rosters/1');
     assert.equal(r.status, 200);
-    const rows = Object.fromEntries(r.body.students.map(s => [s.full_name, [s.in_pulse, s.override && s.override.action, s.override && s.override.kind, s.override && s.override.from_date]]));
+    const rows = Object.fromEntries(r.body.students.map(s => [s.full_name, [s.in_base, s.override && s.override.action, s.override && s.override.kind, s.override && s.override.from_date]]));
     assert.deepEqual(rows, {
       'Ученик А': [true, null, null, null],
       'Ученик Б': [true, 'remove', 'fix', null],

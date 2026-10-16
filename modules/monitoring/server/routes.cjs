@@ -8,6 +8,7 @@ const specs = require('./specs.cjs');
 const works = require('./works.cjs');
 const sheet = require('./sheet.cjs');
 const rosters = require('./rosters.cjs');
+const rosterImport = require('./roster-import.cjs');
 
 function parseBody(body) {
   if (body === null || body === undefined || body === '') return {};
@@ -90,6 +91,7 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (!caps.manage) return forbidden;
     if (method === 'GET') {
       if (path === '/rosters') return rosters.listGroups(db);
+      if (path === '/rosters/import') return rosterImport.status(db);
       if (path === '/rosters/search') return rosters.search(db, query && query.q);
       const g = path.match(/^\/rosters\/(\d+)$/);
       if (g) return rosters.getRoster(db, Number(g[1]));
@@ -98,6 +100,10 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
     const data = parseBody(body);
     if (!data) return { status: 400, body: { error: 'bad_request' } };
+    // Составы групп из файла: пробный прогон без записи, применение, возврат к Пульсу.
+    if (path === '/rosters/import/preview') return rosterImport.preview(db, data);
+    if (path === '/rosters/import/apply') return rosterImport.apply(db, user, userId, data);
+    if (path === '/rosters/import/cancel') return rosterImport.cancel(db, user, userId);
     const g = path.match(/^\/rosters\/(\d+)$/);
     if (g) return rosters.addOverride(db, user, userId, Number(g[1]), data);
     const c = path.match(/^\/rosters\/overrides\/(\d+)\/cancel$/);
