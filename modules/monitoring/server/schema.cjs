@@ -27,7 +27,7 @@ async function schema(db, user) {
   }
   // Field names of the gateway user object, without values.
   const userFields = Object.keys(user || {}).sort().map(key => ({ name: key, type: describeShape(user[key]) }));
-  return { status: 200, body: { views: [...byView.values()], user_fields: userFields, multi_group_students: await multiGroupStudents(db), groups_without_account: await groupsWithoutAccount(db), current_groups: await currentGroups(db) } };
+  return { status: 200, body: { views: [...byView.values()], user_fields: userFields, multi_group_students: await multiGroupStudents(db), groups_without_account: await groupsWithoutAccount(db), current_groups: await currentGroups(db), result_counts: await resultCounts(db) } };
 }
 
 // Ученики, которые состоят в нескольких неархивных группах текущего года.
@@ -88,4 +88,71 @@ async function currentGroups(db) {
   return result.rows;
 }
 
-module.exports = { schema };
+// Счётчики результатов старого раздела: только число строк, без данных.
+// Входное тестирование: представления placement_*; секционные результаты: section_scores.
+// Текущий учебный год определяется по первому найденному пути (в порядке ниже).
+const RESULT_TABLES = /^(placement_.*|section_scores|score_sessions|student_attempts|task_results)$/;
+const DATE_COLUMNS = ['tested_at', 'taken_at', 'scored_at', 'conducted_on', 'held_on', 'test_date', 'date', 'created_at'];
+const q = (name) => `"${String(name).replace(/"/g, '""')}"`;
+
+function yearPath(table, cols, all) {
+  const has = (t, c) => (all.get(t) || []).includes(c);
+  const viaRef = (col, ref) => {
+    if (has(ref, 'academic_year_id')) return { sql: `JOIN pulse_read.${q(ref)} r ON r.id = x.${q(col)} WHERE r.academic_year_id = $1`, how: `${col} → ${ref}.academic_year_id` };
+    if (has(ref, 'term_id') && has('terms', 'academic_year_id')) return { sql: `JOIN pulse_read.${q(ref)} r ON r.id = x.${q(col)} JOIN pulse_read.terms tm ON tm.id = r.term_id WHERE tm.academic_year_id = $1`, how: `${col} → ${ref}.term_id → terms.academic_year_id` };
+    if (has(ref, 'group_id') && has('groups', 'academic_year_id')) return { sql: `JOIN pulse_read.${q(ref)} r ON r.id = x.${q(col)} JOIN pulse_read.groups gr ON gr.id = r.group_id WHERE gr.academic_year_id = $1`, how: `${col} → ${ref}.group_id → groups.academic_year_id` };
+    return null;
+  };
+  if (cols.includes('academic_year_id')) return { sql: 'WHERE x.academic_year_id = $1', how: 'academic_year_id' };
+  if (cols.includes('term_id') && has('terms', 'academic_year_id')) return { sql: 'JOIN pulse_read.terms tm ON tm.id = x.term_id WHERE tm.academic_year_id = $1', how: 'term_id → terms.academic_year_id' };
+  if (cols.includes('group_id') && has('groups', 'academic_year_id')) return { sql: 'JOIN pulse_read.groups gr ON gr.id = x.group_id WHERE gr.academic_year_id = $1', how: 'group_id → groups.academic_year_id' };
+  for (const [col, ref] of [['score_session_id', 'score_sessions'], ['session_id', 'score_sessions'], ['student_attempt_id', 'student_attempts'], ['attempt_id', 'student_attempts'], ['assessment_id', 'assessments']]) {
+    if (cols.includes(col) && ref !== table) {
+      const path = viaRef(col, ref);
+      if (path) return path;
+    }
+  }
+  const dateCol = DATE_COLUMNS.find(c => cols.includes(c));
+  if (dateCol) {
+    return {
+      sql: `WHERE x.${q(dateCol)} >= (SELECT starts_on FROM pulse_read.academic_years WHERE id = $1)
+            AND x.${q(dateCol)} < coalesce((SELECT min(starts_on) FROM pulse_read.academic_years WHERE starts_on > (SELECT starts_on FROM pulse_read.academic_years WHERE id = $1)),
+                                          (SELECT starts_on FROM pulse_read.academic_years WHERE id = $1) + interval '1 year')`,
+      how: `${dateCol} в датах учебного года`,
+    };
+  }
+  return null;
+}
+
+async function resultCounts(db) {
+  const columns = await db.query(
+    `SELECT table_name, column_name FROM information_schema.columns
+     WHERE table_schema = 'pulse_read' ORDER BY table_name, ordinal_position`,
+  );
+  const all = new Map();
+  for (const c of columns.rows) {
+    if (!all.has(c.table_name)) all.set(c.table_name, []);
+    all.get(c.table_name).push(c.column_name);
+  }
+  const year = (await db.query('SELECT id, label FROM pulse_read.academic_years WHERE is_current ORDER BY starts_on DESC NULLS LAST LIMIT 1')).rows[0] || null;
+  const tables = [...all.keys()].filter(t => RESULT_TABLES.test(t)).sort();
+  const rows = [];
+  for (const table of tables) {
+    const kind = table.startsWith('placement_') ? 'Входное тестирование' : table === 'section_scores' ? 'Секционные результаты' : 'Связанная таблица';
+    const row = { table, kind, total: null, current_year: null, year_by: null, error: null };
+    try {
+      row.total = (await db.query(`SELECT count(*)::int AS n FROM pulse_read.${q(table)}`)).rows[0].n;
+      const path = year ? yearPath(table, all.get(table), all) : null;
+      if (path) {
+        row.current_year = (await db.query(`SELECT count(*)::int AS n FROM pulse_read.${q(table)} x ${path.sql}`, [year.id])).rows[0].n;
+        row.year_by = path.how;
+      }
+    } catch (e) {
+      row.error = e && e.code ? `ошибка запроса (${e.code})` : 'ошибка запроса';
+    }
+    rows.push(row);
+  }
+  return { current_year: year ? year.label : null, tables: rows };
+}
+
+module.exports = { schema, resultCounts };

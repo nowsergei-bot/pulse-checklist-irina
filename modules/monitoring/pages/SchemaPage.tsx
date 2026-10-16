@@ -8,6 +8,10 @@ type SchemaData = {
   multi_group_students?: { full_name: string; groups: { title: string; parallel: number | null; campus: string | null }[] }[];
   groups_without_account?: { title: string; parallel: number | null; campus: string | null; teachers: string[] }[];
   current_groups?: { title: string; parallel: number | null; level_code: string | null; campus: string | null }[];
+  result_counts?: {
+    current_year: string | null;
+    tables: { table: string; kind: string; total: number | null; current_year: number | null; year_by: string | null; error: string | null }[];
+  };
 };
 
 const cell = { border: '1px solid #d0d7de', padding: '4px 8px', textAlign: 'left' as const };
@@ -15,6 +19,30 @@ const cell = { border: '1px solid #d0d7de', padding: '4px 8px', textAlign: 'left
 function SchemaTables({ data }: { data: SchemaData }) {
   return (
     <section>
+      {data.result_counts ? (
+        <>
+          <h2>Результаты старого раздела в pulse_read</h2>
+          <p>Только число строк. Текущий учебный год: {data.result_counts.current_year || 'не найден'}.</p>
+          {data.result_counts.tables.length ? (
+            <table style={{ borderCollapse: 'collapse', marginBottom: 24 }}>
+              <thead>
+                <tr><th style={cell}>Что</th><th style={cell}>Представление</th><th style={cell}>Всего</th><th style={cell}>Текущий год</th><th style={cell}>Год определён по</th></tr>
+              </thead>
+              <tbody>
+                {data.result_counts.tables.map(t => (
+                  <tr key={t.table}>
+                    <td style={cell}>{t.kind}</td>
+                    <td style={cell}>{t.table}</td>
+                    <td style={cell}>{t.error || t.total}</td>
+                    <td style={cell}>{t.error ? '' : t.current_year ?? 'нет связи с годом'}</td>
+                    <td style={cell}>{t.year_by || ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <p>В pulse_read нет представлений placement_* и section_scores</p>}
+        </>
+      ) : null}
       <h2>Представления pulse_read</h2>
       {data.views.length ? null : <p>Представления не найдены</p>}
       {data.views.map(view => (
