@@ -928,3 +928,54 @@ a.mon-btn {
   background: rgba(26, 21, 18, 0.06);
   color: #8a8079;
 }
+/* Щадящий режим: строка над таблицей и пометка у процента. */
+.mon-gentle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin: 0.6rem 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--mon-line);
+  border-radius: var(--radius-sm, 10px);
+  background: #fff;
+  font-size: 0.9rem;
+}
+.mon-gentle.is-on {
+  background: #eef3fa;
+  border-color: #d3dfef;
+}
+.mon-gentle__state {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.mon-gentle__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.mon-gentle__history {
+  flex-basis: 100%;
+  color: var(--mon-muted);
+  font-size: 0.82rem;
+}
+.mon-gentle__history summary {
+  cursor: pointer;
+}
+.mon-gentle__history ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+}
+.mon-gentle-tag {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0 0.35rem;
+  border-radius: 8px;
+  background: #e1e9f5;
+  color: #2c4f7c;
+  font-size: 0.64rem;
+  font-weight: 600;
+  vertical-align: middle;
+}

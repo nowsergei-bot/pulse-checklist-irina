@@ -52,6 +52,15 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     return { status: 405, body: { error: 'method_not_allowed' } };
   }
 
+  // Щадящий режим: права (заведующая кафедрой, data_admin) проверяет sheet.cjs.
+  const gentleMatch = path.match(/^\/works\/(\d+)\/gentle$/);
+  if (gentleMatch) {
+    if (method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
+    const data = parseBody(body);
+    if (!data) return { status: 400, body: { error: 'bad_request' } };
+    return sheet.setGentle(db, user, userId, caps, Number(gentleMatch[1]), data);
+  }
+
   // Всё ниже только для data_admin.
   if (path.startsWith('/specs') || path.startsWith('/works')) {
     if (!caps.manage) return forbidden;

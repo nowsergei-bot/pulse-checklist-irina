@@ -61,8 +61,14 @@ async function groupTitles(db, ids) {
   return new Map(r.rows.map(g => [Number(g.id), { id: Number(g.id), title: g.title || g.code, digital: g.campus === 'digital' }]));
 }
 
+async function gentleGroupIds(db, workId) {
+  const r = await db.query('SELECT group_id FROM monitoring.gentle_groups WHERE work_id = $1', [workId]);
+  return new Set(r.rows.map(row => Number(row.group_id)));
+}
+
 // Строки учеников: баллы, отметки «отсутствовал», чужие группы и расчёт.
-async function buildStudents(db, work, groupId, students, struct) {
+// gentle: щадящий режим этой группы в работе.
+async function buildStudents(db, work, groupId, students, struct, gentle = false) {
   const ids = students.map(s => Number(s.id));
   if (!ids.length) return [];
   const scores = (await db.query('SELECT student_id, task_id, group_id, score FROM monitoring.task_scores WHERE work_id = $1 AND student_id = ANY($2::int[])', [work.id, ids])).rows;
@@ -86,7 +92,7 @@ async function buildStudents(db, work, groupId, students, struct) {
       if (row.status === 'absent') absentIds.add(row.part_id);
       if (Number(row.group_id) !== groupId && row.status === 'absent') own.foreign[`p${row.part_id}`] = titles.get(Number(row.group_id))?.title || '';
     }
-    const result = studentResult({ parts: struct.parts, tasks: struct.tasks, maxPoints: work.max_points, scale: struct.scale, absentPartIds: absentIds, scores: scoreMap });
+    const result = studentResult({ parts: struct.parts, tasks: struct.tasks, maxPoints: work.max_points, scale: struct.scale, absentPartIds: absentIds, scores: scoreMap, gentle });
     return { id, full_name: s.full_name, ...own, result };
   });
 }
@@ -115,10 +121,18 @@ async function getSheet(db, userId, caps, workId, groupId) {
   if (a.error) return a.error;
   const struct = await structure(db, a.work);
   const group = (await groupTitles(db, [groupId])).get(groupId) || { id: groupId, title: '', digital: false };
+  const gentleIds = await gentleGroupIds(db, a.work.id);
+  const gentle = gentleIds.has(groupId);
   const members = await groupStudents(db, groupId);
-  const students = await buildStudents(db, a.work, groupId, members, struct);
+  const students = await buildStudents(db, a.work, groupId, members, struct, gentle);
   const left = await leftStudents(db, a.work.id, groupId, new Set(members.map(m => Number(m.id))));
-  const leftRows = await buildStudents(db, a.work, groupId, left, struct);
+  const leftRows = await buildStudents(db, a.work, groupId, left, struct, gentle);
+  const groupCount = (await db.query('SELECT count(*)::int AS n FROM monitoring.work_groups WHERE work_id = $1', [a.work.id])).rows[0].n;
+  const history = caps.seeHistory ? (await db.query(
+    `SELECT enabled, changed_by_name, changed_at FROM monitoring.gentle_history
+     WHERE work_id = $1 AND group_id = $2 ORDER BY id DESC LIMIT 20`,
+    [a.work.id, groupId],
+  )).rows : [];
   const w = a.work;
   return {
     status: 200,
@@ -126,6 +140,7 @@ async function getSheet(db, userId, caps, workId, groupId) {
       work: { id: w.id, title: w.title, parallel: w.parallel, status: w.status, spec_title: w.spec_title, version: w.version, max_points: w.max_points },
       group, can_edit: a.canEdit, reason: a.reason, parts: struct.parts, tasks: struct.tasks, scale: struct.scale,
       students, left_students: leftRows,
+      gentle: { enabled: gentle, can_change: canChangeGentle(caps, a.work), groups_on: gentleIds.size, groups_total: groupCount, history },
     },
   };
 }
@@ -235,7 +250,8 @@ async function saveSheet(db, userId, caps, workId, data) {
     touched.add(studentId);
   }
   const titles = await groupTitles(db, [...new Set(conflicts.map(c => c.group_id))]);
-  const students = await buildStudents(db, a.work, groupId, members.filter(s => touched.has(Number(s.id))), struct);
+  const gentle = (await gentleGroupIds(db, a.work.id)).has(groupId);
+  const students = await buildStudents(db, a.work, groupId, members.filter(s => touched.has(Number(s.id))), struct, gentle);
   return {
     status: 200,
     body: {
@@ -246,4 +262,67 @@ async function saveSheet(db, userId, caps, workId, data) {
   };
 }
 
-module.exports = { getSheet, saveSheet, access };
+// Щадящий режим меняют только заведующая кафедрой и data_admin; черновик работы только data_admin.
+function canChangeGentle(caps, work) {
+  return Boolean(caps.editAnyGroup && (caps.manage || work.status !== 'draft'));
+}
+
+// Сколько отметок изменится, если в группах groupIds режим станет enabled. Ученик считается один раз.
+async function markChanges(db, work, struct, groupIds, enabled) {
+  const seen = new Set();
+  let higher = 0;
+  let lower = 0;
+  for (const groupId of groupIds) {
+    const members = await groupStudents(db, groupId);
+    const left = await leftStudents(db, work.id, groupId, new Set(members.map(m => Number(m.id))));
+    const before = await buildStudents(db, work, groupId, [...members, ...left], struct, !enabled);
+    const after = new Map((await buildStudents(db, work, groupId, [...members, ...left], struct, enabled)).map(s => [s.id, s.result.mark]));
+    for (const s of before) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      const was = s.result.mark;
+      const now = after.get(s.id);
+      if (was === null || now === null || was === now) continue;
+      if (Number(now) > Number(was)) higher += 1;
+      else lower += 1;
+    }
+  }
+  return { changed: higher + lower, higher, lower };
+}
+
+// Включить или выключить щадящий режим для группы или для всех групп работы (параллели).
+// Без confirm только считает, у скольких учеников изменится отметка.
+async function setGentle(db, user, userId, caps, workId, data) {
+  const groupId = Number(data.group_id);
+  if (!Number.isInteger(groupId)) return bad('Не указана группа');
+  if (typeof data.enabled !== 'boolean') return bad('Не указано, включить или выключить');
+  const a = await access(db, userId, caps, workId, groupId);
+  if (a.error) return a.error;
+  if (!canChangeGentle(caps, a.work)) return { status: 403, body: { error: 'forbidden', message: 'Нет права менять щадящий режим' } };
+  const all = data.scope === 'parallel'
+    ? (await db.query('SELECT group_id FROM monitoring.work_groups WHERE work_id = $1 ORDER BY group_id', [workId])).rows.map(r => Number(r.group_id))
+    : [groupId];
+  const on = await gentleGroupIds(db, workId);
+  const targets = all.filter(id => on.has(id) !== data.enabled);
+  const struct = await structure(db, a.work);
+  const counts = await markChanges(db, a.work, struct, targets, data.enabled);
+  if (!data.confirm) return { status: 200, body: { groups: targets.length, ...counts } };
+  if (targets.length) {
+    const named = await db.query('SELECT full_name FROM pulse_read.users WHERE id = $1 AND full_name IS NOT NULL LIMIT 1', [userId]);
+    const name = (named.rows[0] && named.rows[0].full_name) || (user && user.full_name) || '';
+    // Запись и история одной командой; история только для групп, где режим действительно изменился.
+    const write = data.enabled
+      ? `INSERT INTO monitoring.gentle_groups (work_id, group_id, updated_by)
+         SELECT $1, g, $3 FROM unnest($2::int[]) g ON CONFLICT DO NOTHING RETURNING group_id`
+      : 'DELETE FROM monitoring.gentle_groups WHERE work_id = $1 AND group_id = ANY($2::int[]) RETURNING group_id';
+    await db.query(
+      `WITH w AS (${write})
+       INSERT INTO monitoring.gentle_history (work_id, group_id, enabled, changed_by, changed_by_name)
+       SELECT $1, group_id, $4, $3, $5 FROM w`,
+      [workId, targets, userId, data.enabled, name],
+    );
+  }
+  return { status: 200, body: { groups: targets.length, ...counts, done: true } };
+}
+
+module.exports = { getSheet, saveSheet, setGentle, access };

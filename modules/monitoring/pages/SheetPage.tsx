@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from './api';
 import { type Result, type ScaleRow, studentResult } from './calc';
+import Dialog from './Dialog';
 import { GroupName, STATUS_NAMES, versionLabel } from './labels';
 
 type Part = { id: number; code: string; name: string; held_on: string | null };
@@ -15,7 +16,14 @@ type Sheet = {
   group: { id: number; title: string; digital: boolean };
   can_edit: boolean; reason: string; parts: Part[]; tasks: Task[]; scale: ScaleRow[];
   students: Student[]; left_students: Student[];
+  gentle: Gentle;
 };
+type Gentle = {
+  enabled: boolean; can_change: boolean; groups_on: number; groups_total: number;
+  history: { enabled: boolean; changed_by_name: string; changed_at: string }[];
+};
+type GentlePreview = { groups: number; changed: number; higher: number; lower: number };
+type GentleAsk = { enabled: boolean; scope: 'group' | 'parallel'; preview?: GentlePreview; busy?: boolean; error?: string };
 type Change = { student_id: number; task_id?: number; score?: number | null; part_id?: number; absent?: boolean };
 type SaveResult = { students: Student[]; errors: string[]; conflicts: { student_id: number; key: string; group: string }[] };
 type SaveState = 'saved' | 'pending' | 'saving' | 'offline' | 'blocked';
@@ -31,6 +39,14 @@ const SAVE_TEXT: Record<SaveState, string> = {
 // Название из спецификации часто повторяет раздел и уровень («Listening: базовый»); тогда оно только в подсказке.
 const norm = (v: string) => v.toLowerCase().replace(/[^a-zа-яё0-9]+/g, ' ').trim();
 const sameTitle = (t: Task) => norm(t.title) === norm(`${t.section} ${t.level_name || t.level}`);
+
+// «у 1 ученика», «у 2 учеников», «у 21 ученика».
+const pupils = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'ученика' : 'учеников');
+
+function when(value: string) {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 function date(value: string | null) {
   if (!value) return '';
@@ -66,6 +82,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   const [notes, setNotes] = useState<string[]>([]);
   const [hint, setHint] = useState('');
   const [flash, setFlash] = useState('');
+  const [gentleAsk, setGentleAsk] = useState<GentleAsk>();
   const [, setTick] = useState(0);
   const pending = useRef<Record<string, Change>>({});
   const saving = useRef(false);
@@ -153,6 +170,29 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
     timer.current = window.setTimeout(() => { void flush(); }, 700);
   }
 
+  // Щадящий режим: сначала сервер считает, у скольких учеников изменится отметка, потом подтверждение.
+  async function askGentle(enabled: boolean, scope: GentleAsk['scope']) {
+    setGentleAsk({ enabled, scope, busy: true });
+    try {
+      const preview = await api<GentlePreview>(`/works/${workId}/gentle`, { method: 'POST', body: { group_id: groupId, scope, enabled } });
+      setGentleAsk({ enabled, scope, preview });
+    } catch (e) {
+      setGentleAsk({ enabled, scope, error: (e as Error).message });
+    }
+  }
+
+  async function applyGentle(ask: GentleAsk) {
+    setGentleAsk({ ...ask, busy: true, error: '' });
+    try {
+      await api(`/works/${workId}/gentle`, { method: 'POST', body: { group_id: groupId, scope: ask.scope, enabled: ask.enabled, confirm: true } });
+      const data = await api<Sheet>(`/works/${workId}/sheet?group=${groupId}`);
+      setSheet(data);
+      setGentleAsk(undefined);
+    } catch (e) {
+      setGentleAsk({ ...ask, busy: false, error: (e as Error).message });
+    }
+  }
+
   function reject(cell: string, max: number) {
     setHint(`Балл: целое число от 0 до ${max}`);
     setFlash(cell);
@@ -171,6 +211,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   if (!sheet) return <div><BackLink base={base} /><p className="mon-note">Загружаем…</p></div>;
 
   const { work, parts, tasks, students } = sheet;
+  const gentle = sheet.gentle;
   const editable = sheet.can_edit;
   const scoreOf = (s: Student, t: Task) => {
     const p = pending.current[`${s.id}:t${t.id}`];
@@ -185,6 +226,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
     parts, tasks, maxPoints: work.max_points, scale: sheet.scale,
     absentPartIds: new Set(parts.filter(p => absentOf(s, p)).map(p => p.id)),
     scoreOf: taskId => scoreOf(s, tasks.find(t => t.id === taskId) as Task),
+    gentle: gentle.enabled,
   });
   const results = new Map(students.map(s => [s.id, resultOf(s)]));
   const left = sheet.left_students || [];
@@ -258,7 +300,12 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
           ];
         })}
         <td className="mon-num mon-sheet__res-start"><strong>{empty || allAbsent ? '' : r.total}</strong></td>
-        <td className={`mon-num${r.complete ? '' : ' is-wait'}`}>{wasAbsent || empty ? '' : r.percent}</td>
+        <td
+          className={`mon-num${r.complete ? '' : ' is-wait'}`}
+          title={r.gentle && !(wasAbsent || empty) ? `Щадящий режим. Обычный процент: ${r.percent}` : undefined}
+        >
+          {wasAbsent || empty ? '' : r.gentle ? <>{r.gentle_percent}<span className="mon-gentle-tag">щадящий</span></> : r.percent}
+        </td>
         <td className="mon-sheet__mark">{r.mark || ''}</td>
         <td><span className={`mon-state mon-state--${r.complete ? 'ok' : wasAbsent ? 'absent' : 'missing'}`}>{r.state}</span></td>
       </tr>
@@ -301,6 +348,69 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
         {left.length ? ` · выбыли из группы: ${left.length}` : ''}
         {hint ? <span className="mon-sheet__hint"> · {hint}</span> : null}
       </p>
+
+      {gentle.can_change || gentle.enabled ? (
+        <div className={`mon-gentle${gentle.enabled ? ' is-on' : ''}`}>
+          <div className="mon-gentle__state">
+            <strong>Щадящий режим: {gentle.enabled ? 'включён' : 'выключен'}</strong>
+            <span className="mon-muted">
+              Задания повышенного уровня считаются с коэффициентом 0,5, отметка ставится по этому проценту.
+              {gentle.can_change && gentle.groups_total > 1 ? ` Включён в группах работы: ${gentle.groups_on} из ${gentle.groups_total}.` : ''}
+            </span>
+          </div>
+          {gentle.can_change ? (
+            <div className="mon-gentle__actions">
+              <button type="button" className="mon-btn" onClick={() => { void askGentle(!gentle.enabled, 'group'); }}>
+                {gentle.enabled ? 'Выключить' : 'Включить'}
+              </button>
+              {gentle.groups_total > 1 && gentle.groups_on < gentle.groups_total ? (
+                <button type="button" className="mon-btn mon-btn--ghost" title="Все группы этой работы" onClick={() => { void askGentle(true, 'parallel'); }}>
+                  Включить для всех групп параллели
+                </button>
+              ) : null}
+              {gentle.groups_total > 1 && gentle.groups_on > 0 ? (
+                <button type="button" className="mon-btn mon-btn--ghost" title="Все группы этой работы" onClick={() => { void askGentle(false, 'parallel'); }}>
+                  Выключить для всех групп параллели
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {gentle.history.length ? (
+            <details className="mon-gentle__history">
+              <summary>История изменений</summary>
+              <ul>
+                {gentle.history.map(h => (
+                  <li key={`${h.changed_at}-${h.enabled}`}>{when(h.changed_at)} · {h.changed_by_name || 'автор не указан'} · {h.enabled ? 'включён' : 'выключен'}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+      {gentleAsk ? (
+        <Dialog
+          title={`${gentleAsk.enabled ? 'Включить' : 'Выключить'} щадящий режим ${gentleAsk.scope === 'parallel' ? 'для всех групп параллели' : `для группы ${sheet.group.title}`}?`}
+          confirmLabel={gentleAsk.enabled ? 'Включить' : 'Выключить'}
+          busy={gentleAsk.busy || !gentleAsk.preview}
+          onConfirm={gentleAsk.preview && gentleAsk.preview.groups ? () => { void applyGentle(gentleAsk); } : undefined}
+          onCancel={() => setGentleAsk(undefined)}
+        >
+          {gentleAsk.preview ? (
+            gentleAsk.preview.groups ? (
+              <>
+                <p>
+                  {gentleAsk.preview.changed
+                    ? `Отметка изменится у ${gentleAsk.preview.changed} ${pupils(gentleAsk.preview.changed)}: выше у ${gentleAsk.preview.higher}, ниже у ${gentleAsk.preview.lower}.`
+                    : 'Отметки не изменятся.'}
+                </p>
+                {gentleAsk.scope === 'parallel' ? <p>Групп, где режим изменится: {gentleAsk.preview.groups}.</p> : null}
+                <p>Баллы не меняются.</p>
+              </>
+            ) : <p>Режим уже {gentleAsk.enabled ? 'включён' : 'выключен'} во всех этих группах.</p>
+          ) : gentleAsk.error ? null : <p>Считаем…</p>}
+          {gentleAsk.error ? <p className="mon-err" role="alert">{gentleAsk.error}</p> : null}
+        </Dialog>
+      ) : null}
 
       {!students.length && !left.length ? <p className="mon-note">В группе нет учеников</p> : (
         <div className="mon-sheet__wrap">

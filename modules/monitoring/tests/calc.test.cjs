@@ -72,3 +72,44 @@ test('схема с другим максимумом: считается от �
   assert.deepEqual([single(34, 38).percent, single(34, 38).mark], [89, '4']);
   assert.deepEqual([single(35, 38).percent, single(35, 38).mark], [92, '5']);
 });
+
+// Щадящий режим. Максимум базовых 20, повышенных 30, итого 50 (так выходят проценты из задания).
+const gentleParts = [{ id: 1, name: 'Тест' }];
+const gentleTasks = [{ id: 30, part_id: 1, level: 'basic', max_points: 20 }, { id: 31, part_id: 1, level: 'advanced', max_points: 30 }];
+function gentleRun(basic, advanced, gentle = true) {
+  return studentResult({ parts: gentleParts, tasks: gentleTasks, maxPoints: 50, scale, absentPartIds: new Set(), scores: new Map([[30, basic], [31, advanced]]), gentle });
+}
+
+test('щадящий режим: ученики А-Д', () => {
+  const cases = [
+    ['А', 16, 8, 57, '3', 48, '2'],
+    ['Б', 18, 15, 73, '3', 66, '3'],
+    ['В', 19, 20, 83, '4', 78, '4'],
+    ['Г', 20, 25, 93, '5', 90, '5'],
+    ['Д', 12, 26, 71, '3', 76, '4'],
+  ];
+  for (const [name, basic, advanced, gentlePercent, gentleMark, percent, normalMark] of cases) {
+    const r = gentleRun(basic, advanced);
+    assert.equal(r.gentle_percent, gentlePercent, `ученик ${name}`);
+    assert.equal(r.mark, gentleMark, `ученик ${name}`);
+    // Итог в баллах и обычный процент не меняются.
+    assert.equal(r.total, basic + advanced);
+    assert.equal(r.percent, percent, `ученик ${name}`);
+    const off = gentleRun(basic, advanced, false);
+    assert.equal(off.mark, normalMark, `ученик ${name}`);
+    assert.equal(off.gentle_percent, null);
+  }
+});
+
+test('щадящий режим: отметка только по щадящему проценту, даже если обычный выше', () => {
+  const r = gentleRun(12, 26);
+  assert.equal(r.percent, 76);
+  assert.equal(r.gentle_percent, 71);
+  assert.equal(r.mark, '3');
+});
+
+test('щадящий режим: без повышенных заданий процент тот же', () => {
+  const tasksBasic = [{ id: 40, part_id: 1, level: 'basic', max_points: 40 }];
+  const r = studentResult({ parts: gentleParts, tasks: tasksBasic, maxPoints: 40, scale, absentPartIds: new Set(), scores: new Map([[40, 30]]), gentle: true });
+  assert.deepEqual([r.percent, r.gentle_percent, r.mark], [75, 75, '4']);
+});
