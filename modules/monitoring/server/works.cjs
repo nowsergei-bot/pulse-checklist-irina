@@ -1,6 +1,6 @@
 // Работы: список для всех ролей модуля, создание и правка только для data_admin.
 
-const { teacherGroupIds } = require('./lib/groups.cjs');
+const { teacherGroupIds, groupStudents } = require('./lib/groups.cjs');
 
 const STATUSES = ['draft', 'open', 'closed'];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -61,7 +61,7 @@ async function listWorks(db, userId, caps) {
   if (own && !own.length) return { status: 200, body: { works: [] } };
   const r = await db.query(
     `SELECT w.id, w.title, w.parallel, w.status, w.is_test, w.academic_year_id, t.name AS type_name,
-            s.title AS spec_title, v.version, v.max_points,
+            s.title AS spec_title, v.version, v.max_points, w.spec_version_id,
             (SELECT json_agg(json_build_object('name', p.name, 'held_on', wp.held_on) ORDER BY p.sort)
                FROM monitoring.work_parts wp JOIN monitoring.spec_parts p ON p.id = wp.part_id WHERE wp.work_id = w.id) AS parts,
             (SELECT array_agg(group_id) FROM monitoring.work_groups g WHERE g.work_id = w.id) AS group_ids
@@ -81,10 +81,42 @@ async function listWorks(db, userId, caps) {
   const works = r.rows.map(w => ({
     id: w.id, title: w.title, parallel: w.parallel, status: w.status, is_test: w.is_test, type_name: w.type_name,
     spec: w.spec_title, version: w.version, max_points: w.max_points, parts: w.parts || [],
+    spec_version_id: w.spec_version_id,
     groups: (w.group_ids || []).filter(id => !own || own.includes(id)).map(id => groups.get(id)).filter(Boolean)
       .sort((a, b) => Number(a.digital) - Number(b.digital) || String(a.title).localeCompare(String(b.title), 'ru')),
   }));
-  return { status: 200, body: { works } };
+  // Учителю (без права видеть все группы): карточки своих групп с прогрессом внесения.
+  if (own) {
+    for (const w of works) {
+      for (const g of w.groups) g.progress = await groupProgress(db, w.id, w.spec_version_id, g.id);
+    }
+  }
+  for (const w of works) delete w.spec_version_id;
+  return { status: 200, body: { view: own ? 'teacher' : 'table', works } };
+}
+
+// Сколько учеников текущего состава группы внесены полностью: по каждому заданию есть балл
+// (в любой группе) или часть отмечена «отсутствовал». Состав тот же, что в таблице ввода.
+async function groupProgress(db, workId, versionId, groupId) {
+  const members = (await groupStudents(db, groupId, workId)).map(s => Number(s.id));
+  const r = await db.query(
+    `WITH m AS (
+       SELECT unnest($3::int[]) AS student_id
+     ), t AS (
+       SELECT id, part_id FROM monitoring.spec_tasks WHERE version_id = $2
+     )
+     SELECT count(*)::int AS total,
+            count(*) FILTER (WHERE NOT EXISTS (
+              SELECT 1 FROM t
+              WHERE NOT EXISTS (SELECT 1 FROM monitoring.part_status ps
+                                WHERE ps.work_id = $1 AND ps.part_id = t.part_id AND ps.student_id = m.student_id AND ps.status = 'absent')
+                AND NOT EXISTS (SELECT 1 FROM monitoring.task_scores sc
+                                WHERE sc.work_id = $1 AND sc.task_id = t.id AND sc.student_id = m.student_id AND sc.score IS NOT NULL)
+            ))::int AS done
+     FROM m`,
+    [workId, versionId, members],
+  );
+  return r.rows[0];
 }
 
 async function getWork(db, workId) {
