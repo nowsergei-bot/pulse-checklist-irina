@@ -344,4 +344,4 @@ async function setGentle(db, user, userId, caps, workId, data) {
   return { status: 200, body: { groups: targets.length, ...counts, done: true } };
 }
 
-module.exports = { getSheet, saveSheet, setGentle, access };
+module.exports = { getSheet, saveSheet, setGentle, access, loadWork, structure, buildStudents, leftStudents, gentleGroupIds };

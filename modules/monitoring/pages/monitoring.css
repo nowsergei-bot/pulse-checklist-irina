@@ -1178,3 +1178,54 @@ a.mon-btn {
   color: #2f6340;
   font-weight: 600;
 }
+
+/* Аналитика (только data_admin). */
+.mon-an .mon-toolbar {
+  justify-content: flex-start;
+  align-items: flex-end;
+  gap: 0.9rem;
+}
+.mon-an__meta {
+  margin: 0 0 0.55rem;
+}
+.mon-an .mon-toolbar .mon-field {
+  margin: 0;
+}
+.mon-an__block {
+  margin-top: 1.6rem;
+}
+.mon-an__title {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+.mon-an__block > .mon-note {
+  margin: 0 0 0.6rem;
+}
+.mon-an__scroll {
+  overflow-x: auto;
+}
+.mon-an__table {
+  font-variant-numeric: tabular-nums;
+}
+.mon-an__table th {
+  vertical-align: bottom;
+}
+.mon-an__table th.mon-num,
+.mon-an__table td.mon-num {
+  text-align: right;
+}
+.mon-an__table td.mon-num,
+.mon-an__table td:nth-child(2) {
+  white-space: nowrap;
+}
+.mon-an__table tr.is-parallel td,
+.mon-an__table tr.is-total td {
+  background: #faf6f2;
+  font-weight: 700;
+}
+.mon-an__table tr.is-left td,
+.mon-an__table tr.is-parallel_left td,
+.mon-an__table tr.is-total_left td {
+  color: var(--mon-muted);
+  font-style: italic;
+}

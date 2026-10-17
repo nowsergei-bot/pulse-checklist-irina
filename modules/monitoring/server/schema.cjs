@@ -386,4 +386,4 @@ async function placementStructure(db, all, yearId) {
   }
 }
 
-module.exports = { schema, resultCounts, placementBreakdown, placementSchema, catalogColumns, columnMap };
+module.exports = { schema, resultCounts, placementBreakdown, placementSchema, catalogColumns, columnMap, placementLinks, currentYear };
