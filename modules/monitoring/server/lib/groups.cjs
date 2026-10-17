@@ -5,18 +5,29 @@ async function currentYear(db) {
   return r.rows[0] || null;
 }
 
+// Действующие учителя текущих групп: подзапрос со столбцами group_id, user_id, source.
+// Если у группы есть назначение в модуле (monitoring.group_teacher_assignments), учителя только оттуда
+// (source file или manual). Если нет, по Пульсу (source pulse):
 // group_teachers.teacher_id -> english_teachers.id -> english_teachers.user_id = users.id.
+const TEACHER_GROUPS_SQL = `(
+  SELECT a.group_id, a.user_id, a.source
+  FROM monitoring.group_teacher_assignments a
+  JOIN pulse_read.groups g ON g.id = a.group_id
+  JOIN pulse_read.academic_years y ON y.id = g.academic_year_id
+  WHERE g.archived_at IS NULL AND y.is_current
+  UNION
+  SELECT g.id, t.user_id, 'pulse'
+  FROM pulse_read.english_teachers t
+  JOIN pulse_read.group_teachers gt ON gt.teacher_id = t.id
+  JOIN pulse_read.groups g ON g.id = gt.group_id
+  JOIN pulse_read.academic_years y ON y.id = g.academic_year_id
+  WHERE t.user_id IS NOT NULL AND t.archived_at IS NULL AND g.archived_at IS NULL AND y.is_current
+    AND NOT EXISTS (SELECT 1 FROM monitoring.group_teacher_assignments a WHERE a.group_id = g.id)
+)`;
+
 async function teacherGroupIds(db, userId) {
-  const r = await db.query(
-    `SELECT DISTINCT g.id
-     FROM pulse_read.english_teachers t
-     JOIN pulse_read.group_teachers gt ON gt.teacher_id = t.id
-     JOIN pulse_read.groups g ON g.id = gt.group_id
-     JOIN pulse_read.academic_years y ON y.id = g.academic_year_id
-     WHERE t.user_id = $1 AND t.archived_at IS NULL AND g.archived_at IS NULL AND y.is_current`,
-    [userId],
-  );
-  return r.rows.map(row => Number(row.id));
+  const r = await db.query(`SELECT DISTINCT tg.group_id FROM ${TEACHER_GROUPS_SQL} tg WHERE tg.user_id = $1`, [userId]);
+  return r.rows.map(row => Number(row.group_id)).sort((a, b) => a - b);
 }
 
 async function parallelGroups(db, academicYearId, parallel) {
@@ -69,4 +80,4 @@ async function groupStudents(db, groupId, workId = null) {
   return r.rows;
 }
 
-module.exports = { currentYear, teacherGroupIds, parallelGroups, groupStudents, baseRosterSql, fromFileSql };
+module.exports = { TEACHER_GROUPS_SQL, currentYear, teacherGroupIds, parallelGroups, groupStudents, baseRosterSql, fromFileSql };

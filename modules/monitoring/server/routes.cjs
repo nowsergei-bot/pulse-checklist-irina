@@ -9,6 +9,7 @@ const works = require('./works.cjs');
 const sheet = require('./sheet.cjs');
 const rosters = require('./rosters.cjs');
 const rosterImport = require('./roster-import.cjs');
+const groupTeachers = require('./group-teachers.cjs');
 
 function parseBody(body) {
   if (body === null || body === undefined || body === '') return {};
@@ -86,12 +87,13 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (m && method === 'POST') return works.updateWork(db, Number(m[1]), data);
     return { status: 405, body: { error: 'method_not_allowed' } };
   }
-  // Поправки к составам групп: только data_admin, и чтение, и запись.
+  // Поправки к составам групп и учителя групп: только data_admin, и чтение, и запись.
   if (path === '/rosters' || path.startsWith('/rosters/')) {
     if (!caps.manage) return forbidden;
     if (method === 'GET') {
       if (path === '/rosters') return rosters.listGroups(db);
       if (path === '/rosters/import') return rosterImport.status(db);
+      if (path === '/rosters/teachers') return groupTeachers.list(db);
       if (path === '/rosters/search') return rosters.search(db, query && query.q);
       const g = path.match(/^\/rosters\/(\d+)$/);
       if (g) return rosters.getRoster(db, Number(g[1]));
@@ -104,6 +106,13 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (path === '/rosters/import/preview') return rosterImport.preview(db, data);
     if (path === '/rosters/import/apply') return rosterImport.apply(db, user, userId, data);
     if (path === '/rosters/import/cancel') return rosterImport.cancel(db, user, userId);
+    // Учителя групп: из файла (пробный прогон, применение) и вручную.
+    if (path === '/rosters/teachers/preview') return groupTeachers.preview(db, data);
+    if (path === '/rosters/teachers/apply') return groupTeachers.apply(db, user, userId, data);
+    const tg = path.match(/^\/rosters\/teachers\/(\d+)$/);
+    if (tg) return groupTeachers.change(db, user, userId, Number(tg[1]), data);
+    const tr = path.match(/^\/rosters\/teachers\/(\d+)\/reset$/);
+    if (tr) return groupTeachers.reset(db, user, userId, Number(tr[1]));
     const g = path.match(/^\/rosters\/(\d+)$/);
     if (g) return rosters.addOverride(db, user, userId, Number(g[1]), data);
     const c = path.match(/^\/rosters\/overrides\/(\d+)\/cancel$/);

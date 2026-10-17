@@ -240,3 +240,98 @@
     overflow-x: auto;
   }
 }
+
+/* Учителя групп: пробный прогон по файлу и таблица «группа → учитель». */
+.mon-gt__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.75rem;
+  align-items: baseline;
+  cursor: pointer;
+  list-style: none;
+}
+.mon-gt__summary::-webkit-details-marker {
+  display: none;
+}
+.mon-gt__summary::before {
+  content: '▸';
+  color: var(--mon-muted);
+}
+.mon-gt[open] > .mon-gt__summary::before {
+  content: '▾';
+}
+.mon-gt__summary .mon-note {
+  margin: 0;
+}
+.mon-gt > .mon-note {
+  margin: 0.6rem 0;
+}
+.mon-gt__filter {
+  display: flex;
+  max-width: 24rem;
+  margin-bottom: 0.6rem;
+}
+.mon-gt__filter .mon-input {
+  flex: 1;
+}
+.mon-gt__table {
+  background: #fff;
+}
+.mon-gt__table td {
+  vertical-align: top;
+}
+.mon-gt__table tr.is-cont td {
+  border-top-style: dashed;
+}
+.mon-gt__src,
+.mon-gt__st,
+.mon-gt__norole {
+  display: inline-block;
+  margin-right: 0.25rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mon-gt__src--pulse,
+.mon-gt__st {
+  background: #f1ebe6;
+  color: #6b5d52;
+}
+.mon-gt__src--file {
+  background: #e6eef6;
+  color: #2c4f73;
+}
+.mon-gt__src--manual,
+.mon-gt__st--warn {
+  background: #fbf0dc;
+  color: #7a5200;
+}
+.mon-gt__st--err {
+  background: #f6e3e3;
+  color: var(--mon-red);
+}
+.mon-gt__norole {
+  background: #fff;
+  border: 1px solid rgba(127, 10, 16, 0.3);
+  color: var(--mon-red);
+  font-weight: 500;
+}
+.mon-gt__choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: center;
+}
+.mon-gt__choice .mon-select {
+  min-width: 14rem;
+}
+.mon-gt__mode {
+  margin-top: 0.6rem;
+}
+.mon-gt__preview {
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--mon-line);
+}

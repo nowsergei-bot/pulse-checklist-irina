@@ -1,6 +1,6 @@
 // Составы групп из файла: только data_admin, права проверяет routes.cjs.
 // Файл читается в браузере; сюда приходят только строки листа «Составы»:
-// [параллель, группа, ФИО ученика, класс]. Учителя из файла не передаются.
+// [параллель, группа, ФИО ученика, класс]. Учителя групп из того же файла обрабатывает group-teachers.cjs.
 // Строки файла не пишутся в логи и не хранятся: после применения остаются только пары группа и ученик.
 
 const crypto = require('node:crypto');
@@ -43,13 +43,17 @@ function groupTitle(g) {
   return g.campus === 'digital' ? `${g.title} (ЦГ)` : g.title;
 }
 
-async function load(db) {
-  const groups = (await db.query(
+async function currentGroups(db) {
+  return (await db.query(
     `SELECT g.id, coalesce(g.title, g.code) AS title, g.code, g.parallel, g.campus
      FROM pulse_read.groups g JOIN pulse_read.academic_years y ON y.id = g.academic_year_id
      WHERE y.is_current AND g.archived_at IS NULL
      ORDER BY g.parallel NULLS LAST, g.campus = 'digital', coalesce(g.title, g.code)`,
   )).rows.map(g => ({ ...g, id: Number(g.id) }));
+}
+
+async function load(db) {
+  const groups = await currentGroups(db);
   const students = (await db.query(
     'SELECT DISTINCT ON (id) id, full_name FROM pulse_read.students WHERE full_name IS NOT NULL ORDER BY id, full_name',
   )).rows.map(s => ({ id: Number(s.id), full_name: s.full_name }));
@@ -63,9 +67,8 @@ async function load(db) {
   return { groups, students, memberships, activeId: active ? Number(active.id) : null };
 }
 
-// Сопоставление без записи. Тот же расчёт используется при применении.
-function match(rows, { groups, students, memberships, activeId }) {
-  const groupById = new Map(groups.map(g => [g.id, g]));
+// Группа Пульса по параллели и коду группы из файла; при неоднозначности основная, а не ЦГ.
+function groupResolver(groups) {
   const byCode = new Map();
   for (const g of groups) {
     for (const key of new Set([normCode(g.code), normCode(g.title)])) {
@@ -74,6 +77,20 @@ function match(rows, { groups, students, memberships, activeId }) {
       byCode.get(key).push(g);
     }
   }
+  return (row) => {
+    const parallel = Number(String(row.parallel).replace(/\D/g, '')) || null;
+    let found = byCode.get(normCode(row.group)) || [];
+    if (!found.length && parallel) found = byCode.get(normCode(`${parallel}${row.group}`)) || [];
+    if (found.length > 1 && parallel) found = found.filter(g => Number(g.parallel) === parallel);
+    if (found.length > 1) found = found.filter(g => g.campus !== 'digital');
+    return found.length === 1 ? found[0] : null;
+  };
+}
+
+// Сопоставление без записи. Тот же расчёт используется при применении.
+function match(rows, { groups, students, memberships, activeId }) {
+  const groupById = new Map(groups.map(g => [g.id, g]));
+  const resolveGroup = groupResolver(groups);
   const pulseGroups = new Map();
   for (const m of memberships) {
     if (!pulseGroups.has(m.student_id)) pulseGroups.set(m.student_id, []);
@@ -93,15 +110,6 @@ function match(rows, { groups, students, memberships, activeId }) {
       byShort.get(short).push(s.id);
     }
   }
-
-  const resolveGroup = (row) => {
-    const parallel = Number(String(row.parallel).replace(/\D/g, '')) || null;
-    let found = byCode.get(normCode(row.group)) || [];
-    if (!found.length && parallel) found = byCode.get(normCode(`${parallel}${row.group}`)) || [];
-    if (found.length > 1 && parallel) found = found.filter(g => Number(g.parallel) === parallel);
-    if (found.length > 1) found = found.filter(g => g.campus !== 'digital');
-    return found.length === 1 ? found[0] : null;
-  };
 
   const groupsOfStudent = (id) => (pulseGroups.get(id) || []).map(g => groupTitle(groupById.get(g)));
   const narrow = (ids, group) => {
@@ -331,4 +339,4 @@ async function discrepancies(db) {
   return r.rows.filter(row => row.only_file.length || row.only_pulse.length);
 }
 
-module.exports = { preview, apply, cancel, status, discrepancies, normName, normCode, shortName, match };
+module.exports = { preview, apply, cancel, status, discrepancies, normName, normCode, shortName, match, currentGroups, groupResolver, groupTitle, authorName };

@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { api, useApi } from './api';
 import Dialog from './Dialog';
-import { readRosterFile, type RosterRow } from './rosterFile';
+import { readRosterFile, type RosterRow, type TeacherRow } from './rosterFile';
+import { TeacherPreview, type TeacherReport } from './GroupTeachers';
 
 type GroupStat = { group_id: number; title: string; parallel: number | null; rows: number; matched: number; stay: number; moved: number; added: number; not_found: number; ambiguous: number; leaving: number };
 type Report = {
@@ -51,7 +52,8 @@ function List<T>({ title, items, head, row, open }: { title: string; items: T[];
 }
 
 // Загрузка составов групп из Excel: пробный прогон без записи, затем применение после подтверждения.
-export default function RosterImport({ onApplied }: { onApplied: () => void }) {
+// Из того же файла отдельным прогоном читаются учителя групп (столбец «Учитель»).
+export default function RosterImport({ onApplied, onTeachersApplied }: { onApplied: () => void; onTeachersApplied: () => void }) {
   const { data: status, reload } = useApi<Imports>('/rosters/import');
   const input = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<RosterRow[] | null>(null);
@@ -61,17 +63,24 @@ export default function RosterImport({ onApplied }: { onApplied: () => void }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [confirm, setConfirm] = useState<'apply' | 'cancel' | null>(null);
+  const [teacherRows, setTeacherRows] = useState<TeacherRow[] | null>(null);
+  const [teacherReport, setTeacherReport] = useState<TeacherReport | null>(null);
+  const [teacherNote, setTeacherNote] = useState('');
 
   const active = status?.imports.find(i => i.active) || null;
 
   async function pick(file: File | undefined) {
     if (!file) return;
-    setBusy(true); setError(''); setMessage(''); setReport(null); setRows(null);
+    setBusy(true); setError(''); setMessage(''); setReport(null); setRows(null); setTeacherReport(null); setTeacherRows(null); setTeacherNote('');
     try {
-      const read = await readRosterFile(file);
+      const { rows: read, teachers } = await readRosterFile(file);
       setFileName(file.name);
       setRows(read);
       setReport(await api<Report>('/rosters/import/preview', { method: 'POST', body: { rows: read } }));
+      if (teachers.length) {
+        setTeacherRows(teachers);
+        setTeacherReport(await api<TeacherReport>('/rosters/teachers/preview', { method: 'POST', body: { rows: teachers } }));
+      } else setTeacherNote('В файле нет столбца «Учитель» или он пуст: учителя групп не меняются.');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -122,7 +131,7 @@ export default function RosterImport({ onApplied }: { onApplied: () => void }) {
           {active ? <button type="button" className="mon-link mon-link--muted" disabled={busy} onClick={() => setConfirm('cancel')}>Вернуть составы из Пульса</button> : null}
         </div>
       </div>
-      {busy && !report ? <p className="mon-note">Читаем файл и сопоставляем учеников…</p> : null}
+      {busy && !report ? <p className="mon-note">Читаем файл и сопоставляем учеников и учителей…</p> : null}
       {error ? <p className="mon-err" role="alert">{error}</p> : null}
       {message ? <p className="mon-alert mon-alert--ok" role="status">{message}</p> : null}
 
@@ -184,6 +193,13 @@ export default function RosterImport({ onApplied }: { onApplied: () => void }) {
           </div>
         </div>
       ) : null}
+
+      {teacherReport && teacherRows ? (
+        <TeacherPreview rows={teacherRows} report={teacherReport} fileName={fileName}
+          onApplied={text => { setMessage(text); setTeacherReport(null); setTeacherRows(null); onTeachersApplied(); }}
+          onClose={() => { setTeacherReport(null); setTeacherRows(null); }} />
+      ) : null}
+      {teacherNote ? <p className="mon-note">{teacherNote}</p> : null}
 
       {confirm === 'apply' && s ? (
         <Dialog title="Применить составы из файла?" confirmLabel="Применить" busy={busy} onConfirm={apply} onCancel={() => setConfirm(null)}>

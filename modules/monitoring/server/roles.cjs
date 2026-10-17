@@ -1,6 +1,7 @@
 // Экран «Роли»: только data_admin. Почты пользователей не читаются.
 
 const { ROLES } = require('./lib/access.cjs');
+const { TEACHER_GROUPS_SQL } = require('./lib/groups.cjs');
 
 const ROLE_NAMES = {
   teacher: 'Учитель',
@@ -20,16 +21,14 @@ async function rolesByUser(db, userIds) {
   return map;
 }
 
-// Текущие группы учителей: неархивные группы текущего года, тип группы из groups.campus.
+// Текущие группы учителей: назначенные в модуле, иначе по Пульсу; тип группы из groups.campus.
 async function groupsByUser(db, userIds) {
   if (!userIds.length) return new Map();
   const r = await db.query(
-    `SELECT DISTINCT t.user_id, g.id, g.title, g.code, g.campus, g.parallel
-     FROM pulse_read.english_teachers t
-     JOIN pulse_read.group_teachers gt ON gt.teacher_id = t.id
-     JOIN pulse_read.groups g ON g.id = gt.group_id
-     JOIN pulse_read.academic_years y ON y.id = g.academic_year_id
-     WHERE t.user_id = ANY($1::int[]) AND t.archived_at IS NULL AND g.archived_at IS NULL AND y.is_current
+    `SELECT DISTINCT tg.user_id, g.id, g.title, g.code, g.campus, g.parallel
+     FROM ${TEACHER_GROUPS_SQL} tg
+     JOIN pulse_read.groups g ON g.id = tg.group_id
+     WHERE tg.user_id = ANY($1::int[])
      ORDER BY g.parallel NULLS LAST, g.title`,
     [userIds],
   );

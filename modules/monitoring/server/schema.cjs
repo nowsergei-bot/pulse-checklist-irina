@@ -70,8 +70,8 @@ async function multiGroupStudents(db) {
   return result.rows;
 }
 
-// Текущие группы, у которых нет ни одного действующего учителя с учётной записью Пульса.
-// В списке ФИО действующих учителей группы, если они есть.
+// Текущие группы, у которых нет ни одного действующего учителя с учётной записью Пульса
+// и нет учителя, назначенного в модуле. В списке ФИО действующих учителей группы, если они есть.
 async function groupsWithoutAccount(db) {
   const result = await db.query(
     `WITH g AS (
@@ -79,6 +79,7 @@ async function groupsWithoutAccount(db) {
        FROM pulse_read.groups g
        JOIN pulse_read.academic_years y ON y.id = g.academic_year_id
        WHERE y.is_current AND g.archived_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM monitoring.group_teacher_assignments a WHERE a.group_id = g.id)
      ), t AS (
        SELECT DISTINCT gt.group_id, e.full_name,
               (e.user_id IS NOT NULL AND EXISTS (SELECT 1 FROM pulse_read.users u WHERE u.id = e.user_id)) AS has_account

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, useApi } from './api';
 import Dialog from './Dialog';
 import RosterImport from './RosterImport';
+import GroupTeachers from './GroupTeachers';
 import './rosters.css';
 
 type Group = { id: number; title: string; parallel: number | null; digital: boolean; base_count?: number; from_file?: boolean; overrides?: number };
@@ -166,6 +167,7 @@ export default function RostersPage() {
   const [date, setDate] = useState(today());
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState('');
+  const [teachersKey, setTeachersKey] = useState(0);
 
   const byParallel = useMemo(() => {
     const map = new Map<string, Group[]>();
@@ -211,8 +213,9 @@ export default function RostersPage() {
 
   return (
     <div className="mon-rost">
-      <p className="mon-note mon-hint">Состав берётся из Пульса или из загруженного файла. Здесь можно поправить его для модуля: в Пульсе составы не меняются. Поправки и загрузки видны только администраторам данных.</p>
-      <RosterImport onApplied={() => { reload(); reloadList(); }} />
+      <p className="mon-note mon-hint">Состав берётся из Пульса или из загруженного файла. Здесь можно поправить его для модуля: в Пульсе составы не меняются. Поправки, загрузки и назначения учителей видны только администраторам данных.</p>
+      <RosterImport onApplied={() => { reload(); reloadList(); }} onTeachersApplied={() => setTeachersKey(k => k + 1)} />
+      <GroupTeachers key={teachersKey} />
       <div className="mon-toolbar">
         <label className="mon-field">
           <span className="mon-label">Группа</span>
