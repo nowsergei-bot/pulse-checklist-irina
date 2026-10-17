@@ -14,11 +14,24 @@ type SchemaData = {
     current_year: string | null;
     tables: { table: string; kind: string; total: number | null; current_year: number | null; year_by: string | null; error: string | null }[];
   };
-  placement_views?: SchemaView[];
   placement_breakdown?: PlacementBreakdown;
 };
 type PlacementGroup = { parallel: number | null; title: string | null; digital: boolean | null; sessions: number; students: number; scores: number };
 type PlacementBreakdown = { links: string[]; missing: string[]; groups: PlacementGroup[]; scores_without_session: number | null };
+type PlacementField = { field_id: string; rows: number; filled: number; min: number | null; max: number | null; statuses: Record<string, number> };
+type PlacementSpec = {
+  spec_id: string | null; sessions: number; scores: number; parallels: number[]; statuses: Record<string, number>;
+  groups: { title: string | null; parallel: number | null; digital: boolean | null; sessions: number; scores: number }[];
+  fields: PlacementField[];
+};
+type PlacementData = {
+  current_year: string | null;
+  fields: { name: string; type: string; columns: { name: string; type: string }[] }[];
+  structure_missing: string[];
+  date_column?: string | null;
+  specs: PlacementSpec[];
+  multi_session_groups: { title: string | null; parallel: number | null; digital: boolean | null; sessions: { id: number; held_on: string | null; spec_id: string | null; scores: number; rows: number }[] }[];
+};
 
 const cell = { border: '1px solid #d0d7de', padding: '4px 8px', textAlign: 'left' as const };
 
@@ -114,20 +127,84 @@ function PlacementByGroups({ data, year }: { data: PlacementBreakdown; year: str
   );
 }
 
-function PlacementViews({ views }: { views: SchemaView[] }) {
+const groupTitle = (g: { title: string | null; digital: boolean | null }) => (g.title ? (g.digital ? `${g.title} (ЦГ)` : g.title) : 'группа не найдена');
+const statusText = (st: Record<string, number>) => Object.entries(st).map(([k, n]) => `${k}: ${n}`).join(' · ');
+const num = { ...cell, textAlign: 'right' as const };
+
+// Поля placement_*, структура входного тестирования и группы с несколькими сессиями: отдельный запрос,
+// чтобы ошибка в нём была видна здесь, а не терялась вместе со всей страницей.
+function PlacementSection() {
+  const { data, error } = useApi<PlacementData>('/schema/placement');
   return (
     <>
       <h3>Поля представлений входного тестирования</h3>
-      {views.length ? null : <p>В pulse_read нет представлений placement_*</p>}
-      {views.map(view => (
-        <div key={view.name} style={{ marginBottom: 16 }}>
-          <h4 style={{ margin: '8px 0 4px' }}>{view.name}{view.type === 'MATERIALIZED VIEW' ? ' (материализованное представление)' : ''}</h4>
-          <table style={{ borderCollapse: 'collapse' }}>
-            <thead><tr><th style={cell}>Поле</th><th style={cell}>Тип</th></tr></thead>
-            <tbody>{view.columns.map(c => <tr key={c.name}><td style={cell}>{c.name}</td><td style={cell}>{c.type}</td></tr>)}</tbody>
-          </table>
-        </div>
-      ))}
+      {error ? <p className="mon-err" role="alert">Не удалось загрузить: {error}</p> : !data ? <p>Загружаем…</p> : (
+        <>
+          {data.fields.length ? null : <p>В pulse_read нет представлений placement_*</p>}
+          {data.fields.map(view => (
+            <div key={view.name} style={{ marginBottom: 16 }}>
+              <h4 style={{ margin: '8px 0 4px' }}>{view.name}{view.type === 'MATERIALIZED VIEW' ? ' (материализованное представление)' : ''}</h4>
+              <table style={{ borderCollapse: 'collapse' }}>
+                <thead><tr><th style={cell}>Поле</th><th style={cell}>Тип</th></tr></thead>
+                <tbody>{view.columns.map(c => <tr key={c.name}><td style={cell}>{c.name}</td><td style={cell}>{c.type}</td></tr>)}</tbody>
+              </table>
+            </div>
+          ))}
+
+          <h3>Структура входного тестирования {data.current_year || ''}</h3>
+          <p>По каждому spec_id из placement_sessions текущего года. Только коды и числа.</p>
+          {data.structure_missing.length ? <p className="mon-err">Структуру построить нельзя: {data.structure_missing.join('; ')}.</p> : null}
+          {data.specs.map(sp => (
+            <div key={sp.spec_id ?? ''} style={{ marginBottom: 20 }}>
+              <h4 style={{ margin: '12px 0 4px' }}>spec_id: {sp.spec_id ?? 'не указан'}</h4>
+              <p style={{ margin: '0 0 6px' }}>
+                Сессий: {sp.sessions} · баллов: {sp.scores} · параллели: {sp.parallels.join(', ') || 'нет'}
+                {Object.keys(sp.statuses).length ? ` · status: ${statusText(sp.statuses)}` : ''}
+              </p>
+              <p style={{ margin: '0 0 6px' }}>Группы: {sp.groups.map(g => `${groupTitle(g)} (сессий ${g.sessions}, баллов ${g.scores})`).join(', ')}</p>
+              {sp.fields.length ? <table style={{ borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr><th style={cell}>field_id</th><th style={num}>Строк</th><th style={num}>Заполнено</th><th style={num}>Мин.</th><th style={num}>Макс.</th><th style={cell}>status</th></tr>
+                </thead>
+                <tbody>
+                  {sp.fields.map(f => (
+                    <tr key={f.field_id}>
+                      <td style={cell}>{f.field_id}</td>
+                      <td style={num}>{f.rows}</td>
+                      <td style={num}>{f.filled}</td>
+                      <td style={num}>{f.min ?? ''}</td>
+                      <td style={num}>{f.max ?? ''}</td>
+                      <td style={cell}>{statusText(f.statuses)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table> : <p style={{ margin: 0 }}>Строк с баллами нет.</p>}
+            </div>
+          ))}
+
+          <h3>Группы, где больше одной сессии</h3>
+          {data.multi_session_groups.length ? (
+            <table style={{ borderCollapse: 'collapse', marginBottom: 24 }}>
+              <thead>
+                <tr><th style={cell}>Группа</th><th style={cell}>Параллель</th><th style={num}>Сессия</th><th style={cell}>{data.date_column || 'Дата'}</th><th style={cell}>spec_id</th><th style={num}>Баллов</th><th style={num}>Строк</th></tr>
+              </thead>
+              <tbody>
+                {data.multi_session_groups.flatMap((g, gi) => g.sessions.map((x, i) => (
+                  <tr key={`${gi}-${x.id}`}>
+                    <td style={cell}>{i === 0 ? groupTitle(g) : ''}</td>
+                    <td style={cell}>{i === 0 ? g.parallel ?? '' : ''}</td>
+                    <td style={num}>{x.id}</td>
+                    <td style={cell}>{x.held_on ? shortDate(x.held_on) : ''}</td>
+                    <td style={cell}>{x.spec_id ?? ''}</td>
+                    <td style={num}>{x.scores}</td>
+                    <td style={num}>{x.rows}</td>
+                  </tr>
+                )))}
+              </tbody>
+            </table>
+          ) : data.structure_missing.length ? null : <p>Таких групп нет.</p>}
+        </>
+      )}
     </>
   );
 }
@@ -182,7 +259,7 @@ function SchemaTables({ data }: { data: SchemaData }) {
             </table>
           ) : <p>В pulse_read нет представлений placement_* и section_scores</p>}
           {data.placement_breakdown ? <PlacementByGroups data={data.placement_breakdown} year={data.result_counts.current_year} /> : null}
-          {data.placement_views ? <PlacementViews views={data.placement_views} /> : null}
+          <PlacementSection />
         </>
       ) : null}
       <h2>Представления pulse_read</h2>

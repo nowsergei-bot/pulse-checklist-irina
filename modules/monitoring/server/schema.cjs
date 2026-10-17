@@ -38,7 +38,7 @@ async function schema(db, user) {
   // Field names of the gateway user object, without values.
   const userFields = Object.keys(user || {}).sort().map(key => ({ name: key, type: describeShape(user[key]) }));
   const counts = await resultCounts(db, all);
-  return { status: 200, body: { views: [...byView.values()], user_fields: userFields, multi_group_students: await multiGroupStudents(db), groups_without_account: await groupsWithoutAccount(db), current_groups: await currentGroups(db), result_counts: counts, placement_views: [...byView.values()].filter(v => v.name.startsWith('placement_')), placement_breakdown: await placementBreakdown(db, all, counts.year_id), roster_discrepancies: await discrepancies(db), import_discrepancies: await rosterImport.discrepancies(db) } };
+  return { status: 200, body: { views: [...byView.values()], user_fields: userFields, multi_group_students: await multiGroupStudents(db), groups_without_account: await groupsWithoutAccount(db), current_groups: await currentGroups(db), result_counts: counts, placement_breakdown: await placementBreakdown(db, all, counts.year_id), roster_discrepancies: await discrepancies(db), import_discrepancies: await rosterImport.discrepancies(db) } };
 }
 
 function columnMap(cols) {
@@ -198,7 +198,8 @@ async function resultCounts(db, all = null) {
 // Входное тестирование текущего года по параллелям и группам: только числа.
 // Цепочка: placement_field_scores → сессия (placement_sessions) → группа (groups); ученик из балла или из placement_results.
 const SCORE_COLUMNS = ['score', 'points', 'value'];
-async function placementBreakdown(db, all, yearId) {
+// Как связаны баллы, сессии, группы и ученики в представлениях placement_*; чего не хватает.
+function placementLinks(all) {
   const has = (t, c) => (all.get(t) || []).includes(c);
   const missing = [];
   const links = [];
@@ -208,7 +209,6 @@ async function placementBreakdown(db, all, yearId) {
     if (!has('placement_sessions', 'group_id')) missing.push('в placement_sessions нет поля group_id');
   }
   if (!all.has('placement_field_scores')) missing.push('нет представления placement_field_scores');
-  if (yearId == null) missing.push('не найден текущий учебный год');
   const scoreCols = all.get('placement_field_scores') || [];
   let from = 'pulse_read.placement_field_scores fs';
   let session = null;
@@ -242,6 +242,12 @@ async function placementBreakdown(db, all, yearId) {
   if (all.has('placement_sessions') && !year) missing.push('у placement_sessions не найдена связь с учебным годом');
   if (year) links.unshift(`год сессии: placement_sessions.${year.how}`);
   if (has('placement_sessions', 'group_id')) links.splice(1, 0, 'сессия → группа: placement_sessions.group_id → groups.id');
+  return { has, missing, links, from, session, student, scoreCol, year };
+}
+
+async function placementBreakdown(db, all, yearId) {
+  const { missing, links, from, session, student, scoreCol, year } = placementLinks(all);
+  if (yearId == null) missing.push('не найден текущий учебный год');
   if (missing.length) return { links, missing, groups: [], scores_without_session: null };
   const filled = scoreCol ? `fs.${q(scoreCol)} IS NOT NULL` : 'true';
   try {
@@ -272,4 +278,111 @@ async function placementBreakdown(db, all, yearId) {
   }
 }
 
-module.exports = { schema, resultCounts, placementBreakdown, catalogColumns, columnMap };
+// Отдельный запрос для страницы schema: поля всех placement_*, структура входного тестирования текущего года
+// по spec_id и группы, где больше одной сессии. Только коды и числа, без ФИО и почт.
+async function placementSchema(db) {
+  const cols = await catalogColumns(db);
+  const all = columnMap(cols);
+  const fields = new Map();
+  for (const c of cols) {
+    if (!c.table_name.startsWith('placement_')) continue;
+    if (!fields.has(c.table_name)) fields.set(c.table_name, { name: c.table_name, type: RELKIND[c.relkind] || '', columns: [] });
+    fields.get(c.table_name).columns.push({ name: c.column_name, type: c.data_type });
+  }
+  const year = await currentYear(db);
+  return { status: 200, body: { current_year: year ? year.label : null, fields: [...fields.values()], ...(await placementStructure(db, all, year ? year.id : null)) } };
+}
+
+const DATE_OF_SESSION = ['held_on', 'tested_at', 'test_date', 'date', 'created_at'];
+const toNum = (v) => (v === null || v === undefined ? null : Number(v));
+
+async function placementStructure(db, all, yearId) {
+  const { has, missing, from, session, scoreCol, year } = placementLinks(all);
+  if (yearId == null) missing.push('не найден текущий учебный год');
+  if (all.has('placement_sessions') && !has('placement_sessions', 'spec_id')) missing.push('в placement_sessions нет поля spec_id');
+  if (all.has('placement_field_scores') && !has('placement_field_scores', 'field_id')) missing.push('в placement_field_scores нет поля field_id');
+  if (missing.length) return { structure_missing: missing, specs: [], multi_session_groups: [] };
+  const statusCol = has('placement_field_scores', 'status') ? 'fs.status::text' : 'NULL::text';
+  const score = scoreCol ? `fs.${q(scoreCol)}` : 'NULL::numeric';
+  const dateCol = DATE_OF_SESSION.find(c => has('placement_sessions', c));
+  const dateSql = dateCol ? `ps.${q(dateCol)}::date::text` : 'NULL::text';
+  const groupsSql = `(SELECT DISTINCT ON (id) id, parallel, title, code, campus FROM pulse_read.groups ORDER BY id)`;
+  const base = `WITH s AS (
+       SELECT ps.id, ps.group_id, ps.spec_id::text AS spec_id, ${dateSql} AS held_on FROM pulse_read.placement_sessions ps WHERE ${year.sql}
+     ), f AS (
+       SELECT ${session} AS session_id, fs.field_id::text AS field_id, ${score} AS score, ${statusCol} AS status FROM ${from}
+     )`;
+  try {
+    const specGroups = (await db.query(
+      `${base}
+       SELECT s.spec_id, g.parallel, coalesce(g.title, g.code) AS title, g.campus = 'digital' AS digital,
+              count(DISTINCT s.id)::int AS sessions, count(f.score)::int AS scores
+       FROM s LEFT JOIN ${groupsSql} g ON g.id = s.group_id LEFT JOIN f ON f.session_id = s.id
+       GROUP BY s.spec_id, g.id, g.parallel, g.title, g.code, g.campus
+       ORDER BY s.spec_id NULLS LAST, g.parallel NULLS LAST, g.campus = 'digital', coalesce(g.title, g.code)`,
+      [yearId],
+    )).rows;
+    const specFields = (await db.query(
+      `${base}
+       SELECT s.spec_id, f.field_id, count(*)::int AS rows, count(f.score)::int AS filled, min(f.score) AS min, max(f.score) AS max
+       FROM s JOIN f ON f.session_id = s.id
+       GROUP BY s.spec_id, f.field_id
+       ORDER BY s.spec_id NULLS LAST, length(f.field_id), f.field_id`,
+      [yearId],
+    )).rows;
+    const statuses = (await db.query(
+      `${base}
+       SELECT s.spec_id, f.field_id, f.status, count(*)::int AS n
+       FROM s JOIN f ON f.session_id = s.id
+       GROUP BY s.spec_id, f.field_id, f.status
+       ORDER BY f.status NULLS LAST`,
+      [yearId],
+    )).rows;
+    const multi = (await db.query(
+      `${base}, m AS (SELECT group_id FROM s GROUP BY group_id HAVING count(*) > 1)
+       SELECT s.group_id, g.parallel, coalesce(g.title, g.code) AS title, g.campus = 'digital' AS digital,
+              s.id AS session_id, s.held_on, s.spec_id, count(f.score)::int AS scores, count(f.session_id)::int AS rows
+       FROM s JOIN m ON m.group_id = s.group_id
+       LEFT JOIN ${groupsSql} g ON g.id = s.group_id LEFT JOIN f ON f.session_id = s.id
+       GROUP BY s.group_id, g.parallel, g.title, g.code, g.campus, s.id, s.held_on, s.spec_id
+       ORDER BY g.parallel NULLS LAST, coalesce(g.title, g.code), s.group_id, s.held_on NULLS LAST, s.id`,
+      [yearId],
+    )).rows;
+    const specs = new Map();
+    const spec = (id) => {
+      const key = id === null ? '' : id;
+      if (!specs.has(key)) specs.set(key, { spec_id: id, sessions: 0, scores: 0, parallels: [], groups: [], fields: [], statuses: {} });
+      return specs.get(key);
+    };
+    for (const r of specGroups) {
+      const x = spec(r.spec_id);
+      x.sessions += r.sessions;
+      x.scores += r.scores;
+      if (r.parallel !== null && !x.parallels.includes(r.parallel)) x.parallels.push(r.parallel);
+      x.groups.push({ title: r.title, parallel: r.parallel, digital: r.digital, sessions: r.sessions, scores: r.scores });
+    }
+    const fieldKey = new Map();
+    for (const r of specFields) {
+      const field = { field_id: r.field_id, rows: r.rows, filled: r.filled, min: toNum(r.min), max: toNum(r.max), statuses: {} };
+      spec(r.spec_id).fields.push(field);
+      fieldKey.set(`${r.spec_id}\u0000${r.field_id}`, field);
+    }
+    for (const r of statuses) {
+      const label = r.status === null ? 'пусто' : r.status;
+      const field = fieldKey.get(`${r.spec_id}\u0000${r.field_id}`);
+      if (field) field.statuses[label] = r.n;
+      const x = spec(r.spec_id);
+      x.statuses[label] = (x.statuses[label] || 0) + r.n;
+    }
+    const groups = new Map();
+    for (const r of multi) {
+      if (!groups.has(r.group_id)) groups.set(r.group_id, { title: r.title, parallel: r.parallel, digital: r.digital, sessions: [] });
+      groups.get(r.group_id).sessions.push({ id: r.session_id, held_on: r.held_on, spec_id: r.spec_id, scores: r.scores, rows: r.rows });
+    }
+    return { structure_missing: [], date_column: dateCol || null, specs: [...specs.values()], multi_session_groups: [...groups.values()] };
+  } catch (e) {
+    return { structure_missing: [e && e.code ? `ошибка запроса (${e.code})` : 'ошибка запроса'], specs: [], multi_session_groups: [] };
+  }
+}
+
+module.exports = { schema, resultCounts, placementBreakdown, placementSchema, catalogColumns, columnMap };

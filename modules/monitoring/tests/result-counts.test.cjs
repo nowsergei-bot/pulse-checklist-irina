@@ -2,7 +2,7 @@
 // Запуск: MONITORING_TEST_DATABASE_URL=postgres://... node --test tests/
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { resultCounts, placementBreakdown, catalogColumns, columnMap } = require('../server/schema.cjs');
+const { resultCounts, placementBreakdown, placementSchema, catalogColumns, columnMap } = require('../server/schema.cjs');
 
 const url = process.env.MONITORING_TEST_DATABASE_URL;
 
@@ -80,6 +80,31 @@ test('счётчики результатов pulse_read', { skip: !url && 'не
   await db.query('CREATE MATERIALIZED VIEW pulse_read.placement_specs AS SELECT 1 AS id, 7 AS grade');
   const cat = await catalogColumns(db);
   assert.deepEqual(cat.filter(c => c.table_name === 'placement_specs').map(c => [c.column_name, c.relkind]), [['id', 'm'], ['grade', 'm']]);
+
+  // Отдельный запрос: поля всех placement_*, включая материализованные; структура по spec_id; группы с несколькими сессиями.
+  await db.query(`
+    CREATE TABLE pulse_read.placement_spec_catalog (spec_id text, field_id text, max_score numeric);
+    INSERT INTO pulse_read.placement_sessions VALUES (103, 20, 's7b', '2026-09-20');
+    INSERT INTO pulse_read.placement_field_scores VALUES (10, 103, 1, 'f1', 7, 'complete'), (11, 103, 2, 'f1', NULL, 'absent');
+  `);
+  const ps = (await placementSchema(db)).body;
+  assert.deepEqual(ps.fields.map(f => f.name), ['placement_excluded', 'placement_field_scores', 'placement_notes', 'placement_results', 'placement_sessions', 'placement_spec_catalog', 'placement_specs']);
+  assert.equal(ps.fields.find(f => f.name === 'placement_specs').type, 'MATERIALIZED VIEW');
+  assert.deepEqual(ps.fields.find(f => f.name === 'placement_spec_catalog').columns.map(c => c.name), ['spec_id', 'field_id', 'max_score']);
+  assert.deepEqual(ps.structure_missing, []);
+  assert.deepEqual(ps.specs.map(x => [x.spec_id, x.sessions, x.scores, x.parallels]), [['s5', 1, 0, [5]], ['s7', 2, 4, [7]], ['s7b', 1, 1, [7]]]);
+  const s7 = ps.specs.find(x => x.spec_id === 's7');
+  assert.deepEqual(s7.groups.map(g => [g.title, g.digital, g.sessions, g.scores]), [['7 AE', false, 1, 3], ['7 AE', true, 1, 1]]);
+  assert.deepEqual(s7.fields, [
+    { field_id: 'f1', rows: 4, filled: 3, min: 2, max: 5, statuses: { absent: 1, complete: 2, incomplete: 1 } },
+    { field_id: 'f2', rows: 2, filled: 1, min: 3, max: 3, statuses: { complete: 1, incomplete: 1 } },
+  ]);
+  assert.deepEqual(s7.statuses, { absent: 1, complete: 3, incomplete: 2 });
+  assert.deepEqual(ps.multi_session_groups, [{ title: '7 AE', parallel: 7, digital: false, sessions: [
+    { id: 100, held_on: '2026-09-10', spec_id: 's7', scores: 3, rows: 4 },
+    { id: 103, held_on: '2026-09-20', spec_id: 's7b', scores: 1, rows: 2 },
+  ] }]);
+  assert.doesNotMatch(JSON.stringify([ps.specs, ps.multi_session_groups]), /student|full_name/);
 
   // Без ссылки на сессию разбивка не строится и объясняет, чего не хватает.
   await db.query('ALTER TABLE pulse_read.placement_field_scores RENAME COLUMN session_id TO something_id');

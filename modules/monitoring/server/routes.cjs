@@ -2,7 +2,7 @@
 // Права проверяются здесь в каждом запросе по monitoring.user_roles.
 
 const { loadRoles, capabilities, visibleRoles } = require('./lib/access.cjs');
-const { schema } = require('./schema.cjs');
+const { schema, placementSchema } = require('./schema.cjs');
 const roles = require('./roles.cjs');
 const specs = require('./specs.cjs');
 const works = require('./works.cjs');
@@ -110,9 +110,10 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (c) return rosters.cancelOverride(db, user, userId, Number(c[1]));
     return { status: 404, body: { error: 'not_found' } };
   }
-  if (path === '/schema' || path.startsWith('/roles')) {
+  if (path === '/schema' || path === '/schema/placement' || path.startsWith('/roles')) {
     if (!caps.manage) return forbidden;
     if (path === '/schema' && method === 'GET') return schema(db, user);
+    if (path === '/schema/placement' && method === 'GET') return placementSchema(db);
     if (path === '/roles' && method === 'GET') return { status: 200, body: { users: await roles.listUsers(db, query && query.q), names: roles.ROLE_NAMES } };
     if (path === '/roles' && method === 'POST') {
       const data = parseBody(body);
