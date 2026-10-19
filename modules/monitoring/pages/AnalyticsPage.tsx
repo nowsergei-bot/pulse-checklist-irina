@@ -1,25 +1,21 @@
 import { useState } from 'react';
 import { useApi } from './api';
+import AnalyticsCharts, { type Risk, type Row, type SectionKey } from './AnalyticsCharts';
+import RiskZone, { riskNotes, type RiskStudent, type Thresholds } from './RiskZone';
 
-// Обезличенная аналитика для data_admin: только коды групп и числа.
-// Таблицы на экране и листы Excel строятся из одних и тех же описаний.
+// Вкладка «Аналитика»: графики, зона риска и таблицы. Видят data_admin и заведующая кафедрой, только просмотр.
+// manage (data_admin): ещё входное тестирование и щадящий режим. Права проверяет сервер.
+// Таблицы на экране и листы Excel строятся из одних и тех же описаний. ФИО только в зоне риска.
 
-type Kind = 'group' | 'left' | 'parallel' | 'parallel_left' | 'total' | 'total_left';
-type Row = {
-  parallel: number | null; row: string; kind: Kind; gentle_on?: boolean;
-  students: number; complete: number; absent: number; not_entered: number;
-  avg_total: number | null; avg_percent: number | null; marks: Record<string, number>;
-  sections: Record<string, number | null>;
-  gentle: { students: number; complete: number; raised: number; moves: Record<string, number>; avg_percent: number | null };
-  rule?: { compared: number; changed: number; higher: number; lower: number; moves: Record<string, number> };
-};
 type Data = {
   year: string | null; titles: string[]; title: string | null;
-  module: { works: { id: number; parallel: number; status: string; max_points: number }[]; rows: Row[]; section_keys: { key: string; section: string; level: string; level_name: string }[] } | null;
-  placement: { missing: string[]; rows: { parallel: number | string; spec_id: string | null; field_id: string; students: number; scores: number; avg: number | null; min: number | null; max: number | null }[]; parallels: { parallel: number | string; students: number }[] } | null;
-  overlap: { parallel: number; placement: number; module_any: number; module_complete: number; both: number; both_complete: number }[];
-  percent_difference: null;
+  module: { works: { id: number; parallel: number; status: string; max_points: number }[]; rows: Row[]; section_keys: SectionKey[] } | null;
+  risk_thresholds: Thresholds;
+  placement?: { missing: string[]; rows: { parallel: number | string; spec_id: string | null; field_id: string; students: number; scores: number; avg: number | null; min: number | null; max: number | null }[]; parallels: { parallel: number | string; students: number }[] } | null;
+  overlap?: { parallel: number; placement: number; module_any: number; module_complete: number; both: number; both_complete: number }[];
+  percent_difference?: null;
 };
+type RiskData = { title: string | null; students: RiskStudent[]; thresholds: Thresholds };
 type Cell = string | number | null;
 type Table = { key: string; title: string; note: string; head: string[]; rows: Cell[][]; kinds: string[] };
 
@@ -28,13 +24,13 @@ const MOVES = ['2→3', '3→4', '4→5'];
 const DOWN = ['3→2', '4→3', '5→4'];
 const LEVEL = { basic: 'баз.', advanced: 'пов.' } as Record<string, string>;
 
-function tables(d: Data): Table[] {
+function tables(d: Data, manage: boolean): Table[] {
   const rows = d.module?.rows || [];
   const keys = d.module?.section_keys || [];
   const title = d.title || 'работа';
   const kinds = rows.map(r => r.kind);
   const bySection = rows.filter(r => r.kind !== 'total' && r.kind !== 'total_left');
-  const gentle = rows.filter(r => r.gentle.students > 0);
+  const gentle = rows.filter(r => r.gentle && r.gentle.students > 0);
   const ruled = rows.filter(r => r.rule && r.rule.compared > 0);
   const out: Table[] = [
     {
@@ -55,7 +51,7 @@ function tables(d: Data): Table[] {
       key: 'gentle', title: `${title}: щадящий режим`,
       note: 'Только полные работы учеников в щадящем режиме: режим берётся из группы, где внесены баллы ученика, поэтому ученик из двух групп виден и в строке второй группы. Процент один для обоих режимов. «Отметка выше»: по щадящим порогам отметка выше, чем по обычным. Группы без таких учеников не показаны.',
       head: ['Параллель', 'Группа', 'Учеников в режиме', 'Полных работ', 'Средний %', 'Отметка выше', ...MOVES.map(m => `Из «${m[0]}» в «${m[2]}»`)],
-      rows: gentle.map(r => [r.parallel, r.row, r.gentle.students, r.gentle.complete, r.gentle.avg_percent, r.gentle.raised, ...MOVES.map(m => r.gentle.moves[m] || 0)]),
+      rows: gentle.map(r => { const g = r.gentle!; return [r.parallel, r.row, g.students, g.complete, g.avg_percent, g.raised, ...MOVES.map(m => g.moves[m] || 0)]; }),
       kinds: gentle.map(r => r.kind),
     },
     {
@@ -79,11 +75,31 @@ function tables(d: Data): Table[] {
       key: 'overlap', title: `Входное тестирование и ${title}`,
       note: 'Ученики текущего состава. «Есть в работе»: внесён хотя бы один балл или отметка «отсутствовал».',
       head: ['Параллель', 'Во входном', 'Есть в работе', 'Полная работа', 'И там, и там', 'И там, и там, полная работа', 'Разница в %'],
-      rows: d.overlap.map(o => [o.parallel, o.placement, o.module_any, o.module_complete, o.both, o.both_complete, NO_PERCENT]),
-      kinds: d.overlap.map(() => 'group'),
+      rows: (d.overlap || []).map(o => [o.parallel, o.placement, o.module_any, o.module_complete, o.both, o.both_complete, NO_PERCENT]),
+      kinds: (d.overlap || []).map(() => 'group'),
     },
   ];
-  return out;
+  return manage ? out : out.filter(t => t.key === 'groups' || t.key === 'sections');
+}
+
+// Листы зоны риска: группы (только числа) и ученики (с ФИО, только в выгрузке и на экране).
+function riskTables(d: Data, students: RiskStudent[]): Table[] {
+  const notes = riskNotes(d.risk_thresholds);
+  const groups = (d.module?.rows || []).filter(r => r.kind === 'group' && (r.risk as Risk | undefined)?.at_risk);
+  return [
+    {
+      key: 'risk', title: `${d.title || 'работа'}: ученики в зоне риска`, note: notes.student,
+      head: ['Группа', 'Ученик', 'Итог', '%', 'Причина'],
+      rows: students.map(s => [s.group, s.full_name, s.total, s.percent, s.reasons.map(x => x.text).join('; ')]),
+      kinds: students.map(() => 'group'),
+    },
+    {
+      key: 'risk_groups', title: `${d.title || 'работа'}: группы в зоне риска`, note: notes.group,
+      head: ['Параллель', 'Группа', 'Полных работ', 'Доля «2», %', 'Средний %', 'Учеников в зоне риска', 'Почему'],
+      rows: groups.map(g => { const r = g.risk as Risk; return [g.parallel, g.row, g.complete, r.twos_share, g.avg_percent, r.students, r.reasons.map(x => x.text).join('; ')]; }),
+      kinds: groups.map(() => 'group'),
+    },
+  ];
 }
 
 // Имя файла латиницей: некоторые браузеры отбрасывают имя с кириллицей.
@@ -92,10 +108,10 @@ const latin = (text: string) => text.toLowerCase().split('').map(c => LAT[c] ?? 
 
 const show = (v: Cell) => (v === null || v === undefined ? '' : typeof v === 'number' ? v.toLocaleString('ru-RU') : v);
 
-async function download(d: Data, list: Table[]) {
+async function download(d: Data, list: Table[], manage: boolean) {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
-  const sheetNames = { groups: 'Группы', sections: 'Разделы', gentle: 'Щадящий', rule: 'Правила щадящего', placement: 'Входное', overlap: 'Входное и работа' } as Record<string, string>;
+  const sheetNames = { risk_groups: 'Группы в зоне риска', risk: 'Зона риска', groups: 'Группы', sections: 'Разделы', gentle: 'Щадящий', rule: 'Правила щадящего', placement: 'Входное', overlap: 'Входное и работа' } as Record<string, string>;
   for (const t of list) {
     const ws = wb.addWorksheet(sheetNames[t.key]);
     ws.addRow([t.title]).font = { bold: true, size: 12 };
@@ -110,16 +126,17 @@ async function download(d: Data, list: Table[]) {
     });
     ws.views = [{ state: 'frozen', ySplit: 4 }];
     t.head.forEach((h, i) => { ws.getColumn(i + 1).width = Math.max(10, Math.min(28, h.length + 2)); });
-    ws.getColumn(2).width = 22;
+    ws.getColumn(2).width = t.key === 'risk' ? 34 : 22;
+    if (t.key === 'risk_groups' || t.key === 'risk') ws.getColumn(t.head.length).width = 70;
   }
   const info = wb.addWorksheet('Пояснения');
   [
-    ['Обезличенная выгрузка: только коды групп и числа, без ФИО учеников и учителей.'],
+    ['ФИО учеников только на листе «Зона риска». На остальных листах только коды групп и числа, без ФИО учеников и учителей.'],
     [`Учебный год: ${d.year || ''}. Работа: ${d.title || ''}.`],
     ['Составы текущие: из Пульса или из загруженного файла, с поправками модуля.'],
     ['Строки «выбыли»: баллы внесены в группе, но ученика в текущем составе нет.'],
     ['Ученик в двух группах одной параллели в строке параллели считается один раз.'],
-    [`Разница в процентах между входным и работой: ${NO_PERCENT}.`],
+    ...(manage ? [[`Разница в процентах между входным и работой: ${NO_PERCENT}.`]] : []),
     [`Выгружено: ${new Date().toLocaleString('ru-RU')}.`],
   ].forEach(r => info.addRow(r));
   info.getColumn(1).width = 100;
@@ -134,23 +151,29 @@ async function download(d: Data, list: Table[]) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function AnalyticsPage() {
+export default function AnalyticsPage({ manage }: { manage: boolean }) {
   const [title, setTitle] = useState('');
-  const { data, error } = useApi<Data>(`/analytics${title ? `?title=${encodeURIComponent(title)}` : ''}`);
+  const query = title ? `?title=${encodeURIComponent(title)}` : '';
+  const { data, error } = useApi<Data>(`/analytics${query}`);
+  const { data: risk, error: riskError } = useApi<RiskData>(`/analytics/risk${query}`);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const list = data ? tables(data) : [];
+  const list = data ? tables(data, manage) : [];
   const loading = !data || (title && data.title !== title);
+  const riskReady = risk && data && risk.title === data.title ? risk.students : null;
 
   async function save() {
-    if (!data) return;
+    if (!data || !riskReady) return;
     setBusy(true); setSaveError('');
-    try { await download(data, list); } catch (e) { setSaveError((e as Error).message); } finally { setBusy(false); }
+    try { await download(data, [...riskTables(data, riskReady), ...list], manage); } catch (e) { setSaveError((e as Error).message); } finally { setBusy(false); }
   }
 
   return (
     <div className="mon-an">
-      <p className="mon-note mon-hint">Обезличенные данные для аналитики: только коды групп и числа. Составы текущие (Пульс или файл, с поправками модуля); баллы выбывших учеников отдельной строкой «выбыли». Видно только администраторам данных.</p>
+      <p className="mon-note mon-hint">
+        Составы текущие (Пульс или файл, с поправками модуля); баллы выбывших учеников отдельной строкой «выбыли». ФИО учеников только в зоне риска и в выгрузке.
+        {manage ? ' Графики, зону риска и таблицы «группы и параллели», «разделы и уровни» видят заведующие кафедрой; остальные таблицы только администраторы данных.' : ''}
+      </p>
       <div className="mon-toolbar">
         <label className="mon-field">
           <span className="mon-label">Работа</span>
@@ -158,12 +181,19 @@ export default function AnalyticsPage() {
             {(data?.titles || []).map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </label>
-        <button type="button" className="mon-btn mon-btn--primary" disabled={!data || busy || Boolean(loading)} onClick={save}>{busy ? 'Готовим файл…' : 'Скачать Excel'}</button>
+        <button type="button" className="mon-btn mon-btn--primary" disabled={!data || !riskReady || busy || Boolean(loading)} onClick={save}>{busy ? 'Готовим файл…' : 'Скачать Excel'}</button>
         {data?.module ? <span className="mon-note mon-an__meta">{data.year} · параллелей: {data.module.works.length}</span> : null}
       </div>
       {error ? <p className="mon-err" role="alert">{error}</p> : null}
       {saveError ? <p className="mon-err" role="alert">{saveError}</p> : null}
       {loading && !error ? <p className="mon-note">Считаем…</p> : null}
+      {data && !loading && data.module ? (
+        <>
+          <AnalyticsCharts rows={data.module.rows} keys={data.module.section_keys} />
+          <RiskZone key={data.title} rows={data.module.rows} students={riskReady} thresholds={data.risk_thresholds} error={riskError} />
+          <h3 className="mon-viz__section">Таблицы</h3>
+        </>
+      ) : null}
       {data && !loading ? list.map(t => (
         <section key={t.key} className="mon-an__block">
           <h3 className="mon-an__title">{t.title}</h3>

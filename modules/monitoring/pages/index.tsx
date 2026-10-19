@@ -13,7 +13,7 @@ import './monitoring.css';
 
 const BASE = '/cabinet/monitoring';
 
-type Me = { full_name?: string; roles: string[]; capabilities: { manage: boolean } };
+type Me = { full_name?: string; roles: string[]; capabilities: { manage: boolean; seeAnalytics?: boolean } };
 
 // Все /cabinet/monitoring/* обслуживаются здесь.
 export default function MonitoringPage() {
@@ -22,8 +22,11 @@ export default function MonitoringPage() {
   const { data: me, error } = useApi<Me>('/me');
 
   const manage = Boolean(me?.capabilities.manage);
+  // Заведующая кафедрой: вкладка «Аналитика» рядом с «Работами», только просмотр.
+  const seeAnalytics = Boolean(me?.capabilities.seeAnalytics);
   const message = (location.state as { message?: string } | null)?.message;
   const tabs: { path: string; label: string }[] = [{ path: '/', label: 'Работы' }];
+  if (seeAnalytics && !manage) tabs.push({ path: '/analytics', label: 'Аналитика' });
   if (manage) tabs.push({ path: '/specs', label: 'Спецификации' }, { path: '/rosters', label: 'Составы групп' }, { path: '/roles', label: 'Роли' }, { path: '/analytics', label: 'Аналитика' }, { path: '/directory', label: 'Кабинеты' });
   const workMatch = sub.match(/^\/works\/(\d+)$/);
   const sheetMatch = sub.match(/^\/works\/(\d+)\/groups\/(\d+)$/);
@@ -32,7 +35,7 @@ export default function MonitoringPage() {
   let content;
   if (error) content = <p className="mon-err" role="alert">{error}</p>;
   else if (!me) content = <p className="mon-note">Проверяем доступ…</p>;
-  else if (sub === '/analytics' && manage) content = <AnalyticsPage />;
+  else if (sub === '/analytics' && seeAnalytics) content = <AnalyticsPage manage={manage} />;
   else if (sub === '/directory' && manage) content = <CabinetDirectoryPage />;
   else if (sub === '/roles' && manage) content = <RolesPage />;
   else if (sub === '/rosters' && manage) content = <RostersPage />;

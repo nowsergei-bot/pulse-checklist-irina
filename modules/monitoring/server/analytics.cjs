@@ -7,6 +7,7 @@ const { markFor } = require('./lib/calc.cjs');
 const { groupStudents } = require('./lib/groups.cjs');
 const { structure, buildStudents, leftStudents, gentleGroupIds } = require('./sheet.cjs');
 const { ruleMarks, compareRules } = require('./gentle-compare.cjs');
+const { studentReasons, groupRisk, thresholds } = require('./risk.cjs');
 const { catalogColumns, columnMap, placementLinks, currentYear } = require('./schema.cjs');
 
 const q = (name) => `"${String(name).replace(/"/g, '""')}"`;
@@ -95,8 +96,12 @@ async function moduleAnalytics(db, yearId, title) {
   const studentsByParallel = new Map();
   const all = [];
   const allLeft = [];
+  // Зона риска: ученики текущих составов с полной работой и хотя бы одной причиной (с ФИО, только для /analytics/risk).
+  const riskStudents = [];
+  let scale = null;
   for (const work of works) {
     const struct = await structure(db, work);
+    if (!scale) scale = struct.scale;
     for (const t of struct.tasks) {
       const key = `${t.section}|${t.level}`;
       if (!sectionKeys.has(key)) sectionKeys.set(key, { key, section: t.section, level: t.level, level_name: t.level_name || t.level, sort: sectionKeys.size });
@@ -121,7 +126,18 @@ async function moduleAnalytics(db, yearId, title) {
       const students = withNormal(await buildStudents(db, work, g.id, members, struct, gentleIds));
       const gone = await leftStudents(db, work.id, g.id, new Set(members.map(m => Number(m.id))));
       const goneRows = withNormal(await buildStudents(db, work, g.id, gone, struct, gentleIds));
-      rows.push({ parallel: work.parallel, row: groupTitle(g), kind: 'group', gentle_on: gentleIds.has(g.id), ...summarize(students, struct.tasks), rule: compareRules(students) });
+      const risky = [];
+      for (const r of students) {
+        const reasons = studentReasons(r, struct.tasks, struct.scale);
+        if (!reasons.length) continue;
+        risky.push(r.id);
+        riskStudents.push({
+          group_id: g.id, group: groupTitle(g), parallel: work.parallel, student_id: r.id, full_name: r.full_name,
+          total: r.result.total, max_points: work.max_points, percent: r.result.percent, mark: r.result.mark, reasons,
+        });
+      }
+      const sum = summarize(students, struct.tasks);
+      rows.push({ parallel: work.parallel, row: groupTitle(g), kind: 'group', group_id: g.id, gentle_on: gentleIds.has(g.id), ...sum, rule: compareRules(students), risk: groupRisk(sum, risky.length) });
       if (goneRows.length) rows.push({ parallel: work.parallel, row: `${groupTitle(g)} · выбыли`, kind: 'left', gentle_on: gentleIds.has(g.id), ...summarize(goneRows, struct.tasks), rule: compareRules(goneRows) });
       current.push(...students);
       left.push(...goneRows);
@@ -130,7 +146,12 @@ async function moduleAnalytics(db, yearId, title) {
     // Выбывший из одной группы, но оставшийся в другой группе параллели, в параллели не выбыл.
     const inParallel = new Set(cur.map(r => r.id));
     const goneFromParallel = unique(left).filter(r => !inParallel.has(r.id));
-    rows.push({ parallel: work.parallel, row: `${work.parallel} параллель`, kind: 'parallel', ...summarize(cur, struct.tasks), rule: compareRules(cur) });
+    const groupRows = rows.filter(r => r.kind === 'group' && r.parallel === work.parallel);
+    const riskIds = new Set(riskStudents.filter(s => s.parallel === work.parallel).map(s => s.student_id));
+    rows.push({
+      parallel: work.parallel, row: `${work.parallel} параллель`, kind: 'parallel', ...summarize(cur, struct.tasks), rule: compareRules(cur),
+      risk: { students: riskIds.size, groups: groupRows.length, groups_at_risk: groupRows.filter(r => r.risk.at_risk).length },
+    });
     if (goneFromParallel.length) rows.push({ parallel: work.parallel, row: `${work.parallel} параллель · выбыли`, kind: 'parallel_left', ...summarize(goneFromParallel, struct.tasks), rule: compareRules(goneFromParallel) });
     studentsByParallel.set(work.parallel, {
       any: new Set(cur.filter(r => r.result.complete || r.result.missing < struct.tasks.length || r.result.state.startsWith('отсутствовал')).map(r => r.id)),
@@ -149,6 +170,8 @@ async function moduleAnalytics(db, yearId, title) {
     rows,
     section_keys: [...sectionKeys.values()].sort((a, b) => a.sort - b.sort).map(({ sort, ...k }) => k),
     studentsByParallel,
+    riskStudents,
+    thresholds: thresholds(scale),
   };
 }
 
@@ -216,13 +239,32 @@ async function titles(db, yearId) {
   )).rows.map(r => r.title);
 }
 
-async function analytics(db, query) {
+const EMPTY = { works: [], rows: [], section_keys: [], studentsByParallel: new Map(), riskStudents: [], thresholds: thresholds(null) };
+
+async function chosenModule(db, query) {
   const year = await currentYear(db);
-  if (!year) return { status: 200, body: { year: null, titles: [], title: null, module: null, placement: null, overlap: [] } };
+  if (!year) return null;
   const list = await titles(db, year.id);
   const wanted = String((query && query.title) || '').trim();
   const title = list.includes(wanted) ? wanted : list.find(t => /^модуль\s*1$/i.test(t.trim())) || list[0] || null;
-  const mod = title ? await moduleAnalytics(db, year.id, title) : { works: [], rows: [], section_keys: [], studentsByParallel: new Map() };
+  const mod = title ? await moduleAnalytics(db, year.id, title) : EMPTY;
+  return { year, list, title, mod };
+}
+
+// Графики, таблицы и группы в зоне риска: только коды групп и числа.
+// Заведующая кафедрой (manage = false) получает только это: без входного тестирования и сравнения правил щадящего режима.
+async function analytics(db, query, caps = { manage: true }) {
+  const chosen = await chosenModule(db, query);
+  if (!chosen) return { status: 200, body: { year: null, titles: [], title: null, module: null, placement: null, overlap: [], risk_thresholds: thresholds(null) } };
+  const { year, list, title, mod } = chosen;
+  const rows = caps.manage ? mod.rows : mod.rows.map(({ rule, gentle, ...r }) => r);
+  if (!caps.manage) {
+    return {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' },
+      body: { year: year.label, titles: list, title, module: { works: mod.works, rows, section_keys: mod.section_keys }, risk_thresholds: mod.thresholds },
+    };
+  }
   const placement = await placementAnalytics(db, year.id, await currentParallels(db));
   const overlap = [...mod.studentsByParallel.entries()].map(([parallel, m]) => {
     const p = placement.students.get(Number(parallel)) || new Set();
@@ -242,7 +284,8 @@ async function analytics(db, query) {
       year: year.label,
       titles: list,
       title,
-      module: { works: mod.works, rows: mod.rows, section_keys: mod.section_keys },
+      module: { works: mod.works, rows, section_keys: mod.section_keys },
+      risk_thresholds: mod.thresholds,
       placement: { missing: placement.missing, rows: placement.rows, parallels: placement.parallels },
       overlap,
       // Входное тестирование в проценты пока не переводилось: разницы в процентах нет.
@@ -251,4 +294,15 @@ async function analytics(db, query) {
   };
 }
 
-module.exports = { analytics, summarize };
+// Ученики в зоне риска с ФИО и причинами: для экрана и листа Excel «Зона риска».
+async function riskList(db, query) {
+  const chosen = await chosenModule(db, query);
+  if (!chosen) return { status: 200, body: { year: null, title: null, students: [], thresholds: thresholds(null) } };
+  const { year, title, mod } = chosen;
+  const students = mod.riskStudents
+    .map(({ student_id, ...s }) => s)
+    .sort((a, b) => Number(a.parallel) - Number(b.parallel) || String(a.group).localeCompare(String(b.group), 'ru') || String(a.full_name).localeCompare(String(b.full_name), 'ru'));
+  return { status: 200, headers: { 'Cache-Control': 'no-store' }, body: { year: year.label, title, students, thresholds: mod.thresholds } };
+}
+
+module.exports = { analytics, riskList, summarize };

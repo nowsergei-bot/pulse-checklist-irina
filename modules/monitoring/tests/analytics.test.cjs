@@ -33,7 +33,7 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
       (3, '8 AB', '8AB', 'main', 8, 1, NULL), (9, '6 AA', '6AA', 'main', 6, 0, NULL);
     INSERT INTO pulse_read.english_teachers VALUES (1, 101, 'Учитель Вымышленный', NULL);
     INSERT INTO pulse_read.group_teachers VALUES (1, 1);
-    INSERT INTO pulse_read.users VALUES (100, 'Администратор 1'), (101, 'Учитель Вымышленный'), (104, 'Заведующий 1');
+    INSERT INTO pulse_read.users VALUES (100, 'Администратор 1'), (101, 'Учитель Вымышленный'), (104, 'Заведующий 1'), (105, 'Завуч 1');
     INSERT INTO pulse_read.students SELECT i, 'Ученик Вымышленный ' || i FROM generate_series(1, 8) i;
     -- Ученик 8 выбыл из 7 AA: его баллы внесены в этой группе, в составе его нет.
     INSERT INTO pulse_read.group_memberships VALUES (1, 1, 1), (2, 2, 1), (3, 3, 1), (4, 4, 1), (5, 5, 2), (6, 6, 3), (7, 7, 3), (8, 8, 9);
@@ -47,7 +47,7 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
   for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
     await db.query(fs.readFileSync(path.join(dir, file), 'utf8'));
   }
-  await db.query(`INSERT INTO monitoring.user_roles (user_id, role) VALUES (100, 'data_admin'), (104, 'department_head') ON CONFLICT DO NOTHING`);
+  await db.query(`INSERT INTO monitoring.user_roles (user_id, role) VALUES (100, 'data_admin'), (104, 'department_head'), (105, 'deputy'), (101, 'teacher') ON CONFLICT DO NOTHING`);
 
   const one = async (sql, params) => (await db.query(sql, params)).rows[0];
   const type = await one("SELECT id FROM monitoring.assessment_types WHERE code = 'module'");
@@ -95,12 +95,26 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
   await scores(w8, 6, 3, [10, 10, 10, 10]);
   await scores(w8, 7, 3, [10, null, null, null]);
 
-  const call = (id, q = {}) => route({ path: '/analytics', method: 'GET', query: q, body: null, user: { id }, db });
+  const call = (id, q = {}, p = '/analytics') => route({ path: p, method: 'GET', query: q, body: null, user: { id }, db });
 
-  await t.test('только data_admin, проверка на сервере', async () => {
-    assert.equal((await call(101)).status, 403);
-    assert.equal((await call(104)).status, 403);
-    assert.equal((await route({ path: '/analytics', method: 'POST', query: {}, body: '{}', user: { id: 100 }, db })).status, 405);
+  await t.test('аналитику и зону риска получают только data_admin и заведующая кафедрой, проверка на сервере', async () => {
+    for (const p of ['/analytics', '/analytics/risk']) {
+      assert.equal((await call(101, {}, p)).status, 403, `учитель ${p}`);
+      assert.equal((await call(105, {}, p)).status, 403, `завуч ${p}`);
+      assert.equal((await call(999, {}, p)).status, 403, `без роли ${p}`);
+      assert.equal((await call(104, {}, p)).status, 200, `заведующая ${p}`);
+      assert.equal((await call(100, {}, p)).status, 200, `data_admin ${p}`);
+      assert.equal((await route({ path: p, method: 'POST', query: {}, body: '{}', user: { id: 104 }, db })).status, 405);
+    }
+  });
+
+  await t.test('заведующая кафедрой: без входного тестирования и сравнения правил, без ФИО', async () => {
+    const r = (await call(104)).body;
+    assert.equal(r.placement, undefined);
+    assert.equal(r.overlap, undefined);
+    assert.ok(r.module.rows.every(x => x.rule === undefined && x.gentle === undefined));
+    assert.ok(r.module.rows.find(x => x.row === '7 AA').risk.at_risk);
+    assert.doesNotMatch(JSON.stringify(r), /Ученик|Учитель|Администратор|Заведующий|@/);
   });
 
   let body;
@@ -171,6 +185,39 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
     assert.deepEqual(r.body.module.rows.map(x => x.row), ['7 AA', '7 параллель']);
     assert.equal((await call(100, { title: 'Нет такой' })).body.title, 'Модуль 1');
     assert.doesNotMatch(JSON.stringify(body), /Ученик|Учитель|Администратор|@/);
+  });
+
+  await t.test('зона риска: причины у учеников и групп, ФИО только в /analytics/risk', async () => {
+    // 8 AB: ученик 10 набрал 43 из 50 (86 %, «4»), но Listening базового уровня 3 из 10 = 30 %.
+    await db.query("INSERT INTO pulse_read.students VALUES (10, 'Ученик Вымышленный 10'); INSERT INTO pulse_read.group_memberships VALUES (10, 10, 3)");
+    await scores(w8, 10, 3, [3, 10, 15, 15]);
+    const r = await call(104, {}, '/analytics/risk');
+    assert.equal(r.body.title, 'Модуль 1');
+    assert.deepEqual(r.body.students.map(x => [x.group, x.full_name, x.total, x.max_points, x.percent, x.mark, x.reasons.map(y => y.code)]), [
+      ['7 AA', 'Ученик Вымышленный 2', 26, 50, 52, '3', ['edge']],
+      ['7 AA', 'Ученик Вымышленный 3', 23, 50, 46, '3', ['gentle']],
+      ['7 AA (ЦГ)', 'Ученик Вымышленный 5', 20, 50, 40, '2', ['two']],
+      ['8 AB', 'Ученик Вымышленный 10', 43, 50, 86, '4', ['basic']],
+    ]);
+    // Отсутствовавший (4), незаполненный (7) и выбывший (8) в зону риска не попадают.
+    assert.deepEqual(r.body.students.map(x => x.reasons.map(y => y.text)), [
+      ['на грани двойки (50–54\u00a0%)'],
+      ['«3» только благодаря щадящему режиму (45–49\u00a0%)'],
+      ['отметка «2»'],
+      ['базовый уровень ниже 40\u00a0%: Listening 30\u00a0%'],
+    ]);
+    assert.deepEqual(r.body.thresholds, { edge_from: 50, edge_to: 54, basic_below: 40, group_twos_from: 15, group_avg_below: 60, group_risk_share: 1 / 3, gentle_three_from: 45, normal_three_from: 50 });
+    const rows = (await call(100)).body.module.rows;
+    const risk = (name) => { const x = rows.find(y => y.row === name).risk; return [x.at_risk, x.students, x.twos_share, x.reasons.map(y => y.code)]; };
+    assert.deepEqual(risk('7 AA'), [true, 2, 0, ['share']]);
+    assert.deepEqual(risk('7 AA (ЦГ)'), [true, 1, 100, ['twos', 'avg', 'share']]);
+    assert.deepEqual(risk('8 AB'), [true, 1, 0, ['share']]);
+    assert.deepEqual(rows.find(y => y.row === '7 параллель').risk, { students: 3, groups: 2, groups_at_risk: 2 });
+    assert.equal(rows.find(y => y.row === '7 AA · выбыли').risk, undefined);
+    await db.query('DELETE FROM monitoring.task_scores WHERE student_id = 10');
+    await db.query('DELETE FROM pulse_read.group_memberships WHERE student_id = 10');
+    const after = (await call(100)).body.module.rows;
+    assert.deepEqual(after.find(y => y.row === '8 AB').risk, { at_risk: false, students: 0, twos_share: 0, reasons: [] });
   });
 
   await t.test('выбыл из группы, но остался в другой группе параллели: в параллели не выбыл', async () => {

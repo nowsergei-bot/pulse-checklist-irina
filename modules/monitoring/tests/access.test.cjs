@@ -34,3 +34,11 @@ test('щадящий режим переключает только data_admin, 
   for (const role of ['department_head', 'deputy', 'teacher']) assert.equal(capabilities(new Set([role])).switchGentle, false);
   assert.equal(capabilities(new Set(['department_head']), ['data_admin', 'department_head']).switchGentle, true);
 });
+
+test('вкладку «Аналитика» видят только заведующая кафедрой и data_admin', () => {
+  assert.equal(capabilities(new Set(['data_admin'])).seeAnalytics, true);
+  assert.equal(capabilities(new Set(['department_head'])).seeAnalytics, true);
+  for (const role of ['teacher', 'deputy']) assert.equal(capabilities(new Set([role])).seeAnalytics, false);
+  assert.equal(capabilities(new Set(['teacher', 'deputy'])).seeAnalytics, false);
+  assert.equal(capabilities(new Set()).seeAnalytics, false);
+});

@@ -1179,7 +1179,7 @@ a.mon-btn {
   font-weight: 600;
 }
 
-/* Аналитика (только data_admin). */
+/* Аналитика (data_admin и заведующая кафедрой). */
 .mon-an .mon-toolbar {
   justify-content: flex-start;
   align-items: flex-end;
@@ -1228,4 +1228,310 @@ a.mon-btn {
 .mon-an__table tr.is-total_left td {
   color: var(--mon-muted);
   font-style: italic;
+}
+
+/* Графики и зона риска на вкладке «Аналитика». Красный Пульса C00000 только для акцентов. */
+.mon-viz,
+.mon-risk {
+  --viz-red: #c00000;
+  --viz-m5: #3f8f5f;
+  --viz-m4: #4a7db5;
+  --viz-m3: #e0a93b;
+  --viz-m2: #c4473a;
+  --viz-col: #50708f;
+  --viz-done: #50708f;
+  --viz-absent: #b4c1ce;
+  --viz-rest: #eef0f2;
+}
+.mon-viz__section {
+  margin: 2rem 0 0.75rem;
+  padding-left: 0.6rem;
+  border-left: 4px solid var(--viz-red);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--mon-ink);
+}
+.mon-viz__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin: 2rem 0 0.75rem;
+}
+.mon-viz__head .mon-viz__section {
+  margin: 0;
+}
+.mon-viz .mon-segmented button {
+  min-width: 2.6rem;
+  font-size: 1rem;
+}
+.mon-viz .mon-segmented button.is-current {
+  background: rgba(192, 0, 0, 0.08);
+  color: var(--viz-red);
+}
+.mon-viz__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr));
+  gap: 1rem;
+}
+.mon-viz__grid--one {
+  grid-template-columns: minmax(0, 1fr);
+}
+.mon-viz__wide {
+  grid-column: 1 / -1;
+  display: grid;
+}
+.mon-viz__card {
+  position: relative;
+  margin: 0;
+  padding: 1rem 1.1rem 1.1rem;
+  border: 1px solid var(--mon-line);
+  border-radius: 12px;
+  background: #fff;
+  min-width: 0;
+}
+.mon-viz__title {
+  margin: 0 0 0.2rem;
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+.mon-viz__note {
+  margin: 0 0 0.6rem;
+  color: var(--mon-muted);
+  font-size: 0.92rem;
+}
+.mon-viz__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  color: var(--mon-ink);
+}
+.mon-viz__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.mon-viz__swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 3px;
+}
+.mon-viz--m5 { background: var(--viz-m5); color: #fff; }
+.mon-viz--m4 { background: var(--viz-m4); color: #fff; }
+.mon-viz--m3 { background: var(--viz-m3); color: var(--mon-ink); }
+.mon-viz--m2 { background: var(--viz-m2); color: #fff; }
+.mon-viz__bars {
+  display: grid;
+  gap: 0.45rem;
+}
+.mon-viz__bar-row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 5.5rem;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.98rem;
+}
+.mon-viz__bar-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mon-viz__bar-n {
+  color: var(--mon-muted);
+  font-size: 0.9rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mon-viz__track {
+  display: flex;
+  gap: 2px;
+  height: 1.7rem;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mon-viz__track.is-empty {
+  align-items: center;
+  padding-left: 0.5rem;
+  background: repeating-linear-gradient(135deg, #f4f2f0 0 6px, #fbfaf9 6px 12px);
+  color: var(--mon-muted);
+  font-size: 0.88rem;
+}
+.mon-viz__seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 2px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: default;
+}
+.mon-viz__seg:hover {
+  filter: brightness(0.93);
+}
+.mon-viz__fill {
+  background: var(--viz-rest);
+}
+.mon-viz__fill-done { background: var(--viz-done); }
+.mon-viz__fill-absent { background: var(--viz-absent); }
+.mon-viz__swatch.mon-viz__fill-rest { background: var(--viz-rest); border: 1px solid #d5d9dd; }
+.mon-viz__bars:has(.mon-viz__fill-n) .mon-viz__bar-row {
+  grid-template-columns: 7.5rem minmax(0, 1fr) 8.5rem;
+}
+.mon-viz__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.mon-viz__gridline {
+  stroke: rgba(26, 21, 18, 0.08);
+  stroke-width: 1;
+}
+.mon-viz__base {
+  stroke: rgba(26, 21, 18, 0.35);
+  stroke-width: 1;
+}
+.mon-viz__axis {
+  fill: var(--mon-muted);
+  font-size: 12px;
+}
+.mon-viz__xlabel {
+  fill: var(--mon-ink);
+  font-size: 14px;
+}
+.mon-viz__value {
+  fill: var(--mon-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.mon-viz__col {
+  fill: var(--viz-col);
+}
+.mon-viz__svg rect:hover + .mon-viz__col {
+  fill: #3e5a76;
+}
+.mon-viz__ref {
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+.mon-viz__ref--75 { stroke: var(--viz-m5); }
+.mon-viz__ref--50 { stroke: var(--viz-red); }
+.mon-viz__ref-label {
+  fill: var(--mon-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.mon-viz__tip {
+  position: absolute;
+  z-index: 5;
+  transform: translate(12px, -110%);
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--mon-line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(26, 21, 18, 0.14);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.mon-viz__tip-head {
+  font-weight: 700;
+}
+.mon-viz__heatmap {
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-size: 0.98rem;
+  font-variant-numeric: tabular-nums;
+}
+.mon-viz__heatmap th {
+  padding: 0.3rem 0.55rem;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+.mon-viz__heatmap tbody th {
+  text-align: left;
+}
+.mon-viz__heat-level {
+  color: var(--mon-muted);
+  font-weight: 400 !important;
+  font-size: 0.88rem;
+}
+.mon-viz__heat {
+  min-width: 4.2rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 700;
+  cursor: default;
+}
+.mon-viz__heat.is-low { background: #f4cfcb; color: #7d2119; }
+.mon-viz__heat.is-mid { background: #f8e6b0; color: #6b4e0c; }
+.mon-viz__heat.is-high { background: #cfe8d5; color: #24563a; }
+.mon-viz__heat.is-none { background: #f4f2f0; color: var(--mon-muted); font-weight: 400; }
+.mon-risk__card + .mon-risk__card {
+  margin-top: 1rem;
+}
+.mon-risk__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+}
+.mon-risk__head .mon-field {
+  margin: 0;
+}
+.mon-risk__table {
+  font-size: 0.98rem;
+  font-variant-numeric: tabular-nums;
+}
+.mon-risk__table td.mon-num,
+.mon-risk__table th.mon-num {
+  text-align: right;
+  white-space: nowrap;
+}
+.mon-risk__group {
+  white-space: nowrap;
+}
+.mon-risk__table tr.is-chosen td {
+  background: rgba(192, 0, 0, 0.05);
+}
+.mon-risk__reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.mon-risk__reason {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  background: #f4f2f0;
+  color: var(--mon-ink);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.mon-risk__reason.is-two,
+.mon-risk__reason.is-twos { background: #f9e3e1; color: #8c2a22; }
+.mon-risk__reason.is-gentle,
+.mon-risk__reason.is-edge,
+.mon-risk__reason.is-avg { background: #fbf1d6; color: #7a5a12; }
+.mon-risk__reason.is-basic,
+.mon-risk__reason.is-share { background: #e8edf3; color: #34495e; }
+.mon-an .mon-toolbar .mon-btn--primary {
+  background: #c00000;
+  border-color: #c00000;
+}
+.mon-an .mon-toolbar .mon-btn--primary:hover:not(:disabled) {
+  background: #a30000;
+  border-color: #a30000;
+  box-shadow: 0 2px 10px rgba(192, 0, 0, 0.28);
 }

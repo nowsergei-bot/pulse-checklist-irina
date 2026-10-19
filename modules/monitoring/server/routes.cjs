@@ -10,7 +10,7 @@ const sheet = require('./sheet.cjs');
 const rosters = require('./rosters.cjs');
 const rosterImport = require('./roster-import.cjs');
 const groupTeachers = require('./group-teachers.cjs');
-const { analytics } = require('./analytics.cjs');
+const { analytics, riskList } = require('./analytics.cjs');
 
 function parseBody(body) {
   if (body === null || body === undefined || body === '') return {};
@@ -120,11 +120,13 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (c) return rosters.cancelOverride(db, user, userId, Number(c[1]));
     return { status: 404, body: { error: 'not_found' } };
   }
-  // Обезличенная аналитика: только data_admin, только коды групп и числа.
-  if (path === '/analytics') {
-    if (!caps.manage) return forbidden;
+  // Аналитика и зона риска: заведующая кафедрой и data_admin, только чтение.
+  // /analytics: коды групп и числа (входное тестирование и сравнение правил только data_admin);
+  // /analytics/risk: ученики в зоне риска с ФИО.
+  if (path === '/analytics' || path === '/analytics/risk') {
+    if (!caps.seeAnalytics) return forbidden;
     if (method !== 'GET') return { status: 405, body: { error: 'method_not_allowed' } };
-    return analytics(db, query);
+    return path === '/analytics' ? analytics(db, query, caps) : riskList(db, query);
   }
   if (path === '/schema' || path === '/schema/placement' || path.startsWith('/roles')) {
     if (!caps.manage) return forbidden;

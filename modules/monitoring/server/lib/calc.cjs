@@ -12,6 +12,20 @@ const GENTLE_SCALE = Object.freeze([
   { mark: '2', min_percent: 0 },
 ]);
 
+// Пороги зоны риска (вкладка «Аналитика»): единственное место, где они заданы. Экран получает их от сервера.
+// Ученик: отметка «2»; «3» только благодаря щадящему режиму; процент от edge_from до edge_to;
+//   базовый уровень хотя бы одного раздела ниже basic_below %.
+// Группа (по полным работам): доля «2» от group_twos_from %, или средний % ниже group_avg_below,
+//   или в зоне риска больше group_risk_share учеников.
+const RISK = Object.freeze({
+  edge_from: 50,
+  edge_to: 54,
+  basic_below: 40,
+  group_twos_from: 15,
+  group_avg_below: 60,
+  group_risk_share: 1 / 3,
+});
+
 // Процент в целых числах, половина вверх: round(100 × баллы / максимум).
 function percentOf(total, maxPoints) {
   return Math.floor((200 * total + maxPoints) / (2 * maxPoints));
@@ -66,4 +80,4 @@ function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, 
   };
 }
 
-module.exports = { GENTLE_SCALE, percentOf, markFor, studentResult };
+module.exports = { GENTLE_SCALE, RISK, percentOf, markFor, studentResult };
