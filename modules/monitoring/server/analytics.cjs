@@ -6,6 +6,7 @@
 const { markFor } = require('./lib/calc.cjs');
 const { groupStudents } = require('./lib/groups.cjs');
 const { structure, buildStudents, leftStudents, gentleGroupIds } = require('./sheet.cjs');
+const { ruleMarks, compareRules } = require('./gentle-compare.cjs');
 const { catalogColumns, columnMap, placementLinks, currentYear } = require('./schema.cjs');
 
 const q = (name) => `"${String(name).replace(/"/g, '""')}"`;
@@ -112,12 +113,16 @@ async function moduleAnalytics(db, yearId, title) {
     const left = [];
     for (const g of groups) {
       const members = await groupStudents(db, g.id, work.id);
-      const withNormal = (list) => list.map(r => ({ ...r, normal_mark: r.result.complete ? markFor(r.result.percent, struct.scale) : null }));
+      const withNormal = (list) => list.map(r => ({
+        ...r,
+        normal_mark: r.result.complete ? markFor(r.result.percent, struct.scale) : null,
+        ...ruleMarks(r, struct.tasks, work.max_points, struct.scale),
+      }));
       const students = withNormal(await buildStudents(db, work, g.id, members, struct, gentleIds));
       const gone = await leftStudents(db, work.id, g.id, new Set(members.map(m => Number(m.id))));
       const goneRows = withNormal(await buildStudents(db, work, g.id, gone, struct, gentleIds));
-      rows.push({ parallel: work.parallel, row: groupTitle(g), kind: 'group', gentle_on: gentleIds.has(g.id), ...summarize(students, struct.tasks) });
-      if (goneRows.length) rows.push({ parallel: work.parallel, row: `${groupTitle(g)} · выбыли`, kind: 'left', gentle_on: gentleIds.has(g.id), ...summarize(goneRows, struct.tasks) });
+      rows.push({ parallel: work.parallel, row: groupTitle(g), kind: 'group', gentle_on: gentleIds.has(g.id), ...summarize(students, struct.tasks), rule: compareRules(students) });
+      if (goneRows.length) rows.push({ parallel: work.parallel, row: `${groupTitle(g)} · выбыли`, kind: 'left', gentle_on: gentleIds.has(g.id), ...summarize(goneRows, struct.tasks), rule: compareRules(goneRows) });
       current.push(...students);
       left.push(...goneRows);
     }
@@ -125,8 +130,8 @@ async function moduleAnalytics(db, yearId, title) {
     // Выбывший из одной группы, но оставшийся в другой группе параллели, в параллели не выбыл.
     const inParallel = new Set(cur.map(r => r.id));
     const goneFromParallel = unique(left).filter(r => !inParallel.has(r.id));
-    rows.push({ parallel: work.parallel, row: `${work.parallel} параллель`, kind: 'parallel', ...summarize(cur, struct.tasks) });
-    if (goneFromParallel.length) rows.push({ parallel: work.parallel, row: `${work.parallel} параллель · выбыли`, kind: 'parallel_left', ...summarize(goneFromParallel, struct.tasks) });
+    rows.push({ parallel: work.parallel, row: `${work.parallel} параллель`, kind: 'parallel', ...summarize(cur, struct.tasks), rule: compareRules(cur) });
+    if (goneFromParallel.length) rows.push({ parallel: work.parallel, row: `${work.parallel} параллель · выбыли`, kind: 'parallel_left', ...summarize(goneFromParallel, struct.tasks), rule: compareRules(goneFromParallel) });
     studentsByParallel.set(work.parallel, {
       any: new Set(cur.filter(r => r.result.complete || r.result.missing < struct.tasks.length || r.result.state.startsWith('отсутствовал')).map(r => r.id)),
       complete: new Set(cur.filter(r => r.result.complete).map(r => r.id)),
@@ -136,8 +141,8 @@ async function moduleAnalytics(db, yearId, title) {
   }
   if (works.length > 1) {
     // Все параллели: у параллелей разные спецификации, поэтому средние по разделам здесь не считаются.
-    rows.push({ parallel: null, row: 'Все параллели', kind: 'total', ...summarize(unique(all), []) });
-    if (allLeft.length) rows.push({ parallel: null, row: 'Все параллели · выбыли', kind: 'total_left', ...summarize(unique(allLeft), []) });
+    rows.push({ parallel: null, row: 'Все параллели', kind: 'total', ...summarize(unique(all), []), rule: compareRules(unique(all)) });
+    if (allLeft.length) rows.push({ parallel: null, row: 'Все параллели · выбыли', kind: 'total_left', ...summarize(unique(allLeft), []), rule: compareRules(unique(allLeft)) });
   }
   return {
     works: works.map(w => ({ id: w.id, parallel: w.parallel, status: w.status, max_points: w.max_points })),

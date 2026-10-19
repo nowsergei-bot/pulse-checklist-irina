@@ -11,6 +11,7 @@ type Row = {
   avg_total: number | null; avg_percent: number | null; marks: Record<string, number>;
   sections: Record<string, number | null>;
   gentle: { students: number; complete: number; raised: number; moves: Record<string, number>; avg_percent: number | null };
+  rule?: { compared: number; changed: number; higher: number; lower: number; moves: Record<string, number> };
 };
 type Data = {
   year: string | null; titles: string[]; title: string | null;
@@ -24,6 +25,7 @@ type Table = { key: string; title: string; note: string; head: string[]; rows: C
 
 const NO_PERCENT = 'нет: входное ещё не переведено в проценты';
 const MOVES = ['2→3', '3→4', '4→5'];
+const DOWN = ['3→2', '4→3', '5→4'];
 const LEVEL = { basic: 'баз.', advanced: 'пов.' } as Record<string, string>;
 
 function tables(d: Data): Table[] {
@@ -33,6 +35,7 @@ function tables(d: Data): Table[] {
   const kinds = rows.map(r => r.kind);
   const bySection = rows.filter(r => r.kind !== 'total' && r.kind !== 'total_left');
   const gentle = rows.filter(r => r.gentle.students > 0);
+  const ruled = rows.filter(r => r.rule && r.rule.compared > 0);
   const out: Table[] = [
     {
       key: 'groups', title: `${title}: группы и параллели`,
@@ -54,6 +57,16 @@ function tables(d: Data): Table[] {
       head: ['Параллель', 'Группа', 'Учеников в режиме', 'Полных работ', 'Средний %', 'Отметка выше', ...MOVES.map(m => `Из «${m[0]}» в «${m[2]}»`)],
       rows: gentle.map(r => [r.parallel, r.row, r.gentle.students, r.gentle.complete, r.gentle.avg_percent, r.gentle.raised, ...MOVES.map(m => r.gentle.moves[m] || 0)]),
       kinds: gentle.map(r => r.kind),
+    },
+    {
+      key: 'rule', title: `${title}: щадящий режим, прежнее и новое правило`,
+      note: 'Сколько отметок изменило новое правило, на внесённых баллах. Прежнее: отметка лучшая из двух, по обычному проценту и по (2 × базовый + повышенный) / (2 × макс. базовых + макс. повышенных). Новое: процент один (итог / максимум), пороги «5» от 90 %, «4» от 75 %, «3» от 45 %. Только полные работы учеников в щадящем режиме.',
+      head: ['Параллель', 'Группа', 'Работ в режиме', 'Изменилось', 'Стало выше', 'Стало ниже', ...DOWN.map(m => `Из «${m[0]}» в «${m[2]}»`), ...MOVES.map(m => `Из «${m[0]}» в «${m[2]}»`)],
+      rows: ruled.map(r => {
+        const x = r.rule as NonNullable<Row['rule']>;
+        return [r.parallel, r.row, x.compared, x.changed, x.higher, x.lower, ...[...DOWN, ...MOVES].map(m => x.moves[m] || 0)];
+      }),
+      kinds: ruled.map(r => r.kind),
     },
     {
       key: 'placement', title: 'Входное тестирование: по параллелям и полям',
@@ -82,7 +95,7 @@ const show = (v: Cell) => (v === null || v === undefined ? '' : typeof v === 'nu
 async function download(d: Data, list: Table[]) {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
-  const sheetNames = { groups: 'Группы', sections: 'Разделы', gentle: 'Щадящий', placement: 'Входное', overlap: 'Входное и работа' } as Record<string, string>;
+  const sheetNames = { groups: 'Группы', sections: 'Разделы', gentle: 'Щадящий', rule: 'Правила щадящего', placement: 'Входное', overlap: 'Входное и работа' } as Record<string, string>;
   for (const t of list) {
     const ws = wb.addWorksheet(sheetNames[t.key]);
     ws.addRow([t.title]).font = { bold: true, size: 12 };

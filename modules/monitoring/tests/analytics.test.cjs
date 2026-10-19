@@ -139,6 +139,11 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
     assert.deepEqual(g.gentle, { students: 4, complete: 3, raised: 1, moves: { '2→3': 1 }, avg_percent: 66 });
     assert.deepEqual(body.module.rows.find(x => x.row === '7 AA (ЦГ)').gentle, { students: 0, complete: 0, raised: 0, moves: {}, avg_percent: null });
     assert.deepEqual(body.module.rows.find(x => x.row === '7 параллель').gentle.moves, { '2→3': 1 });
+    // Прежнее и новое правило: 46 % было «3» по прежнему щадящему проценту 59, по порогу 45 тоже «3»; 52 и 100 % не меняются.
+    assert.deepEqual(g.rule, { compared: 3, changed: 0, higher: 0, lower: 0, moves: {} });
+    assert.deepEqual(body.module.rows.find(x => x.row === '7 AA · выбыли').rule, { compared: 1, changed: 0, higher: 0, lower: 0, moves: {} });
+    assert.equal(body.module.rows.find(x => x.row === '7 AA (ЦГ)').rule.compared, 0);
+    assert.deepEqual(body.module.rows.find(x => x.row === 'Все параллели').rule, { compared: 3, changed: 0, higher: 0, lower: 0, moves: {} });
   });
 
   await t.test('входное тестирование по текущей параллели ученика и полю', async () => {
