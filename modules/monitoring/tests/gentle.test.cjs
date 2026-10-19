@@ -90,7 +90,7 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
     assert.equal(r.body.gentle.enabled, false);
     assert.equal(r.body.gentle.can_change, false);
     assert.deepEqual(r.body.gentle.history, []);
-    assert.deepEqual(r.body.gentle_scale.map(x => x.min_percent), [85, 70, 45, 0]);
+    assert.deepEqual(r.body.gentle_scale.map(x => x.min_percent), [90, 75, 45, 0]);
     assert.deepEqual(results(r), {
       А: [24, 48, '2', false], Б: [33, 66, '3', false], В: [39, 78, '4', false], Г: [45, 90, '5', false], Д: [38, 76, '4', false],
     });
@@ -129,7 +129,7 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
     const sheet = await getSheet(db, 101, teacher, work.id, 1);
     assert.equal(sheet.body.gentle.enabled, true);
     assert.deepEqual(results(sheet), {
-      // 48 %: щадящий «3» (от 45), обычный «2»; 66, 78 и 90 % дают ту же отметку, пометки нет.
+      // 48 %: щадящий «3» (от 45), обычный «2»; 66, 76, 78 и 90 % дают ту же отметку, пометки нет.
       А: [24, 48, '3', true], Б: [33, 66, '3', false], В: [39, 78, '4', false], Г: [45, 90, '5', false], Д: [38, 76, '4', false],
     });
     // Учителю и заведующей история не видна, data_admin видна.

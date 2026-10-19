@@ -6,8 +6,8 @@
 
 // Щадящие пороги: единственное место, где они заданы. Экран получает их от сервера.
 const GENTLE_SCALE = Object.freeze([
-  { mark: '5', min_percent: 85 },
-  { mark: '4', min_percent: 70 },
+  { mark: '5', min_percent: 90 },
+  { mark: '4', min_percent: 75 },
   { mark: '3', min_percent: 45 },
   { mark: '2', min_percent: 0 },
 ]);

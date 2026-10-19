@@ -270,7 +270,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   const done = students.map(s => results.get(s.id) as Result).filter(r => r.complete);
   const avgTotal = done.length ? done.reduce((a, r) => a + r.total, 0) / done.length : null;
   const avgPercent = done.length ? done.reduce((a, r) => a + r.percent, 0) / done.length : null;
-  // Щадящие пороги для подсказок: «5» от 85%, «4» от 70%, «3» от 45%.
+  // Щадящие пороги для подсказок: «5» от 90%, «4» от 75%, «3» от 45%.
   const gentleRule = [...sheet.gentle_scale].sort((a, b) => Number(b.min_percent) - Number(a.min_percent))
     .filter(x => Number(x.min_percent) > 0).map(x => `«${x.mark}» от ${x.min_percent}%`).join(', ');
   const partTasks = (p: Part) => tasks.filter(t => t.part_id === p.id);

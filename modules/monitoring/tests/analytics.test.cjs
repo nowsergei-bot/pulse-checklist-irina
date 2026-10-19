@@ -83,7 +83,7 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
       await db.query('INSERT INTO monitoring.task_scores (work_id, task_id, student_id, group_id, score, updated_by) VALUES ($1, $2, $3, $4, $5, 100)', [w, tasks[i], student, group, s]);
     }
   };
-  // 7 AA (щадящий режим, пороги 85 / 70 / 45): 50 баллов «5»; 26 баллов 52% «3»; 23 балла 46%: обычный «2», щадящий «3»; ученик 4 отсутствовал.
+  // 7 AA (щадящий режим, пороги 90 / 75 / 45): 50 баллов «5»; 26 баллов 52% «3»; 23 балла 46%: обычный «2», щадящий «3»; ученик 4 отсутствовал.
   await scores(w7, 1, 1, [10, 10, 15, 15]);
   await scores(w7, 2, 1, [8, 8, 5, 5]);
   await scores(w7, 3, 1, [9, 9, 3, 2]);
