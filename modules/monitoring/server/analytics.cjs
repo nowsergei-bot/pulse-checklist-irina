@@ -24,10 +24,12 @@ function summarize(rows, tasks) {
     students: rows.length, complete: 0, absent: 0, not_entered: 0,
     avg_total: null, avg_percent: null, marks: { 5: 0, 4: 0, 3: 0, 2: 0 },
     sections: {},
-    gentle: { students: 0, complete: 0, raised: 0, moves: {} },
+    gentle: { students: 0, complete: 0, raised: 0, moves: {}, avg_percent: null, avg_gentle_percent: null },
   };
   let total = 0;
   let percent = 0;
+  let gentlePercent = 0;
+  let gentleNormal = 0;
   const sec = new Map();
   for (const r of rows) {
     const res = r.result;
@@ -41,6 +43,8 @@ function summarize(rows, tasks) {
     if (MARKS.includes(String(res.mark))) out.marks[res.mark] += 1;
     if (r.gentle) {
       out.gentle.complete += 1;
+      gentleNormal += res.percent;
+      gentlePercent += res.gentle_percent;
       if (res.gentle_used) {
         out.gentle.raised += 1;
         const key = `${r.normal_mark}→${res.mark}`;
@@ -57,6 +61,8 @@ function summarize(rows, tasks) {
   }
   out.avg_total = avg(total, out.complete);
   out.avg_percent = avg(percent, out.complete);
+  out.gentle.avg_percent = avg(gentleNormal, out.gentle.complete);
+  out.gentle.avg_gentle_percent = avg(gentlePercent, out.gentle.complete);
   for (const [key, s] of sec) out.sections[key] = s.max ? round1((100 * s.got) / s.max) : null;
   return out;
 }
@@ -118,14 +124,17 @@ async function moduleAnalytics(db, yearId, title) {
       left.push(...goneRows);
     }
     const cur = unique(current);
+    // Выбывший из одной группы, но оставшийся в другой группе параллели, в параллели не выбыл.
+    const inParallel = new Set(cur.map(r => r.id));
+    const goneFromParallel = unique(left).filter(r => !inParallel.has(r.id));
     rows.push({ parallel: work.parallel, row: `${work.parallel} параллель`, kind: 'parallel', ...summarize(cur, struct.tasks) });
-    if (left.length) rows.push({ parallel: work.parallel, row: `${work.parallel} параллель · выбыли`, kind: 'parallel_left', ...summarize(unique(left), struct.tasks) });
+    if (goneFromParallel.length) rows.push({ parallel: work.parallel, row: `${work.parallel} параллель · выбыли`, kind: 'parallel_left', ...summarize(goneFromParallel, struct.tasks) });
     studentsByParallel.set(work.parallel, {
       any: new Set(cur.filter(r => r.result.complete || r.result.missing < struct.tasks.length || r.result.state.startsWith('отсутствовал')).map(r => r.id)),
       complete: new Set(cur.filter(r => r.result.complete).map(r => r.id)),
     });
     all.push(...cur);
-    allLeft.push(...left);
+    allLeft.push(...goneFromParallel);
   }
   if (works.length > 1) {
     // Все параллели: у параллелей разные спецификации, поэтому средние по разделам здесь не считаются.

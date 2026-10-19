@@ -10,7 +10,7 @@ type Row = {
   students: number; complete: number; absent: number; not_entered: number;
   avg_total: number | null; avg_percent: number | null; marks: Record<string, number>;
   sections: Record<string, number | null>;
-  gentle: { students: number; complete: number; raised: number; moves: Record<string, number> };
+  gentle: { students: number; complete: number; raised: number; moves: Record<string, number>; avg_percent: number | null; avg_gentle_percent: number | null };
 };
 type Data = {
   year: string | null; titles: string[]; title: string | null;
@@ -50,9 +50,9 @@ function tables(d: Data): Table[] {
     },
     {
       key: 'gentle', title: `${title}: щадящий режим`,
-      note: 'Только полные работы. «Отметка выше»: по щадящему проценту отметка выше, чем по обычному. Группы без щадящего режима не показаны.',
-      head: ['Параллель', 'Группа', 'Учеников в режиме', 'Полных работ', 'Отметка выше', ...MOVES.map(m => `Из «${m[0]}» в «${m[2]}»`)],
-      rows: gentle.map(r => [r.parallel, r.row, r.gentle.students, r.gentle.complete, r.gentle.raised, ...MOVES.map(m => r.gentle.moves[m] || 0)]),
+      note: 'Только полные работы учеников в щадящем режиме: режим берётся из группы, где внесены баллы ученика, поэтому ученик из двух групп виден и в строке второй группы. Средний % обычный и средний % щадящий по одним и тем же ученикам. «Отметка выше»: по щадящему проценту отметка выше, чем по обычному. Группы без таких учеников не показаны.',
+      head: ['Параллель', 'Группа', 'Учеников в режиме', 'Полных работ', 'Средний %', 'Средний % щадящий', 'Отметка выше', ...MOVES.map(m => `Из «${m[0]}» в «${m[2]}»`)],
+      rows: gentle.map(r => [r.parallel, r.row, r.gentle.students, r.gentle.complete, r.gentle.avg_percent, r.gentle.avg_gentle_percent, r.gentle.raised, ...MOVES.map(m => r.gentle.moves[m] || 0)]),
       kinds: gentle.map(r => r.kind),
     },
     {

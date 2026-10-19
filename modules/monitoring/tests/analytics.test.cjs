@@ -135,8 +135,9 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
   await t.test('щадящий режим: у кого отметка стала выше и из какой в какую', async () => {
     const g = body.module.rows.find(x => x.row === '7 AA');
     assert.equal(g.gentle_on, true);
-    assert.deepEqual(g.gentle, { students: 4, complete: 3, raised: 1, moves: { '2→3': 1 } });
-    assert.deepEqual(body.module.rows.find(x => x.row === '7 AA (ЦГ)').gentle, { students: 0, complete: 0, raised: 0, moves: {} });
+    // Обычный: 100, 52, 44; щадящий: (2 × базовые + повышенные) / 70: 100, 60, 57.
+    assert.deepEqual(g.gentle, { students: 4, complete: 3, raised: 1, moves: { '2→3': 1 }, avg_percent: 65.3, avg_gentle_percent: 72.3 });
+    assert.deepEqual(body.module.rows.find(x => x.row === '7 AA (ЦГ)').gentle, { students: 0, complete: 0, raised: 0, moves: {}, avg_percent: null, avg_gentle_percent: null });
     assert.deepEqual(body.module.rows.find(x => x.row === '7 параллель').gentle.moves, { '2→3': 1 });
   });
 
@@ -165,5 +166,18 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
     assert.deepEqual(r.body.module.rows.map(x => x.row), ['7 AA', '7 параллель']);
     assert.equal((await call(100, { title: 'Нет такой' })).body.title, 'Модуль 1');
     assert.doesNotMatch(JSON.stringify(body), /Ученик|Учитель|Администратор|@/);
+  });
+
+  await t.test('выбыл из группы, но остался в другой группе параллели: в параллели не выбыл', async () => {
+    // Ученик 9 перешёл из 7 AA в 7 AA (ЦГ); его баллы внесены в 7 AA.
+    await db.query("INSERT INTO pulse_read.students VALUES (9, 'Ученик Вымышленный 9'); INSERT INTO pulse_read.group_memberships VALUES (9, 9, 2)");
+    await scores(w7, 9, 1, [5, 5, 5, 5]);
+    const rows = (await call(100)).body.module.rows;
+    const count = (name) => rows.find(x => x.row === name)?.students;
+    assert.equal(count('7 AA · выбыли'), 2);
+    assert.equal(count('7 AA (ЦГ)'), 2);
+    assert.equal(count('7 параллель'), 6);
+    assert.equal(count('7 параллель · выбыли'), 1);
+    assert.equal(count('Все параллели · выбыли'), 1);
   });
 });

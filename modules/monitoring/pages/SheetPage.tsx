@@ -62,8 +62,6 @@ function bySection(list: Task[]) {
   return out;
 }
 
-// Процент, по которому выставлена отметка: щадящий, только если по нему отметка выше.
-const shownPercent = (r: Result) => (r.gentle_used && r.gentle_percent !== null ? r.gentle_percent : r.percent);
 const decimal = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
 const MARKS = ['5', '4', '3', '2'];
 
@@ -268,10 +266,12 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   const complete = students.filter(s => results.get(s.id)?.complete).length;
   const absent = students.filter(s => results.get(s.id)?.state.startsWith('отсутствовал')).length;
   const present = students.length - absent;
-  // Среднее по группе: только полные работы; процент тот, по которому ставится отметка.
+  // Среднее по группе: только полные работы; обычный процент и, в щадящем режиме, щадящий.
   const done = students.map(s => results.get(s.id) as Result).filter(r => r.complete);
   const avgTotal = done.length ? done.reduce((a, r) => a + r.total, 0) / done.length : null;
-  const avgPercent = done.length ? done.reduce((a, r) => a + shownPercent(r), 0) / done.length : null;
+  const avgPercent = done.length ? done.reduce((a, r) => a + r.percent, 0) / done.length : null;
+  const doneGentle = done.filter(r => r.gentle_percent !== null);
+  const avgGentle = doneGentle.length ? doneGentle.reduce((a, r) => a + (r.gentle_percent as number), 0) / doneGentle.length : null;
   const partTasks = (p: Part) => tasks.filter(t => t.part_id === p.id);
   // Первое задание каждого раздела, кроме первого в части: тонкая линия между разделами.
   const sectionStart = new Set(parts.flatMap(p => bySection(partTasks(p)).slice(1).map(g => g.tasks[0].id)));
@@ -351,20 +351,19 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
           ];
         })}
         <td className="mon-num mon-sheet__res-start mon-sheet__total">{empty || allAbsent ? '' : r.total}</td>
-        {/* Процент тот, по которому выставлена отметка; «щадящий» только у тех, у кого сработал щадящий. */}
-        <td
-          className={`mon-num mon-sheet__pct${r.complete ? '' : ' is-wait'}`}
-          title={wasAbsent || empty || !r.gentle ? undefined
-            : r.gentle_used ? `Отметка по щадящему проценту. Обычный процент: ${r.percent}`
-              : `Отметка по обычному проценту. Щадящий: ${r.gentle_percent}`}
-        >
-          {wasAbsent || empty ? '' : shownPercent(r)}
-          {r.gentle_used && !(wasAbsent || empty) ? <span className="mon-sheet__pct-mode">щадящий</span> : null}
-        </td>
-        {/* Отметка плашкой; пока работа не полная, вместо отметки её состояние. */}
+        {/* Обычный процент всегда; в щадящем режиме рядом щадящий. Отметка лучшая из двух. */}
+        <td className={`mon-num mon-sheet__pct${r.complete ? '' : ' is-wait'}`}>{wasAbsent || empty ? '' : r.percent}</td>
+        {gentle.enabled ? (
+          <td className={`mon-num mon-sheet__pct mon-sheet__pct-gentle${r.complete ? '' : ' is-wait'}`}
+            title={r.gentle ? undefined : 'Баллы ученика внесены в группе без щадящего режима'}>
+            {wasAbsent || empty ? '' : r.gentle_percent ?? '—'}
+          </td>
+        ) : null}
+        {/* Отметка плашкой; «щадящий», только если щадящий процент поднял отметку. Пока работа не полная, вместо отметки её состояние. */}
         <td className="mon-sheet__mark">
-          {r.mark ? <span className={`mon-mark mon-mark--${MARKS.includes(r.mark) ? r.mark : 'other'}`} title={r.state}>{r.mark}</span>
+          {r.mark ? <span className={`mon-mark mon-mark--${MARKS.includes(r.mark) ? r.mark : 'other'}`} title={r.gentle_used ? `Отметка по щадящему проценту ${r.gentle_percent}; по обычному ${r.percent}` : r.state}>{r.mark}</span>
             : <span className={`mon-sheet__state${wasAbsent ? ' is-absent' : ''}`} title={r.state}>{r.complete ? 'нет отметки' : wasAbsent ? (parts.length > 1 ? r.state : 'отсутствовал') : `не внесено: ${r.missing}`}</span>}
+          {r.gentle_used ? <span className="mon-sheet__pct-mode">щадящий</span> : null}
         </td>
       </tr>
     );
@@ -413,10 +412,10 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
         </div>
       ) : null}
 
-      {/* Строку с кнопками и историей видит только тот, кто может переключать режим; остальные видят «% (щадящий)» в шапке. */}
+      {/* Строку с кнопками и историей видит только тот, кто может переключать режим; остальные видят колонку «% щадящий» в таблице. */}
       {admin ? (
         <div className={`mon-gentle${gentle.enabled ? ' is-on' : ''}`}>
-          <span className="mon-gentle__line" title="Задания повышенного уровня считаются с коэффициентом 0,5, отметка ставится по этому проценту.">
+          <span className="mon-gentle__line" title="Задания повышенного уровня считаются с коэффициентом 0,5. Отметка лучшая из двух: по обычному и по щадящему проценту.">
             <strong>Щадящий режим {gentle.enabled ? 'включён' : 'выключен'}</strong>
             {gentle.groups_total > 1 || gentle.enabled
               ? ` · ${gentle.enabled ? '' : 'включён в '}${gentle.groups_on} из ${gentle.groups_total} ${groupsWord(gentle.groups_total)}`
@@ -489,7 +488,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                     {parts.length === 1 ? work.title : p.name}{p.held_on ? ` · ${date(p.held_on)}` : ''}
                   </th>
                 ))}
-                <th colSpan={3} className="mon-sheet__part mon-sheet__res-start">Результат</th>
+                <th colSpan={gentle.enabled ? 4 : 3} className="mon-sheet__part mon-sheet__res-start">Результат</th>
               </tr>
               <tr>
                 {parts.map(p => [
@@ -499,9 +498,12 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                   )),
                 ])}
                 <th rowSpan={2} className="mon-num mon-sheet__res-start mon-sheet__res-head">Итого<span className="mon-sheet__max">из {work.max_points}</span></th>
-                <th rowSpan={2} className="mon-num mon-sheet__res-head" title={gentle.enabled ? 'Щадящий режим: отметка лучшая из двух, по обычному и по щадящему проценту (повышенный уровень с коэффициентом 0,5). Процент тот, по которому выставлена отметка.' : undefined}>
-                  %{gentle.enabled ? <span className="mon-sheet__pct-mode">щадящий режим</span> : null}
-                </th>
+                <th rowSpan={2} className="mon-num mon-sheet__res-head" title="Обычный процент: итог / максимум">%</th>
+                {gentle.enabled ? (
+                  <th rowSpan={2} className="mon-num mon-sheet__res-head mon-sheet__pct-gentle" title="Щадящий процент: (2 × базовый + повышенный) / (2 × макс. базовых + макс. повышенных). Отметка лучшая из двух процентов.">
+                    %<span className="mon-sheet__pct-mode">щадящий</span>
+                  </th>
+                ) : null}
                 <th rowSpan={2} className="mon-sheet__mark-head mon-sheet__res-head">Отметка</th>
               </tr>
               <tr>
@@ -533,6 +535,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                   </td>
                   <td className="mon-num mon-sheet__res-start mon-sheet__total">{avgTotal === null ? '' : decimal(avgTotal)}</td>
                   <td className="mon-num mon-sheet__pct">{avgPercent === null ? '' : decimal(avgPercent)}</td>
+                  {gentle.enabled ? <td className="mon-num mon-sheet__pct mon-sheet__pct-gentle">{avgGentle === null ? '' : decimal(avgGentle)}</td> : null}
                   <td />
                 </tr>
               </tfoot>

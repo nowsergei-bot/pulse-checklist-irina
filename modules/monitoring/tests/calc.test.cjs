@@ -122,3 +122,44 @@ test('щадящий режим: без повышенных заданий пр
   const r = studentResult({ parts: gentleParts, tasks: tasksBasic, maxPoints: 40, scale, absentPartIds: new Set(), scores: new Map([[40, 30]]), gentle: true });
   assert.deepEqual([r.percent, r.gentle_percent, r.mark], [75, 75, '4']);
 });
+
+test('щадящий режим: примеры с продакшена, (2 × базовый + повышенный) / 70', () => {
+  // [базовый, повышенный, обычный %, щадящий %, отметка, сработал щадящий]
+  const cases = [
+    [18, 21, 78, 81, '4', false],
+    [18, 24, 84, 86, '4', false],
+    [18, 25, 86, 87, '4', false],
+    [18, 26, 88, 89, '4', false],
+    [17, 28, 90, 89, '5', false],
+    // 24 из 50: обычный 48 % «2», щадящий 63 % «3»: отметка поднята.
+    [20, 4, 48, 63, '3', true],
+  ];
+  for (const [basic, advanced, percent, gentlePercent, mark, used] of cases) {
+    const r = gentleRun(basic, advanced);
+    assert.deepEqual([r.total, r.percent, r.gentle_percent, r.mark, r.gentle_used], [basic + advanced, percent, gentlePercent, mark, used], `${basic} + ${advanced}`);
+  }
+});
+
+test('щадящий режим: границы шкалы 49/50, 74/75, 89/90', () => {
+  // Максимум 100: базовый 25, повышенный 75; щадящий = (2 × базовый + повышенный) / 125.
+  const bTasks = [{ id: 50, part_id: 1, level: 'basic', max_points: 25 }, { id: 51, part_id: 1, level: 'advanced', max_points: 75 }];
+  const one = (basic, advanced, gentle = true) => studentResult({
+    parts: gentleParts, tasks: bTasks, maxPoints: 100, scale, absentPartIds: new Set(), scores: new Map([[50, basic], [51, advanced]]), gentle,
+  });
+  // [базовый, повышенный, обычный %, щадящий %, отметка в режиме, сработал щадящий, отметка без режима]
+  const cases = [
+    [13, 36, 49, 50, '3', true, '2'],
+    [20, 54, 74, 75, '4', true, '3'],
+    [23, 66, 89, 90, '5', true, '4'],
+    // Обычный на границе, щадящий ниже: отметка по обычному.
+    [0, 50, 50, 40, '3', false, '3'],
+    [0, 75, 75, 60, '4', false, '4'],
+    [25, 65, 90, 92, '5', false, '5'],
+  ];
+  for (const [basic, advanced, percent, gentlePercent, mark, used, offMark] of cases) {
+    const r = one(basic, advanced);
+    assert.deepEqual([r.percent, r.gentle_percent, r.mark, r.gentle_used], [percent, gentlePercent, mark, used], `${basic} + ${advanced}`);
+    assert.equal(one(basic, advanced, false).mark, offMark, `${basic} + ${advanced} без режима`);
+  }
+  assert.deepEqual([49, 50, 74, 75, 89, 90].map(p => markFor(p, scale)), ['2', '3', '3', '4', '4', '5']);
+});
