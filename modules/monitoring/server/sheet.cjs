@@ -1,7 +1,7 @@
 // Ввод результатов по группе. Права проверяются здесь при каждом запросе.
 // Один балл на работу + задание + ученика; в результате хранится группа, где его внесли.
 
-const { studentResult } = require('./lib/calc.cjs');
+const { studentResult, GENTLE_SCALE } = require('./lib/calc.cjs');
 const { teacherGroupIds, groupStudents } = require('./lib/groups.cjs');
 
 const MAX_CHANGES = 1000;
@@ -155,7 +155,7 @@ async function getSheet(db, userId, caps, workId, groupId) {
     status: 200,
     body: {
       work: { id: w.id, title: w.title, parallel: w.parallel, status: w.status, spec_title: w.spec_title, version: w.version, max_points: w.max_points },
-      group, can_edit: a.canEdit, reason: a.reason, parts: struct.parts, tasks: struct.tasks, scale: struct.scale,
+      group, can_edit: a.canEdit, reason: a.reason, parts: struct.parts, tasks: struct.tasks, scale: struct.scale, gentle_scale: GENTLE_SCALE,
       students, left_students: leftRows,
       gentle: { enabled: gentle, can_change: canChangeGentle(caps, a.work), groups_on: gentleIds.size, groups_total: groupCount, history },
     },

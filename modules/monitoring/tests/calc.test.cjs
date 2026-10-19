@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { percentOf, markFor, studentResult } = require('../server/lib/calc.cjs');
+const { GENTLE_SCALE, percentOf, markFor, studentResult } = require('../server/lib/calc.cjs');
 
 // Шкала по Положению о системе оценивания (миграция 004).
 const scale = [
@@ -74,92 +74,102 @@ test('схема с другим максимумом: считается от �
 });
 
 // Щадящий режим. Максимум базовых 20, повышенных 30, итого 50 (так выходят проценты из задания).
+// Щадящий режим: процент тот же, отметка по щадящим порогам 85 / 70 / 45.
 const gentleParts = [{ id: 1, name: 'Тест' }];
 const gentleTasks = [{ id: 30, part_id: 1, level: 'basic', max_points: 20 }, { id: 31, part_id: 1, level: 'advanced', max_points: 30 }];
 function gentleRun(basic, advanced, gentle = true) {
   return studentResult({ parts: gentleParts, tasks: gentleTasks, maxPoints: 50, scale, absentPartIds: new Set(), scores: new Map([[30, basic], [31, advanced]]), gentle });
 }
+// Работа на max баллов одним заданием.
+function anyMax(total, maxPoints, gentle) {
+  const one = [{ id: 60, part_id: 1, level: 'basic', max_points: maxPoints }];
+  return studentResult({ parts: gentleParts, tasks: one, maxPoints, scale, absentPartIds: new Set(), scores: new Map([[60, total]]), gentle });
+}
 
-test('щадящий режим: ученики А-Д, отметка лучшая из двух', () => {
-  // [имя, базовые, повышенные, щадящий %, обычный %, отметка в режиме, сработал щадящий, отметка без режима]
+test('щадящие пороги заданы в одном месте: 85 / 70 / 45', () => {
+  assert.deepEqual(GENTLE_SCALE.map(r => [r.mark, r.min_percent]), [['5', 85], ['4', 70], ['3', 45], ['2', 0]]);
+  assert.ok(Object.isFrozen(GENTLE_SCALE));
+});
+
+test('щадящий режим: пример с продакшена, 35 и 36 из 50 больше не расходятся', () => {
+  // Раньше: 18 + 17 = 35 давало «4», 16 + 20 = 36 давало «3».
   const cases = [
-    ['А', 16, 8, 57, 48, '3', true, '2'],
-    ['Б', 18, 15, 73, 66, '3', false, '3'],
-    ['В', 19, 20, 83, 78, '4', false, '4'],
-    ['Г', 20, 25, 93, 90, '5', false, '5'],
-    ['Д', 12, 26, 71, 76, '4', false, '4'],
+    // [базовый, повышенный, %, отметка в режиме, пометка, отметка без режима]
+    [18, 17, 70, '4', true, '3'],
+    [16, 20, 72, '4', true, '3'],
   ];
-  for (const [name, basic, advanced, gentlePercent, percent, mark, used, normalMark] of cases) {
+  for (const [basic, advanced, percent, mark, used, offMark] of cases) {
     const r = gentleRun(basic, advanced);
-    assert.equal(r.gentle_percent, gentlePercent, `ученик ${name}`);
-    assert.equal(r.percent, percent, `ученик ${name}`);
-    assert.equal(r.mark, mark, `ученик ${name}`);
-    assert.equal(r.gentle_used, used, `ученик ${name}`);
-    // Итог в баллах не меняется.
-    assert.equal(r.total, basic + advanced);
+    assert.deepEqual([r.total, r.percent, r.mark, r.gentle_used], [basic + advanced, percent, mark, used], `${basic} + ${advanced}`);
+    assert.equal('gentle_percent' in r, false);
     const off = gentleRun(basic, advanced, false);
-    assert.deepEqual([off.mark, off.gentle_percent, off.gentle_used], [normalMark, null, false], `ученик ${name}`);
+    assert.deepEqual([off.percent, off.mark, off.gentle_used], [percent, offMark, false], `${basic} + ${advanced} без режима`);
   }
 });
 
-test('щадящий режим: базовый 9/20, повышенный 16/30: обычный 50 % «3», щадящий 49 % «2», итог «3» по обычному', () => {
-  const r = gentleRun(9, 16);
-  assert.deepEqual([r.percent, r.gentle_percent, r.mark, r.gentle_used], [50, 49, '3', false]);
-});
-
-test('щадящий режим: 12/26: обычный 76 % «4», щадящий 71 % «3», итог «4» по обычному', () => {
-  const r = gentleRun(12, 26);
-  assert.deepEqual([r.percent, r.gentle_percent, r.mark, r.gentle_used], [76, 71, '4', false]);
-});
-
-test('щадящий режим: незаконченная работа без отметки и без срабатывания', () => {
-  const r = studentResult({ parts: gentleParts, tasks: gentleTasks, maxPoints: 50, scale, absentPartIds: new Set(), scores: new Map([[30, 16], [31, null]]), gentle: true });
-  assert.deepEqual([r.mark, r.gentle_used], [null, false]);
-});
-
-test('щадящий режим: без повышенных заданий процент тот же', () => {
-  const tasksBasic = [{ id: 40, part_id: 1, level: 'basic', max_points: 40 }];
-  const r = studentResult({ parts: gentleParts, tasks: tasksBasic, maxPoints: 40, scale, absentPartIds: new Set(), scores: new Map([[40, 30]]), gentle: true });
-  assert.deepEqual([r.percent, r.gentle_percent, r.mark], [75, 75, '4']);
-});
-
-test('щадящий режим: примеры с продакшена, (2 × базовый + повышенный) / 70', () => {
-  // [базовый, повышенный, обычный %, щадящий %, отметка, сработал щадящий]
-  const cases = [
-    [18, 21, 78, 81, '4', false],
-    [18, 24, 84, 86, '4', false],
-    [18, 25, 86, 87, '4', false],
-    [18, 26, 88, 89, '4', false],
-    [17, 28, 90, 89, '5', false],
-    // 24 из 50: обычный 48 % «2», щадящий 63 % «3»: отметка поднята.
-    [20, 4, 48, 63, '3', true],
-  ];
-  for (const [basic, advanced, percent, gentlePercent, mark, used] of cases) {
-    const r = gentleRun(basic, advanced);
-    assert.deepEqual([r.total, r.percent, r.gentle_percent, r.mark, r.gentle_used], [basic + advanced, percent, gentlePercent, mark, used], `${basic} + ${advanced}`);
+test('процент один: от уровня заданий не зависит', () => {
+  // 18 + 21 и 21 + 18 = 39 из 50: 78 % в обоих режимах.
+  for (const [basic, advanced] of [[18, 21], [20, 19], [9, 30]]) {
+    assert.equal(gentleRun(basic, advanced).percent, 78);
+    assert.equal(gentleRun(basic, advanced, false).percent, 78);
   }
 });
 
-test('щадящий режим: границы шкалы 49/50, 74/75, 89/90', () => {
-  // Максимум 100: базовый 25, повышенный 75; щадящий = (2 × базовый + повышенный) / 125.
-  const bTasks = [{ id: 50, part_id: 1, level: 'basic', max_points: 25 }, { id: 51, part_id: 1, level: 'advanced', max_points: 75 }];
-  const one = (basic, advanced, gentle = true) => studentResult({
-    parts: gentleParts, tasks: bTasks, maxPoints: 100, scale, absentPartIds: new Set(), scores: new Map([[50, basic], [51, advanced]]), gentle,
-  });
-  // [базовый, повышенный, обычный %, щадящий %, отметка в режиме, сработал щадящий, отметка без режима]
+test('щадящий режим: границы 44/45, 69/70, 84/85', () => {
   const cases = [
-    [13, 36, 49, 50, '3', true, '2'],
-    [20, 54, 74, 75, '4', true, '3'],
-    [23, 66, 89, 90, '5', true, '4'],
-    // Обычный на границе, щадящий ниже: отметка по обычному.
-    [0, 50, 50, 40, '3', false, '3'],
-    [0, 75, 75, 60, '4', false, '4'],
-    [25, 65, 90, 92, '5', false, '5'],
+    // [%, отметка в режиме, пометка]
+    [44, '2', false], [45, '3', true],
+    [69, '3', false], [70, '4', true],
+    [84, '4', false], [85, '5', true],
+    [49, '3', true], [50, '3', false],
+    [74, '4', true], [75, '4', false],
+    [89, '5', true], [90, '5', false],
+    [0, '2', false], [100, '5', false],
   ];
-  for (const [basic, advanced, percent, gentlePercent, mark, used, offMark] of cases) {
-    const r = one(basic, advanced);
-    assert.deepEqual([r.percent, r.gentle_percent, r.mark, r.gentle_used], [percent, gentlePercent, mark, used], `${basic} + ${advanced}`);
-    assert.equal(one(basic, advanced, false).mark, offMark, `${basic} + ${advanced} без режима`);
+  for (const [percent, mark, used] of cases) {
+    const r = anyMax(percent, 100, true);
+    assert.deepEqual([r.percent, r.mark, r.gentle_used], [percent, mark, used], `${percent} %`);
+  }
+});
+
+test('обычный режим: границы 49/50, 74/75, 89/90', () => {
+  const cases = [[49, '2'], [50, '3'], [74, '3'], [75, '4'], [89, '4'], [90, '5']];
+  for (const [percent, mark] of cases) {
+    const r = anyMax(percent, 100, false);
+    assert.deepEqual([r.percent, r.mark, r.gentle_used], [percent, mark, false], `${percent} %`);
   }
   assert.deepEqual([49, 50, 74, 75, 89, 90].map(p => markFor(p, scale)), ['2', '3', '3', '4', '4', '5']);
+  assert.deepEqual([44, 45, 69, 70, 84, 85].map(p => markFor(p, GENTLE_SCALE)), ['2', '3', '3', '4', '4', '5']);
+});
+
+test('работа на 43 балла: 30/43 = 70 %, щадящий «4»; на 38 баллов тоже от своего максимума', () => {
+  assert.deepEqual([anyMax(30, 43, true).percent, anyMax(30, 43, true).mark, anyMax(30, 43, true).gentle_used], [70, '4', true]);
+  assert.deepEqual([anyMax(30, 43, false).mark], ['3']);
+  // 27/38 = 71,05 → 71 %: щадящий «4», обычный «3».
+  assert.deepEqual([anyMax(27, 38, true).percent, anyMax(27, 38, true).mark, anyMax(27, 38, false).mark], [71, '4', '3']);
+});
+
+test('монотонность: при большем итоге отметка не ниже, для 38, 43 и 50 баллов, в обоих режимах', () => {
+  for (const maxPoints of [38, 43, 50]) {
+    for (const gentle of [false, true]) {
+      let prev = 0;
+      for (let total = 0; total <= maxPoints; total += 1) {
+        const mark = Number(anyMax(total, maxPoints, gentle).mark);
+        assert.ok(mark >= prev, `максимум ${maxPoints}, ${gentle ? 'щадящий' : 'обычный'}: ${total} баллов дают «${mark}», а ${total - 1} давали «${prev}»`);
+        prev = mark;
+      }
+      assert.equal(prev, 5);
+    }
+    // Щадящая отметка никогда не ниже обычной.
+    for (let total = 0; total <= maxPoints; total += 1) {
+      assert.ok(Number(anyMax(total, maxPoints, true).mark) >= Number(anyMax(total, maxPoints, false).mark));
+    }
+  }
+});
+
+test('щадящий режим: отсутствовал или не всё внесено: отметки и пометки нет', () => {
+  const missing = studentResult({ parts: gentleParts, tasks: gentleTasks, maxPoints: 50, scale, absentPartIds: new Set(), scores: new Map([[30, 16], [31, null]]), gentle: true });
+  assert.deepEqual([missing.mark, missing.gentle_used, missing.complete], [null, false, false]);
+  const absent = studentResult({ parts: gentleParts, tasks: gentleTasks, maxPoints: 50, scale, absentPartIds: new Set([1]), scores: new Map(), gentle: true });
+  assert.deepEqual([absent.mark, absent.gentle_used, absent.state], [null, false, 'отсутствовал: тест']);
 });

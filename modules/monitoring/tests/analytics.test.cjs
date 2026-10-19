@@ -83,10 +83,10 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
       await db.query('INSERT INTO monitoring.task_scores (work_id, task_id, student_id, group_id, score, updated_by) VALUES ($1, $2, $3, $4, $5, 100)', [w, tasks[i], student, group, s]);
     }
   };
-  // 7 AA (щадящий режим): 50 баллов «5»; 26 баллов 52% «3»; 22 балла 44% «2», щадящий 57% «3»; ученик 4 отсутствовал.
+  // 7 AA (щадящий режим, пороги 85 / 70 / 45): 50 баллов «5»; 26 баллов 52% «3»; 23 балла 46%: обычный «2», щадящий «3»; ученик 4 отсутствовал.
   await scores(w7, 1, 1, [10, 10, 15, 15]);
   await scores(w7, 2, 1, [8, 8, 5, 5]);
-  await scores(w7, 3, 1, [9, 9, 2, 2]);
+  await scores(w7, 3, 1, [9, 9, 3, 2]);
   await db.query("INSERT INTO monitoring.part_status (work_id, part_id, student_id, group_id, status, updated_by) VALUES ($1, $2, 4, 1, 'absent', 100)", [w7, part.id]);
   await scores(w7, 8, 1, [10, 10, 10, 10]);
   await db.query('INSERT INTO monitoring.gentle_groups (work_id, group_id, updated_by) VALUES ($1, 1, 100)', [w7]);
@@ -113,14 +113,14 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
     assert.deepEqual(body.module.works.map(w => w.parallel), [7, 8]); // черновик не считается
     const view = body.module.rows.map(x => [x.row, x.students, x.complete, x.absent, x.not_entered, x.avg_total, x.avg_percent, [x.marks[5], x.marks[4], x.marks[3], x.marks[2]]]);
     assert.deepEqual(view, [
-      ['7 AA', 4, 3, 1, 0, 32.7, 65.3, [1, 0, 2, 0]],
+      ['7 AA', 4, 3, 1, 0, 33, 66, [1, 0, 2, 0]],
       ['7 AA · выбыли', 1, 1, 0, 0, 40, 80, [0, 1, 0, 0]],
       ['7 AA (ЦГ)', 1, 1, 0, 0, 20, 40, [0, 0, 0, 1]],
-      ['7 параллель', 5, 4, 1, 0, 29.5, 59, [1, 0, 2, 1]],
+      ['7 параллель', 5, 4, 1, 0, 29.8, 59.5, [1, 0, 2, 1]],
       ['7 параллель · выбыли', 1, 1, 0, 0, 40, 80, [0, 1, 0, 0]],
       ['8 AB', 2, 1, 0, 1, 40, 80, [0, 1, 0, 0]],
       ['8 параллель', 2, 1, 0, 1, 40, 80, [0, 1, 0, 0]],
-      ['Все параллели', 7, 5, 1, 1, 31.6, 63.2, [1, 1, 2, 1]],
+      ['Все параллели', 7, 5, 1, 1, 31.8, 63.6, [1, 1, 2, 1]],
       ['Все параллели · выбыли', 1, 1, 0, 0, 40, 80, [0, 1, 0, 0]],
     ]);
   });
@@ -128,16 +128,16 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
   await t.test('разделы и уровни: средний процент по полным работам', async () => {
     assert.deepEqual(body.module.section_keys.map(k => k.key), ['Listening|basic', 'Reading|basic', 'Grammar|advanced', 'Vocabulary|advanced']);
     const g = body.module.rows.find(x => x.row === '7 AA');
-    assert.deepEqual(g.sections, { 'Listening|basic': 90, 'Reading|basic': 90, 'Grammar|advanced': 48.9, 'Vocabulary|advanced': 48.9 });
+    assert.deepEqual(g.sections, { 'Listening|basic': 90, 'Reading|basic': 90, 'Grammar|advanced': 51.1, 'Vocabulary|advanced': 48.9 });
     assert.deepEqual(body.module.rows.find(x => x.row === '7 параллель').sections['Listening|basic'], 80);
   });
 
   await t.test('щадящий режим: у кого отметка стала выше и из какой в какую', async () => {
     const g = body.module.rows.find(x => x.row === '7 AA');
     assert.equal(g.gentle_on, true);
-    // Обычный: 100, 52, 44; щадящий: (2 × базовые + повышенные) / 70: 100, 60, 57.
-    assert.deepEqual(g.gentle, { students: 4, complete: 3, raised: 1, moves: { '2→3': 1 }, avg_percent: 65.3, avg_gentle_percent: 72.3 });
-    assert.deepEqual(body.module.rows.find(x => x.row === '7 AA (ЦГ)').gentle, { students: 0, complete: 0, raised: 0, moves: {}, avg_percent: null, avg_gentle_percent: null });
+    // Процент один: 100, 52, 46. Щадящие пороги: 46 % даёт «3» вместо «2»; 52 и 100 % отметку не меняют.
+    assert.deepEqual(g.gentle, { students: 4, complete: 3, raised: 1, moves: { '2→3': 1 }, avg_percent: 66 });
+    assert.deepEqual(body.module.rows.find(x => x.row === '7 AA (ЦГ)').gentle, { students: 0, complete: 0, raised: 0, moves: {}, avg_percent: null });
     assert.deepEqual(body.module.rows.find(x => x.row === '7 параллель').gentle.moves, { '2→3': 1 });
   });
 

@@ -1,10 +1,16 @@
 // Итог, процент и отметка не хранятся, а считаются здесь.
-// Шкала по Положению о системе оценивания: отметка от процента, округлённого до целого.
-// Щадящий режим: повышенные задания с коэффициентом 0,5, то есть
-// щадящий процент = (2 × базовые + повышенные) / (2 × макс. базовых + макс. повышенных) × 100.
-// Отметка лучшая из двух: по обычному и по щадящему проценту. Щадящий «срабатывает» (gentle_used),
-// только если по нему отметка выше; при равных отметках действует обычный процент.
-// Обычный процент сохраняется для сравнения групп.
+// Процент один: итог / максимум работы × 100, округление до целого.
+// Обычная шкала по Положению о системе оценивания берётся из базы (grade_scale_rows).
+// Щадящий режим: тот же процент, но отметка по щадящим порогам GENTLE_SCALE.
+// Пометка «щадящий» (gentle_used), только если по щадящим порогам отметка выше обычной.
+
+// Щадящие пороги: единственное место, где они заданы. Экран получает их от сервера.
+const GENTLE_SCALE = Object.freeze([
+  { mark: '5', min_percent: 85 },
+  { mark: '4', min_percent: 70 },
+  { mark: '3', min_percent: 45 },
+  { mark: '2', min_percent: 0 },
+]);
 
 // Процент в целых числах, половина вверх: round(100 × баллы / максимум).
 function percentOf(total, maxPoints) {
@@ -22,52 +28,42 @@ function markFor(percent, scale) {
   return row ? row.mark : null;
 }
 
-// Щадящий процент даёт отметку выше обычной: его порог по шкале выше.
-function gentleWins(percent, gentlePercent, scale) {
-  if (gentlePercent === null) return false;
-  const normal = scaleRow(percent, scale);
-  const gentle = scaleRow(gentlePercent, scale);
-  return Boolean(gentle) && (!normal || Number(gentle.min_percent) > Number(normal.min_percent));
+// Отметка по щадящим порогам выше обычной.
+function higherMark(gentleMark, normalMark) {
+  return gentleMark !== null && (normalMark === null || Number(gentleMark) > Number(normalMark));
 }
 
 // parts: [{ id, name }]; tasks: [{ id, part_id, max_points }];
 // absentPartIds: Set части со статусом «отсутствовал»; scores: Map task_id -> целое или null.
-// gentle: щадящий режим включён для группы; tasks тогда нужны с level.
-function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, gentle = false }) {
+// gentle: щадящий режим включён для группы.
+function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, gentle = false, gentleScale = GENTLE_SCALE }) {
   let total = 0;
   let missing = 0;
-  let advanced = 0;
-  let maxAdvanced = 0;
   for (const task of tasks) {
-    if (task.level === 'advanced') maxAdvanced += task.max_points;
     if (absentPartIds.has(task.part_id)) continue;
     const score = scores.get(task.id);
     if (score === null || score === undefined) missing += 1;
-    else {
-      total += score;
-      if (task.level === 'advanced') advanced += score;
-    }
+    else total += score;
   }
   const absentParts = parts.filter(p => absentPartIds.has(p.id));
   const complete = absentParts.length === 0 && missing === 0;
   const percent = percentOf(total, maxPoints);
-  const gentlePercent = gentle ? percentOf(2 * total - advanced, 2 * maxPoints - maxAdvanced) : null;
   let state;
   if (absentParts.length) state = 'отсутствовал: ' + absentParts.map(p => p.name.toLowerCase()).join(' и ');
   else if (missing) state = 'не внесено баллов: ' + missing;
   else state = 'полная работа';
-  const gentleUsed = complete && gentleWins(percent, gentlePercent, scale);
+  const normalMark = complete ? markFor(percent, scale) : null;
+  const mark = complete && gentle ? markFor(percent, gentleScale) : normalMark;
   return {
     total,
     percent,
     gentle: Boolean(gentle),
-    gentle_percent: gentlePercent,
-    gentle_used: gentleUsed,
-    mark: complete ? markFor(gentleUsed ? gentlePercent : percent, scale) : null,
+    gentle_used: Boolean(gentle) && complete && higherMark(mark, normalMark),
+    mark,
     complete,
     missing,
     state,
   };
 }
 
-module.exports = { percentOf, markFor, studentResult };
+module.exports = { GENTLE_SCALE, percentOf, markFor, studentResult };

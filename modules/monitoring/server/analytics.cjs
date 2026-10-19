@@ -18,17 +18,17 @@ function groupTitle(g) {
 }
 
 // Сводка по набору строк учеников. Средние только по полным работам.
-// normal_mark: отметка по обычному проценту, нужна для щадящего режима (из какой отметки в какую).
+// Отметки фактически поставленные (в щадящем режиме по щадящим порогам).
+// normal_mark: отметка по обычным порогам, нужна для щадящего режима (из какой отметки в какую).
 function summarize(rows, tasks) {
   const out = {
     students: rows.length, complete: 0, absent: 0, not_entered: 0,
     avg_total: null, avg_percent: null, marks: { 5: 0, 4: 0, 3: 0, 2: 0 },
     sections: {},
-    gentle: { students: 0, complete: 0, raised: 0, moves: {}, avg_percent: null, avg_gentle_percent: null },
+    gentle: { students: 0, complete: 0, raised: 0, moves: {}, avg_percent: null },
   };
   let total = 0;
   let percent = 0;
-  let gentlePercent = 0;
   let gentleNormal = 0;
   const sec = new Map();
   for (const r of rows) {
@@ -44,7 +44,6 @@ function summarize(rows, tasks) {
     if (r.gentle) {
       out.gentle.complete += 1;
       gentleNormal += res.percent;
-      gentlePercent += res.gentle_percent;
       if (res.gentle_used) {
         out.gentle.raised += 1;
         const key = `${r.normal_mark}→${res.mark}`;
@@ -62,7 +61,6 @@ function summarize(rows, tasks) {
   out.avg_total = avg(total, out.complete);
   out.avg_percent = avg(percent, out.complete);
   out.gentle.avg_percent = avg(gentleNormal, out.gentle.complete);
-  out.gentle.avg_gentle_percent = avg(gentlePercent, out.gentle.complete);
   for (const [key, s] of sec) out.sections[key] = s.max ? round1((100 * s.got) / s.max) : null;
   return out;
 }

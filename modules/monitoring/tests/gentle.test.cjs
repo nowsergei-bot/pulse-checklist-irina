@@ -83,15 +83,16 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
   }
   const saved = await saveSheet(db, 101, teacher, work.id, { group_id: 1, changes });
   assert.deepEqual(saved.body.errors, []);
-  const results = (r) => Object.fromEntries(r.body.students.map(s => [s.full_name.slice(-1), [s.result.total, s.result.percent, s.result.gentle_percent, s.result.mark, s.result.gentle_used]]));
+  const results = (r) => Object.fromEntries(r.body.students.map(s => [s.full_name.slice(-1), [s.result.total, s.result.percent, s.result.mark, s.result.gentle_used]]));
 
   await t.test('по умолчанию выключен: обычный процент и отметка', async () => {
     const r = await getSheet(db, 101, teacher, work.id, 1);
     assert.equal(r.body.gentle.enabled, false);
     assert.equal(r.body.gentle.can_change, false);
     assert.deepEqual(r.body.gentle.history, []);
+    assert.deepEqual(r.body.gentle_scale.map(x => x.min_percent), [85, 70, 45, 0]);
     assert.deepEqual(results(r), {
-      А: [24, 48, null, '2', false], Б: [33, 66, null, '3', false], В: [39, 78, null, '4', false], Г: [45, 90, null, '5', false], Д: [38, 76, null, '4', false],
+      А: [24, 48, '2', false], Б: [33, 66, '3', false], В: [39, 78, '4', false], Г: [45, 90, '5', false], Д: [38, 76, '4', false],
     });
   });
 
@@ -116,19 +117,20 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
   });
 
   await t.test('перед включением: у скольких учеников изменится отметка, ничего не записано', async () => {
-    // Отметка лучшая из двух: при включении она может только вырасти.
+    // Щадящие пороги ниже обычных: при включении отметка может только вырасти.
     const r = await setGentle(db, {}, 104, headSwitch, work.id, { group_id: 1, enabled: true });
     assert.deepEqual(r.body, { groups: 1, changed: 1, higher: 1, lower: 0 });
     assert.equal((await one('SELECT count(*)::int AS n FROM monitoring.gentle_groups')).n, 0);
   });
 
-  await t.test('включение: отметка лучшая из двух, итог и обычный процент прежние, история с ФИО', async () => {
+  await t.test('включение: процент прежний, отметка по щадящим порогам, история с ФИО', async () => {
     const r = await setGentle(db, { full_name: 'Другое имя' }, 104, headSwitch, work.id, { group_id: 1, enabled: true, confirm: true });
     assert.equal(r.body.done, true);
     const sheet = await getSheet(db, 101, teacher, work.id, 1);
     assert.equal(sheet.body.gentle.enabled, true);
     assert.deepEqual(results(sheet), {
-      А: [24, 48, 57, '3', true], Б: [33, 66, 73, '3', false], В: [39, 78, 83, '4', false], Г: [45, 90, 93, '5', false], Д: [38, 76, 71, '4', false],
+      // 48 %: щадящий «3» (от 45), обычный «2»; 66, 78 и 90 % дают ту же отметку, пометки нет.
+      А: [24, 48, '3', true], Б: [33, 66, '3', false], В: [39, 78, '4', false], Г: [45, 90, '5', false], Д: [38, 76, '4', false],
     });
     // Учителю и заведующей история не видна, data_admin видна.
     assert.deepEqual(sheet.body.gentle.history, []);
@@ -142,7 +144,7 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
     assert.equal(sum.s, 24 + 33 + 39 + 45 + 38);
     // Сохранение баллов пересчитывает отметку в том же режиме.
     const again = await saveSheet(db, 101, teacher, work.id, { group_id: 1, changes: [{ student_id: 5, task_id: tasks[0].id, score: 6 }] });
-    assert.deepEqual([again.body.students[0].result.gentle_percent, again.body.students[0].result.mark, again.body.students[0].result.gentle_used], [71, '4', false]);
+    assert.deepEqual([again.body.students[0].result.percent, again.body.students[0].result.mark, again.body.students[0].result.gentle_used], [76, '4', false]);
   });
 
   await t.test('повторное включение ничего не меняет и не пишет в историю', async () => {
@@ -161,7 +163,7 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
     assert.equal(off.body.groups, 2);
     const sheet = await getSheet(db, 100, admin, work.id, 1);
     assert.equal(sheet.body.gentle.enabled, false);
-    assert.equal(results(sheet).Д[3], '4');
+    assert.equal(results(sheet).Д[2], '4');
     const h = await db.query('SELECT group_id, enabled, changed_by_name FROM monitoring.gentle_history ORDER BY id');
     assert.deepEqual(h.rows, [
       { group_id: 1, enabled: true, changed_by_name: 'Заведующий 1' },
@@ -189,7 +191,7 @@ test('щадящий режим', { skip: !url && 'нет MONITORING_TEST_DATABA
     await setGentle(db, {}, 100, admin, work.id, { group_id: 2, enabled: false, confirm: true });
     second = await getSheet(db, 100, admin, work.id, 2);
     assert.equal(second.body.gentle.enabled, false);
-    assert.deepEqual([pupil(second, 1).gentle, pupil(second, 1).result.gentle_percent, pupil(second, 1).result.mark], [true, 57, '3']);
+    assert.deepEqual([pupil(second, 1).gentle, pupil(second, 1).result.gentle_used, pupil(second, 1).result.mark], [true, true, '3']);
     assert.deepEqual([pupil(await getSheet(db, 100, admin, work.id, 1), 1).result.mark], ['3']);
     await setGentle(db, {}, 100, admin, work.id, { group_id: 1, scope: 'parallel', enabled: false, confirm: true });
   });
