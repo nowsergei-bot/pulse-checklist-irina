@@ -1,10 +1,15 @@
 // Итог, процент и отметка не хранятся, а считаются здесь.
 // Процент один: итог / максимум работы × 100, округление до целого.
-// Обычная шкала по Положению о системе оценивания берётся из базы (grade_scale_rows).
-// Щадящий режим: тот же процент, но отметка по щадящим порогам GENTLE_SCALE.
-// Пометка «щадящий» (gentle_used), только если по щадящим порогам отметка выше обычной.
+// Обычная шкала по Положению о системе оценивания берётся из базы (grade_scale_rows):
+// «5» от 90 %, «4» от 74 %, «3» от 50 % (миграции 004 и 010).
+// Щадящий режим (решение кафедры 20.10.2026) на отметку не влияет: GENTLE_CHANGES_MARK = false,
+// отметка всегда по обычной шкале, пометки «щадящий» нет. Где режим был включён, хранится по-прежнему.
 
-// Щадящие пороги: единственное место, где они заданы. Экран получает их от сервера.
+// Меняет ли щадящий режим отметку. Чтобы режим снова ставил отметку по GENTLE_SCALE, поставьте true.
+const GENTLE_CHANGES_MARK = false;
+
+// Щадящие пороги, действовавшие 19–20.10.2026. Сейчас к отметке не применяются (GENTLE_CHANGES_MARK);
+// нужны для сравнения «прежнее и новое правило» в аналитике.
 const GENTLE_SCALE = Object.freeze([
   { mark: '5', min_percent: 90 },
   { mark: '4', min_percent: 75 },
@@ -13,8 +18,7 @@ const GENTLE_SCALE = Object.freeze([
 ]);
 
 // Пороги зоны риска (вкладка «Аналитика»): единственное место, где они заданы. Экран получает их от сервера.
-// Ученик: отметка «2»; «3» только благодаря щадящему режиму; процент от edge_from до edge_to;
-//   базовый уровень хотя бы одного раздела ниже basic_below %.
+// Ученик: отметка «2»; процент от edge_from до edge_to; базовый уровень хотя бы одного раздела ниже basic_below %.
 // Группа (по полным работам): доля «2» от group_twos_from %, или средний % ниже group_avg_below,
 //   или в зоне риска больше group_risk_share учеников.
 const RISK = Object.freeze({
@@ -49,8 +53,8 @@ function higherMark(gentleMark, normalMark) {
 
 // parts: [{ id, name }]; tasks: [{ id, part_id, max_points }];
 // absentPartIds: Set части со статусом «отсутствовал»; scores: Map task_id -> целое или null.
-// gentle: щадящий режим включён для группы.
-function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, gentle = false, gentleScale = GENTLE_SCALE }) {
+// gentle: щадящий режим включён для группы; на отметку влияет, только если gentleChangesMark.
+function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, gentle = false, gentleScale = GENTLE_SCALE, gentleChangesMark = GENTLE_CHANGES_MARK }) {
   let total = 0;
   let missing = 0;
   for (const task of tasks) {
@@ -67,7 +71,7 @@ function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, 
   else if (missing) state = 'не внесено баллов: ' + missing;
   else state = 'полная работа';
   const normalMark = complete ? markFor(percent, scale) : null;
-  const mark = complete && gentle ? markFor(percent, gentleScale) : normalMark;
+  const mark = complete && gentle && gentleChangesMark ? markFor(percent, gentleScale) : normalMark;
   return {
     total,
     percent,
@@ -80,4 +84,4 @@ function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, 
   };
 }
 
-module.exports = { GENTLE_SCALE, RISK, percentOf, markFor, studentResult };
+module.exports = { GENTLE_CHANGES_MARK, GENTLE_SCALE, RISK, percentOf, markFor, studentResult };

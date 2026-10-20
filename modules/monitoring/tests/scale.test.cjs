@@ -1,4 +1,5 @@
 // Миграция 004: шкала по Положению о системе оценивания для всех работ, в том числе уже созданных.
+// Миграция 010: «4» от 74 % (решение кафедры 20.10.2026).
 // Запуск: MONITORING_TEST_DATABASE_URL=postgres://... node --test tests/
 // База должна быть пустой: тест создаёт схему monitoring и применяет миграции.
 const test = require('node:test');
@@ -47,7 +48,7 @@ test('миграция 004: шкала по Положению', { skip: !url &&
     const scales = (await db.query('SELECT name, is_default FROM monitoring.grade_scales')).rows;
     assert.deepEqual(scales, [{ name: 'Положение о системе оценивания', is_default: true }]);
     const rows = (await db.query('SELECT mark, min_percent FROM monitoring.grade_scale_rows ORDER BY min_percent DESC')).rows;
-    assert.deepEqual(rows, [{ mark: '5', min_percent: 90 }, { mark: '4', min_percent: 75 }, { mark: '3', min_percent: 50 }, { mark: '2', min_percent: 0 }]);
+    assert.deepEqual(rows, [{ mark: '5', min_percent: 90 }, { mark: '4', min_percent: 74 }, { mark: '3', min_percent: 50 }, { mark: '2', min_percent: 0 }]);
   });
 
   await t.test('созданная раньше работа переходит на новую шкалу, баллы на месте', async () => {

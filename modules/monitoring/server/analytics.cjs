@@ -20,7 +20,7 @@ function groupTitle(g) {
 }
 
 // Сводка по набору строк учеников. Средние только по полным работам.
-// Отметки фактически поставленные (в щадящем режиме по щадящим порогам).
+// Отметки фактически поставленные (по обычной шкале: щадящий режим на отметку сейчас не влияет).
 // normal_mark: отметка по обычным порогам, нужна для щадящего режима (из какой отметки в какую).
 function summarize(rows, tasks) {
   const out = {
@@ -98,10 +98,8 @@ async function moduleAnalytics(db, yearId, title) {
   const allLeft = [];
   // Зона риска: ученики текущих составов с полной работой и хотя бы одной причиной (с ФИО, только для /analytics/risk).
   const riskStudents = [];
-  let scale = null;
   for (const work of works) {
     const struct = await structure(db, work);
-    if (!scale) scale = struct.scale;
     for (const t of struct.tasks) {
       const key = `${t.section}|${t.level}`;
       if (!sectionKeys.has(key)) sectionKeys.set(key, { key, section: t.section, level: t.level, level_name: t.level_name || t.level, sort: sectionKeys.size });
@@ -128,7 +126,7 @@ async function moduleAnalytics(db, yearId, title) {
       const goneRows = withNormal(await buildStudents(db, work, g.id, gone, struct, gentleIds));
       const risky = [];
       for (const r of students) {
-        const reasons = studentReasons(r, struct.tasks, struct.scale);
+        const reasons = studentReasons(r, struct.tasks);
         if (!reasons.length) continue;
         risky.push(r.id);
         riskStudents.push({
@@ -171,7 +169,7 @@ async function moduleAnalytics(db, yearId, title) {
     section_keys: [...sectionKeys.values()].sort((a, b) => a.sort - b.sort).map(({ sort, ...k }) => k),
     studentsByParallel,
     riskStudents,
-    thresholds: thresholds(scale),
+    thresholds: thresholds(),
   };
 }
 
@@ -239,7 +237,7 @@ async function titles(db, yearId) {
   )).rows.map(r => r.title);
 }
 
-const EMPTY = { works: [], rows: [], section_keys: [], studentsByParallel: new Map(), riskStudents: [], thresholds: thresholds(null) };
+const EMPTY = { works: [], rows: [], section_keys: [], studentsByParallel: new Map(), riskStudents: [], thresholds: thresholds() };
 
 async function chosenModule(db, query) {
   const year = await currentYear(db);
@@ -255,7 +253,7 @@ async function chosenModule(db, query) {
 // Заведующая кафедрой (manage = false) получает только это: без входного тестирования и сравнения правил щадящего режима.
 async function analytics(db, query, caps = { manage: true }) {
   const chosen = await chosenModule(db, query);
-  if (!chosen) return { status: 200, body: { year: null, titles: [], title: null, module: null, placement: null, overlap: [], risk_thresholds: thresholds(null) } };
+  if (!chosen) return { status: 200, body: { year: null, titles: [], title: null, module: null, placement: null, overlap: [], risk_thresholds: thresholds() } };
   const { year, list, title, mod } = chosen;
   const rows = caps.manage ? mod.rows : mod.rows.map(({ rule, gentle, ...r }) => r);
   if (!caps.manage) {
@@ -297,7 +295,7 @@ async function analytics(db, query, caps = { manage: true }) {
 // Ученики в зоне риска с ФИО и причинами: для экрана и листа Excel «Зона риска».
 async function riskList(db, query) {
   const chosen = await chosenModule(db, query);
-  if (!chosen) return { status: 200, body: { year: null, title: null, students: [], thresholds: thresholds(null) } };
+  if (!chosen) return { status: 200, body: { year: null, title: null, students: [], thresholds: thresholds() } };
   const { year, title, mod } = chosen;
   const students = mod.riskStudents
     .map(({ student_id, ...s }) => s)

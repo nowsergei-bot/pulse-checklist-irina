@@ -1,11 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { GENTLE_SCALE, percentOf, markFor, studentResult } = require('../server/lib/calc.cjs');
+const { GENTLE_CHANGES_MARK, GENTLE_SCALE, percentOf, markFor, studentResult } = require('../server/lib/calc.cjs');
 
-// Шкала по Положению о системе оценивания (миграция 004).
+// Шкала по Положению о системе оценивания (миграции 004 и 010): «4» от 74 %.
 const scale = [
   { mark: '5', min_percent: 90 },
-  { mark: '4', min_percent: 75 },
+  { mark: '4', min_percent: 74 },
   { mark: '3', min_percent: 50 },
   { mark: '2', min_percent: 0 },
 ];
@@ -40,10 +40,10 @@ test('процент округляется до целого, половина 
   assert.deepEqual([single(37, 41).percent, single(37, 41).mark], [90, '5']);
   // 30 из 40 = 75 % -> «4».
   assert.deepEqual([single(30, 40).percent, single(30, 40).mark], [75, '4']);
-  // Граница 74,5 % (149 из 200) -> 75 % -> «4».
-  assert.deepEqual([single(149, 200).percent, single(149, 200).mark], [75, '4']);
-  // 74,4 % -> 74 % -> «3».
-  assert.deepEqual([single(372, 500).percent, single(372, 500).mark], [74, '3']);
+  // Граница «4»: 73,5 % (147 из 200) -> 74 % -> «4»; 74,4 % -> 74 % -> «4»; 73,4 % -> 73 % -> «3».
+  assert.deepEqual([single(147, 200).percent, single(147, 200).mark], [74, '4']);
+  assert.deepEqual([single(372, 500).percent, single(372, 500).mark], [74, '4']);
+  assert.deepEqual([single(367, 500).percent, single(367, 500).mark], [73, '3']);
   // Границы «5» и «3»: 89,5 % -> 90 %, 49,5 % -> 50 %, 49,4 % -> 49 %.
   assert.equal(markFor(percentOf(179, 200), scale), '5');
   assert.equal(markFor(percentOf(99, 200), scale), '3');
@@ -73,106 +73,76 @@ test('схема с другим максимумом: считается от �
   assert.deepEqual([single(35, 38).percent, single(35, 38).mark], [92, '5']);
 });
 
-// Щадящий режим. Максимум базовых 20, повышенных 30, итого 50 (так выходят проценты из задания).
-// Щадящий режим: процент тот же, отметка по щадящим порогам 90 / 75 / 45: меняется только «3» от 45 %.
+// Работа на max баллов одним заданием; gentle: щадящий режим группы.
 const gentleParts = [{ id: 1, name: 'Тест' }];
 const gentleTasks = [{ id: 30, part_id: 1, level: 'basic', max_points: 20 }, { id: 31, part_id: 1, level: 'advanced', max_points: 30 }];
-function gentleRun(basic, advanced, gentle = true) {
-  return studentResult({ parts: gentleParts, tasks: gentleTasks, maxPoints: 50, scale, absentPartIds: new Set(), scores: new Map([[30, basic], [31, advanced]]), gentle });
-}
-// Работа на max баллов одним заданием.
-function anyMax(total, maxPoints, gentle) {
+function anyMax(total, maxPoints, gentle, extra = {}) {
   const one = [{ id: 60, part_id: 1, level: 'basic', max_points: maxPoints }];
-  return studentResult({ parts: gentleParts, tasks: one, maxPoints, scale, absentPartIds: new Set(), scores: new Map([[60, total]]), gentle });
+  return studentResult({ parts: gentleParts, tasks: one, maxPoints, scale, absentPartIds: new Set(), scores: new Map([[60, total]]), gentle, ...extra });
 }
+const view = (r) => [r.percent, r.mark];
 
-test('щадящие пороги заданы в одном месте: 90 / 75 / 45', () => {
-  assert.deepEqual(GENTLE_SCALE.map(r => [r.mark, r.min_percent]), [['5', 90], ['4', 75], ['3', 45], ['2', 0]]);
-  assert.ok(Object.isFrozen(GENTLE_SCALE));
+test('новая шкала, примеры из задания на 50 баллов', () => {
+  assert.deepEqual(view(anyMax(37, 50, false)), [74, '4']);
+  assert.deepEqual(view(anyMax(36, 50, false)), [72, '3']);
+  assert.deepEqual(view(anyMax(45, 50, false)), [90, '5']);
+  assert.deepEqual(view(anyMax(25, 50, false)), [50, '3']);
+  assert.deepEqual(view(anyMax(24, 50, false)), [48, '2']);
 });
 
-test('щадящий режим: примеры из задания на 50 баллов', () => {
-  const cases = [
-    // [базовый, повышенный, %, отметка в режиме, пометка, отметка без режима]
-    [18, 17, 70, '3', false, '3'],
-    [16, 20, 72, '3', false, '3'],
-    [17, 20, 74, '3', false, '3'],
-    [18, 20, 76, '4', false, '4'],
-    [15, 8, 46, '3', true, '2'],
-    [14, 8, 44, '2', false, '2'],
-  ];
-  for (const [basic, advanced, percent, mark, used, offMark] of cases) {
-    const r = gentleRun(basic, advanced);
-    assert.deepEqual([r.total, r.percent, r.mark, r.gentle_used], [basic + advanced, percent, mark, used], `${basic} + ${advanced}`);
-    assert.equal('gentle_percent' in r, false);
-    const off = gentleRun(basic, advanced, false);
-    assert.deepEqual([off.percent, off.mark, off.gentle_used], [percent, offMark, false], `${basic} + ${advanced} без режима`);
+test('работы на 43 и 38 баллов: процент от своего максимума, округление до целого', () => {
+  // 32/43 = 74,4 % -> 74 % -> «4»; 31/43 = 72,1 % -> 72 % -> «3».
+  assert.deepEqual(view(anyMax(32, 43, false)), [74, '4']);
+  assert.deepEqual(view(anyMax(31, 43, false)), [72, '3']);
+  // 28/38 = 73,68 % -> 74 % -> «4» (без округления было бы ниже 74). 27/38 = 71,05 % -> 71 % -> «3».
+  assert.deepEqual(view(anyMax(28, 38, false)), [74, '4']);
+  assert.deepEqual(view(anyMax(27, 38, false)), [71, '3']);
+});
+
+test('границы обычной шкалы: 49/50, 73/74, 89/90', () => {
+  const cases = [[49, '2'], [50, '3'], [73, '3'], [74, '4'], [89, '4'], [90, '5'], [0, '2'], [100, '5']];
+  for (const [percent, mark] of cases) assert.deepEqual(view(anyMax(percent, 100, false)), [percent, mark], `${percent} %`);
+});
+
+test('щадящий режим на отметку не влияет: та же отметка, пометки нет', () => {
+  assert.equal(GENTLE_CHANGES_MARK, false);
+  for (const maxPoints of [38, 43, 50, 100]) {
+    for (let total = 0; total <= maxPoints; total += 1) {
+      const on = anyMax(total, maxPoints, true);
+      const off = anyMax(total, maxPoints, false);
+      assert.deepEqual([on.percent, on.mark, on.gentle_used], [off.percent, off.mark, false], `${total} из ${maxPoints}`);
+      assert.equal(on.gentle, true);
+    }
   }
+  // 23/50 = 46 %: «2» и в группе с режимом; 37/50 = 74 %: «4» в обеих.
+  assert.deepEqual(view(anyMax(23, 50, true)), [46, '2']);
+  assert.deepEqual(view(anyMax(37, 50, true)), [74, '4']);
+});
+
+test('прежние щадящие пороги хранятся для сравнения и включаются одной настройкой', () => {
+  assert.deepEqual(GENTLE_SCALE.map(r => [r.mark, r.min_percent]), [['5', 90], ['4', 75], ['3', 45], ['2', 0]]);
+  assert.ok(Object.isFrozen(GENTLE_SCALE));
+  const on = anyMax(23, 50, true, { gentleChangesMark: true });
+  assert.deepEqual([on.mark, on.gentle_used], ['3', true]);
 });
 
 test('процент один: от уровня заданий не зависит', () => {
-  // 18 + 21, 20 + 19 и 9 + 30 = 39 из 50: 78 % в обоих режимах.
   for (const [basic, advanced] of [[18, 21], [20, 19], [9, 30]]) {
-    assert.equal(gentleRun(basic, advanced).percent, 78);
-    assert.equal(gentleRun(basic, advanced, false).percent, 78);
+    const r = studentResult({ parts: gentleParts, tasks: gentleTasks, maxPoints: 50, scale, absentPartIds: new Set(), scores: new Map([[30, basic], [31, advanced]]), gentle: true });
+    assert.deepEqual(view(r), [78, '4']);
   }
 });
 
-test('щадящий режим: границы 44/45, 74/75, 89/90; пометка только у 45–49 %', () => {
-  const cases = [
-    // [%, отметка в режиме, пометка]
-    [44, '2', false], [45, '3', true],
-    [49, '3', true], [50, '3', false],
-    [74, '3', false], [75, '4', false],
-    [89, '4', false], [90, '5', false],
-    [0, '2', false], [100, '5', false],
-  ];
-  for (const [percent, mark, used] of cases) {
-    const r = anyMax(percent, 100, true);
-    assert.deepEqual([r.percent, r.mark, r.gentle_used], [percent, mark, used], `${percent} %`);
-  }
-  // На всей шкале щадящий режим меняет отметку только в 45–49 %.
-  for (let p = 0; p <= 100; p += 1) {
-    const on = anyMax(p, 100, true);
-    const off = anyMax(p, 100, false);
-    assert.equal(on.mark !== off.mark, p >= 45 && p <= 49, `${p} %`);
-    assert.equal(on.gentle_used, p >= 45 && p <= 49, `${p} %`);
-  }
-});
-
-test('обычный режим: границы 49/50, 74/75, 89/90', () => {
-  const cases = [[49, '2'], [50, '3'], [74, '3'], [75, '4'], [89, '4'], [90, '5']];
-  for (const [percent, mark] of cases) {
-    const r = anyMax(percent, 100, false);
-    assert.deepEqual([r.percent, r.mark, r.gentle_used], [percent, mark, false], `${percent} %`);
-  }
-  assert.deepEqual([49, 50, 74, 75, 89, 90].map(p => markFor(p, scale)), ['2', '3', '3', '4', '4', '5']);
-  assert.deepEqual([44, 45, 74, 75, 89, 90].map(p => markFor(p, GENTLE_SCALE)), ['2', '3', '3', '4', '4', '5']);
-});
-
-test('работы на 43 и 38 баллов: процент от своего максимума', () => {
-  // 20/43 = 46,5 → 47 %: щадящий «3» с пометкой, обычный «2». 30/43 = 70 %: «3» в обоих режимах.
-  assert.deepEqual([anyMax(20, 43, true).percent, anyMax(20, 43, true).mark, anyMax(20, 43, true).gentle_used, anyMax(20, 43, false).mark], [47, '3', true, '2']);
-  assert.deepEqual([anyMax(30, 43, true).mark, anyMax(30, 43, true).gentle_used], ['3', false]);
-  // 17/38 = 44,7 → 45 %: щадящий «3» с пометкой; 16/38 = 42 %: «2».
-  assert.deepEqual([anyMax(17, 38, true).percent, anyMax(17, 38, true).mark, anyMax(17, 38, true).gentle_used], [45, '3', true]);
-  assert.deepEqual([anyMax(16, 38, true).percent, anyMax(16, 38, true).mark], [42, '2']);
-});
-
-test('монотонность: при большем итоге отметка не ниже, для 38, 43 и 50 баллов, в обоих режимах', () => {
+test('монотонность: при большем итоге отметка не ниже, для 38, 43 и 50 баллов, с режимом и без', () => {
   for (const maxPoints of [38, 43, 50]) {
     for (const gentle of [false, true]) {
       let prev = 0;
       for (let total = 0; total <= maxPoints; total += 1) {
         const mark = Number(anyMax(total, maxPoints, gentle).mark);
-        assert.ok(mark >= prev, `максимум ${maxPoints}, ${gentle ? 'щадящий' : 'обычный'}: ${total} баллов дают «${mark}», а ${total - 1} давали «${prev}»`);
+        assert.ok(mark >= prev, `максимум ${maxPoints}: ${total} баллов дают «${mark}», а ${total - 1} давали «${prev}»`);
         prev = mark;
       }
       assert.equal(prev, 5);
-    }
-    // Щадящая отметка никогда не ниже обычной.
-    for (let total = 0; total <= maxPoints; total += 1) {
-      assert.ok(Number(anyMax(total, maxPoints, true).mark) >= Number(anyMax(total, maxPoints, false).mark));
     }
   }
 });

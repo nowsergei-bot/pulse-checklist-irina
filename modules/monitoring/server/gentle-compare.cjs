@@ -1,31 +1,16 @@
 // Сравнение прежнего и нового правила щадящего режима на внесённых баллах: сколько отметок изменилось.
-// Только числа по группам, без ФИО. Обе отметки считаются здесь из баллов.
-// Прежнее правило (до 19.10.2026): отметка лучшая из двух, по обычному проценту и по
-//   (2 × базовые + повышенные) / (2 × макс. базовых + макс. повышенных).
-// Новое правило: процент один (итог / максимум), отметка по щадящим порогам GENTLE_SCALE (lib/calc.cjs).
+// Только числа по группам, без ФИО.
+// Прежнее правило (19–20.10.2026): в группах с режимом отметка по щадящим порогам GENTLE_SCALE (90 / 75 / 45).
+// Новое правило (с 20.10.2026): режим на отметку не влияет, отметка по обычной шкале работы (90 / 74 / 50).
 
 const { GENTLE_SCALE, percentOf, markFor } = require('./lib/calc.cjs');
 
-const better = (a, b) => (b !== null && (a === null || Number(b) > Number(a)) ? b : a);
-
 // Отметки ученика по двум правилам; null, если ученик не в щадящем режиме или работа не полная.
-// r: строка buildStudents (gentle, result, scores по task_id); tasks: задания с level и max_points.
+// r: строка buildStudents (gentle, result); scale: обычная шкала работы.
 function ruleMarks(r, tasks, maxPoints, scale) {
   if (!r.gentle || !r.result.complete) return { rule_old: null, rule_new: null };
-  let advanced = 0;
-  let maxAdvanced = 0;
-  for (const t of tasks) {
-    if (t.level !== 'advanced') continue;
-    maxAdvanced += t.max_points;
-    advanced += Number(r.scores[t.id] || 0);
-  }
-  const total = r.result.total;
-  const percent = percentOf(total, maxPoints);
-  const oldGentle = percentOf(2 * total - advanced, 2 * maxPoints - maxAdvanced);
-  return {
-    rule_old: better(markFor(percent, scale), markFor(oldGentle, scale)),
-    rule_new: markFor(percent, GENTLE_SCALE),
-  };
+  const percent = percentOf(r.result.total, maxPoints);
+  return { rule_old: markFor(percent, GENTLE_SCALE), rule_new: markFor(percent, scale) };
 }
 
 // Сводка по строкам с rule_old / rule_new: сколько сравнено, изменится, выше, ниже и переходы «было → станет».

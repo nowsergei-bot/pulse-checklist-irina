@@ -1,7 +1,8 @@
 // Расчёт на экране по введённым значениям, ещё до сохранения.
 // Повторяет server/lib/calc.cjs; после сохранения сервер считает так же.
-// Процент один: итог / максимум. Щадящий режим: отметка по щадящим порогам, которые приходят
-// с сервера (gentle_scale); пометка «щадящий» (gentle_used), только если отметка выше обычной.
+// Процент один: итог / максимум. Щадящий режим меняет отметку, только если сервер прислал
+// gentle_changes_mark (сейчас нет: отметка всегда по обычной шкале); тогда отметка по gentle_scale,
+// пометка «щадящий» (gentle_used), только если отметка выше обычной.
 
 export type ScaleRow = { mark: string; min_percent: number | string };
 export type Result = { total: number; percent: number; gentle: boolean; gentle_used: boolean; mark: string | null; complete: boolean; missing: number; state: string };
@@ -19,12 +20,13 @@ function markFor(percent: number, scale: ScaleRow[]) {
 const higherMark = (gentleMark: string | null, normalMark: string | null) =>
   gentleMark !== null && (normalMark === null || Number(gentleMark) > Number(normalMark));
 
-export function studentResult({ parts, tasks, maxPoints, scale, gentleScale, absentPartIds, scoreOf, gentle = false }: {
+export function studentResult({ parts, tasks, maxPoints, scale, gentleScale, gentleChangesMark, absentPartIds, scoreOf, gentle = false }: {
   parts: { id: number; name: string }[];
   tasks: { id: number; part_id: number; max_points: number }[];
   maxPoints: number;
   scale: ScaleRow[];
   gentleScale: ScaleRow[];
+  gentleChangesMark: boolean;
   absentPartIds: Set<number>;
   scoreOf: (taskId: number) => number | null;
   gentle?: boolean;
@@ -45,6 +47,6 @@ export function studentResult({ parts, tasks, maxPoints, scale, gentleScale, abs
   else if (missing) state = 'не внесено баллов: ' + missing;
   else state = 'полная работа';
   const normalMark = complete ? markFor(percent, scale) : null;
-  const mark = complete && gentle ? markFor(percent, gentleScale) : normalMark;
+  const mark = complete && gentle && gentleChangesMark ? markFor(percent, gentleScale) : normalMark;
   return { total, percent, gentle, gentle_used: gentle && complete && higherMark(mark, normalMark), mark, complete, missing, state };
 }

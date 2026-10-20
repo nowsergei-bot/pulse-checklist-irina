@@ -83,7 +83,7 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
       await db.query('INSERT INTO monitoring.task_scores (work_id, task_id, student_id, group_id, score, updated_by) VALUES ($1, $2, $3, $4, $5, 100)', [w, tasks[i], student, group, s]);
     }
   };
-  // 7 AA (щадящий режим, пороги 90 / 75 / 45): 50 баллов «5»; 26 баллов 52% «3»; 23 балла 46%: обычный «2», щадящий «3»; ученик 4 отсутствовал.
+  // 7 AA (щадящий режим включён, на отметку не влияет): 50 баллов «5»; 26 баллов 52% «3»; 23 балла 46% «2»; ученик 4 отсутствовал.
   await scores(w7, 1, 1, [10, 10, 15, 15]);
   await scores(w7, 2, 1, [8, 8, 5, 5]);
   await scores(w7, 3, 1, [9, 9, 3, 2]);
@@ -127,14 +127,14 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
     assert.deepEqual(body.module.works.map(w => w.parallel), [7, 8]); // черновик не считается
     const view = body.module.rows.map(x => [x.row, x.students, x.complete, x.absent, x.not_entered, x.avg_total, x.avg_percent, [x.marks[5], x.marks[4], x.marks[3], x.marks[2]]]);
     assert.deepEqual(view, [
-      ['7 AA', 4, 3, 1, 0, 33, 66, [1, 0, 2, 0]],
+      ['7 AA', 4, 3, 1, 0, 33, 66, [1, 0, 1, 1]],
       ['7 AA · выбыли', 1, 1, 0, 0, 40, 80, [0, 1, 0, 0]],
       ['7 AA (ЦГ)', 1, 1, 0, 0, 20, 40, [0, 0, 0, 1]],
-      ['7 параллель', 5, 4, 1, 0, 29.8, 59.5, [1, 0, 2, 1]],
+      ['7 параллель', 5, 4, 1, 0, 29.8, 59.5, [1, 0, 1, 2]],
       ['7 параллель · выбыли', 1, 1, 0, 0, 40, 80, [0, 1, 0, 0]],
       ['8 AB', 2, 1, 0, 1, 40, 80, [0, 1, 0, 0]],
       ['8 параллель', 2, 1, 0, 1, 40, 80, [0, 1, 0, 0]],
-      ['Все параллели', 7, 5, 1, 1, 31.8, 63.6, [1, 1, 2, 1]],
+      ['Все параллели', 7, 5, 1, 1, 31.8, 63.6, [1, 1, 1, 2]],
       ['Все параллели · выбыли', 1, 1, 0, 0, 40, 80, [0, 1, 0, 0]],
     ]);
   });
@@ -146,18 +146,17 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
     assert.deepEqual(body.module.rows.find(x => x.row === '7 параллель').sections['Listening|basic'], 80);
   });
 
-  await t.test('щадящий режим: у кого отметка стала выше и из какой в какую', async () => {
+  await t.test('щадящий режим на отметку не влияет; сравнение с прежними щадящими порогами', async () => {
     const g = body.module.rows.find(x => x.row === '7 AA');
     assert.equal(g.gentle_on, true);
-    // Процент один: 100, 52, 46. Щадящие пороги: 46 % даёт «3» вместо «2»; 52 и 100 % отметку не меняют.
-    assert.deepEqual(g.gentle, { students: 4, complete: 3, raised: 1, moves: { '2→3': 1 }, avg_percent: 66 });
+    // Процент один: 100, 52, 46. Отметки по обычной шкале, отметка выше ни у кого.
+    assert.deepEqual(g.gentle, { students: 4, complete: 3, raised: 0, moves: {}, avg_percent: 66 });
     assert.deepEqual(body.module.rows.find(x => x.row === '7 AA (ЦГ)').gentle, { students: 0, complete: 0, raised: 0, moves: {}, avg_percent: null });
-    assert.deepEqual(body.module.rows.find(x => x.row === '7 параллель').gentle.moves, { '2→3': 1 });
-    // Прежнее и новое правило: 46 % было «3» по прежнему щадящему проценту 59, по порогу 45 тоже «3»; 52 и 100 % не меняются.
-    assert.deepEqual(g.rule, { compared: 3, changed: 0, higher: 0, lower: 0, moves: {} });
+    // Прежнее правило (90 / 75 / 45) и новое (90 / 74 / 50): 46 % было «3», стало «2»; 52 и 100 % не меняются.
+    assert.deepEqual(g.rule, { compared: 3, changed: 1, higher: 0, lower: 1, moves: { '3→2': 1 } });
     assert.deepEqual(body.module.rows.find(x => x.row === '7 AA · выбыли').rule, { compared: 1, changed: 0, higher: 0, lower: 0, moves: {} });
     assert.equal(body.module.rows.find(x => x.row === '7 AA (ЦГ)').rule.compared, 0);
-    assert.deepEqual(body.module.rows.find(x => x.row === 'Все параллели').rule, { compared: 3, changed: 0, higher: 0, lower: 0, moves: {} });
+    assert.deepEqual(body.module.rows.find(x => x.row === 'Все параллели').rule, { compared: 3, changed: 1, higher: 0, lower: 1, moves: { '3→2': 1 } });
   });
 
   await t.test('входное тестирование по текущей параллели ученика и полю', async () => {
@@ -195,21 +194,23 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
     assert.equal(r.body.title, 'Модуль 1');
     assert.deepEqual(r.body.students.map(x => [x.group, x.full_name, x.total, x.max_points, x.percent, x.mark, x.reasons.map(y => y.code)]), [
       ['7 AA', 'Ученик Вымышленный 2', 26, 50, 52, '3', ['edge']],
-      ['7 AA', 'Ученик Вымышленный 3', 23, 50, 46, '3', ['gentle']],
+      ['7 AA', 'Ученик Вымышленный 3', 23, 50, 46, '2', ['two']],
       ['7 AA (ЦГ)', 'Ученик Вымышленный 5', 20, 50, 40, '2', ['two']],
       ['8 AB', 'Ученик Вымышленный 10', 43, 50, 86, '4', ['basic']],
     ]);
     // Отсутствовавший (4), незаполненный (7) и выбывший (8) в зону риска не попадают.
     assert.deepEqual(r.body.students.map(x => x.reasons.map(y => y.text)), [
       ['на грани двойки (50–54\u00a0%)'],
-      ['«3» только благодаря щадящему режиму (45–49\u00a0%)'],
+      ['отметка «2»'],
       ['отметка «2»'],
       ['базовый уровень ниже 40\u00a0%: Listening 30\u00a0%'],
     ]);
-    assert.deepEqual(r.body.thresholds, { edge_from: 50, edge_to: 54, basic_below: 40, group_twos_from: 15, group_avg_below: 60, group_risk_share: 1 / 3, gentle_three_from: 45, normal_three_from: 50 });
+    assert.deepEqual(r.body.thresholds, { edge_from: 50, edge_to: 54, basic_below: 40, group_twos_from: 15, group_avg_below: 60, group_risk_share: 1 / 3 });
+    // Причины «только благодаря щадящему режиму» больше нет.
+    assert.ok(r.body.students.every(x => x.reasons.every(y => y.code !== 'gentle')));
     const rows = (await call(100)).body.module.rows;
     const risk = (name) => { const x = rows.find(y => y.row === name).risk; return [x.at_risk, x.students, x.twos_share, x.reasons.map(y => y.code)]; };
-    assert.deepEqual(risk('7 AA'), [true, 2, 0, ['share']]);
+    assert.deepEqual(risk('7 AA'), [true, 2, 33.3, ['twos', 'share']]);
     assert.deepEqual(risk('7 AA (ЦГ)'), [true, 1, 100, ['twos', 'avg', 'share']]);
     assert.deepEqual(risk('8 AB'), [true, 1, 0, ['share']]);
     assert.deepEqual(rows.find(y => y.row === '7 параллель').risk, { students: 3, groups: 2, groups_at_risk: 2 });

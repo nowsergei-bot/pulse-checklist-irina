@@ -12,16 +12,14 @@ export type RiskStudent = {
 export type Thresholds = {
   edge_from: number; edge_to: number; basic_below: number;
   group_twos_from: number; group_avg_below: number; group_risk_share: number;
-  gentle_three_from: number | null; normal_three_from: number | null;
 };
 
 const num = (v: number | null) => (v === null ? '' : v.toLocaleString('ru-RU'));
 const shareText = (x: number) => (Math.abs(x - 1 / 3) < 1e-9 ? 'больше трети' : `больше ${Math.round(x * 100)} %`);
 
 export function riskNotes(t: Thresholds) {
-  const gentle = t.gentle_three_from !== null && t.normal_three_from !== null ? ` (${t.gentle_three_from}–${t.normal_three_from - 1}\u00a0%)` : '';
   return {
-    student: `Ученик в зоне риска, если работа полная и есть хотя бы одна причина: отметка «2»; «3» только благодаря щадящему режиму${gentle}; на грани двойки (${t.edge_from}–${t.edge_to}\u00a0%); базовый уровень хотя бы одного раздела ниже ${t.basic_below}\u00a0%.`,
+    student: `Ученик в зоне риска, если работа полная и есть хотя бы одна причина: отметка «2»; на грани двойки (${t.edge_from}–${t.edge_to}\u00a0%); базовый уровень хотя бы одного раздела ниже ${t.basic_below}\u00a0%.`,
     group: `Группа в зоне риска, если среди полных работ доля «2» от ${t.group_twos_from}\u00a0%, или средний\u00a0% ниже ${t.group_avg_below}, или в зоне риска ${shareText(t.group_risk_share)} учеников.`,
   };
 }

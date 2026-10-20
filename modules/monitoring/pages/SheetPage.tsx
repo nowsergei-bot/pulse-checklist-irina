@@ -14,7 +14,7 @@ type Student = {
 type Sheet = {
   work: { id: number; title: string; parallel: number; status: 'draft' | 'open' | 'closed'; spec_title: string; version: number; max_points: number };
   group: { id: number; title: string; digital: boolean };
-  can_edit: boolean; reason: string; parts: Part[]; tasks: Task[]; scale: ScaleRow[]; gentle_scale: ScaleRow[];
+  can_edit: boolean; reason: string; parts: Part[]; tasks: Task[]; scale: ScaleRow[]; gentle_scale: ScaleRow[]; gentle_changes_mark?: boolean;
   students: Student[]; left_students: Student[];
   gentle: Gentle;
 };
@@ -256,6 +256,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   // Итог, процент и отметка по тому, что сейчас в полях, включая ещё не отправленное.
   const resultOf = (s: Student) => studentResult({
     parts, tasks, maxPoints: work.max_points, scale: sheet.scale, gentleScale: sheet.gentle_scale,
+    gentleChangesMark: Boolean(sheet.gentle_changes_mark),
     absentPartIds: new Set(parts.filter(p => absentOf(s, p)).map(p => p.id)),
     scoreOf: taskId => scoreOf(s, tasks.find(t => t.id === taskId) as Task),
     // Режим группы, где внесены баллы ученика (у ученика из двух групп может отличаться).
@@ -270,7 +271,8 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   const done = students.map(s => results.get(s.id) as Result).filter(r => r.complete);
   const avgTotal = done.length ? done.reduce((a, r) => a + r.total, 0) / done.length : null;
   const avgPercent = done.length ? done.reduce((a, r) => a + r.percent, 0) / done.length : null;
-  // Щадящие пороги для подсказок: «5» от 90%, «4» от 75%, «3» от 45%.
+  // Щадящие пороги для подсказок (когда режим меняет отметку).
+  const gentleChanges = Boolean(sheet.gentle_changes_mark);
   const gentleRule = [...sheet.gentle_scale].sort((a, b) => Number(b.min_percent) - Number(a.min_percent))
     .filter(x => Number(x.min_percent) > 0).map(x => `«${x.mark}» от ${x.min_percent}%`).join(', ');
   const partTasks = (p: Part) => tasks.filter(t => t.part_id === p.id);
@@ -406,14 +408,15 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
         </div>
       ) : null}
 
-      {/* Строку с кнопками и историей видит только тот, кто может переключать режим; остальные видят пометку «щадящий» у отметки. */}
+      {/* Строку с кнопками и историей видит только тот, кто может переключать режим (data_admin). Пока режим на отметку не влияет, пометки «щадящий» нет. */}
       {admin ? (
         <div className={`mon-gentle${gentle.enabled ? ' is-on' : ''}`}>
-          <span className="mon-gentle__line" title={`Процент тот же, отметка по щадящим порогам: ${gentleRule}.`}>
+          <span className="mon-gentle__line" title={gentleChanges ? `Процент тот же, отметка по щадящим порогам: ${gentleRule}.` : 'Решение кафедры 20.10.2026: щадящий режим на отметку не влияет, отметка всегда по обычной шкале. Где режим включён, сохраняется.'}>
             <strong>Щадящий режим {gentle.enabled ? 'включён' : 'выключен'}</strong>
             {gentle.groups_total > 1 || gentle.enabled
               ? ` · ${gentle.enabled ? '' : 'включён в '}${gentle.groups_on} из ${gentle.groups_total} ${groupsWord(gentle.groups_total)}`
               : ''}
+            {gentleChanges ? '' : ' · на отметку не влияет'}
           </span>
           {gentle.history.length ? (
             <button type="button" className="mon-link mon-link--muted mon-gentle__history-link" aria-expanded={showHistory} onClick={() => setShowHistory(v => !v)}>
