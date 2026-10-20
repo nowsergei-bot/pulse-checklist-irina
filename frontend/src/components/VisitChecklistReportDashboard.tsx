@@ -16,6 +16,7 @@ import {
   reportPersonKey,
   SECTION_NAMES,
   type ReportVisit,
+  RATING_LABELS,
 } from "../lib/lessonVisitChecklist/visitChecklistReport";
 import {
   COMPACT_LIST_SIZE,
@@ -44,6 +45,8 @@ import {
   UNIT_FILTER_NOT_DEFINED,
   UNIT_NOT_DEFINED,
   ATTENTION_GROUP_NAMES,
+  ATTENTION_REASON_NAMES,
+  observerLevel,
   COVERAGE_EXCLUDED_DEPARTMENT_IDS,
   DIRECTOR_PERIODS,
   attentionTeachers,
@@ -108,9 +111,12 @@ const lessonText = (v: ReportVisit) =>
 function Badge({
   percent,
   preliminary = false,
+  prefix = "",
 }: {
   percent: number | null;
   preliminary?: boolean;
+  /** Подпись перед уровнем, например «По баллам». */
+  prefix?: string;
 }) {
   const i = levelIndex(percent);
   return i < 0 ? null : (
@@ -121,8 +127,56 @@ function Badge({
         color: !preliminary && (i === 0 || i === 4) ? "#fff" : "#152315",
       }}
     >
+      {prefix ? `${prefix}: ` : ""}
       {LEVELS[i]}
       {preliminary ? " · предварительно" : ""}
+    </span>
+  );
+}
+/** Плашка уровня по итоговой оценке урока (10.1); стрелка, если кто-то из наблюдателей оценил ниже. */
+function ObserverBadge({ rows }: { rows: ReportVisit[] }) {
+  const level = observerLevel(rows);
+  if (!level)
+    return <span className="vcr-level vcr-level--none">Наблюдатель: нет оценки</span>;
+  const i = level.value - 1,
+    lower = level.lowest < level.value;
+  return (
+    <span
+      className="vcr-level"
+      style={{
+        backgroundColor: LEVEL_COLORS[i],
+        color: i === 0 || i === 4 ? "#fff" : "#152315",
+      }}
+      title={
+        lower
+          ? `Один из наблюдателей оценил ниже: ${RATING_LABELS[level.lowest - 1]}, ${dateText(level.lowestDate)}`
+          : undefined
+      }
+    >
+      Наблюдатель: {level.label}
+      {lower ? " ↓" : ""}
+    </span>
+  );
+}
+/** Итог учителя в списках: число, плашка «По баллам» и плашка «Наблюдатель»; плашки переносятся целиком. */
+function TeacherLevels({
+  text,
+  percent,
+  rows,
+  preliminary = false,
+}: {
+  text: string | null;
+  percent: number | null;
+  rows: ReportVisit[];
+  preliminary?: boolean;
+}) {
+  return (
+    <span className="vcr-scorecell vcr-scorecell--teacher">
+      {text != null && <span className="vcr-scorecell__value">{text}</span>}
+      {text != null && (
+        <Badge percent={percent} preliminary={preliminary} prefix="По баллам" />
+      )}
+      <ObserverBadge rows={rows} />
     </span>
   );
 }
@@ -663,6 +717,8 @@ function DirectorSummary({
           "Полных уроков": t.fullLessons,
           "Ниже 70": t.below70,
           Повторяемость: t.repeat,
+          Причина: ATTENTION_REASON_NAMES[t.reason],
+          Наблюдатель: observerLevel(t.rows)?.label ?? "нет оценки",
         })),
       );
       sheet("Новые учителя", [
@@ -832,14 +888,16 @@ function DirectorSummary({
                         </td>
                         <td data-label="Кафедра">{t.department}</td>
                         <td data-label="Средний итог">
-                          {t.average != null && (
-                            <ScoreLevel
-                              text={`${displayScore(t.average)} из 100`}
-                              percent={t.average}
-                            />
-                          )}
+                          <TeacherLevels
+                            text={t.average != null ? `${displayScore(t.average)} из 100` : null}
+                            percent={t.average}
+                            rows={t.rows}
+                          />
                         </td>
-                        <td data-label="Повторяемость">{t.repeat}</td>
+                        <td data-label="Повторяемость">
+                          {t.repeat}
+                          <small>{ATTENTION_REASON_NAMES[t.reason]}</small>
+                        </td>
                       </tr>
                     );
                   })}
@@ -853,12 +911,6 @@ function DirectorSummary({
               </>
             ) : (
               <Empty />
-            )}
-            {linked(
-              "support",
-              groupB.length
-                ? `Все ${groupA.length} и ещё ${groupB.length} ${pluralRu(groupB.length, ["учитель", "учителя", "учителей"])} с отдельными уроками ниже 70 →`
-                : `Все ${groupA.length} →`,
             )}
           </section>
           <section className={keep}>
@@ -889,9 +941,10 @@ function DirectorSummary({
                         </td>
                         <td data-label="Кафедра">{t.department}</td>
                         <td data-label="Средний итог">
-                          <ScoreLevel
+                          <TeacherLevels
                             text={`${displayScore(t.average)} из 100`}
                             percent={t.average}
+                            rows={t.rows}
                           />
                         </td>
                         <td data-label="Полных уроков">
@@ -974,12 +1027,16 @@ function DirectorSummary({
                             <td data-label="Кафедра">{t.department}</td>
                             <td data-label="Средний итог">
                               {metrics.average != null ? (
-                                <ScoreLevel
+                                <TeacherLevels
                                   text={`${displayScore(metrics.average)} из 100`}
                                   percent={metrics.average}
+                                  rows={t.rows}
                                 />
                               ) : metrics.visits ? (
-                                "Итог не сформирован"
+                                <>
+                                  Итог не сформирован{" "}
+                                  <TeacherLevels text={null} percent={null} rows={t.rows} />
+                                </>
                               ) : (
                                 "Не посещён"
                               )}
@@ -1381,6 +1438,7 @@ export default function VisitChecklistReportDashboard({
       average: schoolAverage(rows.filter((v) => v.teacherKey === t.key)),
     }));
   const resultGroups = teacherResultGroups(teachers);
+  const teacherRows = new Map(teachers.map((t) => [t.key, t.rows]));
   const teacherResultRows = resultGroups.flatMap((group) =>
     group.rows.map((row) => ({ ...row, groupKey: group.key })),
   );
@@ -1739,17 +1797,29 @@ export default function VisitChecklistReportDashboard({
             </td>
             <td>{t.department}</td>
             <td>
-              {t.average != null && (
-                <ScoreLevel
-                  text={`${displayScore(t.average)} из 100`}
-                  percent={t.average}
-                />
-              )}
+              <TeacherLevels
+                text={t.average != null ? `${displayScore(t.average)} из 100` : null}
+                percent={t.average}
+                rows={t.rows}
+              />
             </td>
-            <td>{t.repeat}</td>
+            <td>
+              {t.repeat}
+              <small>{ATTENTION_REASON_NAMES[t.reason]}</small>
+            </td>
             <td>
               {lessonObservations(t.rows)
-                .filter((v) => scorePercent(v) != null && scorePercent(v)! < 70)
+                .filter((v) =>
+                  t.below70
+                    ? scorePercent(v) != null && scorePercent(v)! < 70
+                    : // Попал только по оценке наблюдателя: урок с самой низкой оценкой 10.1.
+                      t.rows.some(
+                        (r) =>
+                          !r.self &&
+                          r.rating === observerLevel(t.rows)?.lowest &&
+                          (v.pairKey ? r.pairKey === v.pairKey : r.id === v.id),
+                      ),
+                )
                 .slice(0, 1)
                 .map((v) => (
                   <p key={v.id}>
@@ -1791,9 +1861,10 @@ export default function VisitChecklistReportDashboard({
           </td>
           <td>{t.department}</td>
           <td>
-            <ScoreLevel
+            <TeacherLevels
               text={`${displayScore(t.average)} из 100`}
               percent={t.average}
+              rows={t.rows}
             />
           </td>
           <td>
@@ -2006,6 +2077,8 @@ export default function VisitChecklistReportDashboard({
           Среднее: t.average,
           Группа: ATTENTION_GROUP_NAMES[t.group],
           Повторяемость: t.repeat,
+          Причина: ATTENTION_REASON_NAMES[t.reason],
+          Наблюдатель: observerLevel(t.rows)?.label ?? "нет оценки",
         })),
       );
       sheet(
@@ -2610,13 +2683,18 @@ export default function VisitChecklistReportDashboard({
                           </td>
                           <td>{row.department}</td>
                           <td>
-                            {row.value == null ? (
+                            {row.value == null && !teacherRows.get(row.key)?.length ? (
                               "—"
                             ) : (
-                              <ScoreLevel
-                                text={`${displayScore(row.value, row.maximum)} из ${row.maximum}`}
+                              <TeacherLevels
+                                text={
+                                  row.value == null
+                                    ? null
+                                    : `${displayScore(row.value, row.maximum)} из ${row.maximum}`
+                                }
                                 percent={row.percent}
                                 preliminary={group.preliminary}
+                                rows={teacherRows.get(row.key) || []}
                               />
                             )}
                           </td>

@@ -11,6 +11,7 @@ import {
   lessonObservations,
   mean,
   pairedSelf,
+  RATING_LABELS,
   reportPersonKey,
   REPORT_START,
   SECTION_NAMES,
@@ -712,17 +713,71 @@ export function repeatText(fullLessons: number, below70: number): string {
     : `ниже порога ${below70} из ${lessonsGenitive(fullLessons)}`;
 }
 
+export type AttentionReason = "score" | "observer" | "both";
+export const ATTENTION_REASON_NAMES: Record<AttentionReason, string> = {
+  score: "по баллам",
+  observer: "по оценке наблюдателя",
+  both: "по баллам и оценке наблюдателя",
+};
 export type AttentionInfo = {
   group: AttentionGroup;
+  reason: AttentionReason;
   average: number | null;
   fullLessons: number;
   below70: number;
   repeat: string;
 };
+
+/** Оценки 10.1 каждого наблюдателя урока (самоанализ не учитывается) и итог урока по баллам. */
+function lessonRatings(rows: ReportVisit[]) {
+  const ratings = new Map<string, number[]>();
+  for (const row of rows) {
+    if (row.self || row.rating == null) continue;
+    const key = row.pairKey || `unidentified:${row.id}`;
+    ratings.set(key, [...(ratings.get(key) || []), row.rating]);
+  }
+  return lessonObservations(rows).map((lesson) => ({
+    date: lesson.date,
+    percent: scorePercent(lesson),
+    ratings: ratings.get(lesson.pairKey || `unidentified:${lesson.id}`) || [],
+  }));
+}
+
+export type ObserverLevel = {
+  /** 1…5 по шкале RATING_LABELS. */
+  value: number;
+  label: string;
+  /** Самая низкая оценка отдельного наблюдателя. */
+  lowest: number;
+  lowestDate: string;
+};
 /**
- * Учителя с полным уроком ниже 70 (это и есть «Нужна методическая поддержка») в двух группах.
- * А: средний итог по полным урокам ниже 70 или хотя бы один полный урок ниже 50.
- * Б: остальные. Сравнение точное, без округления. Сначала А, внутри по возрастанию среднего итога.
+ * Уровень учителя по итоговой оценке урока (10.1): среднее оценок наблюдателей урока,
+ * затем среднее по урокам, округление до целого. null, если оценок нет.
+ */
+export function observerLevel(rows: ReportVisit[]): ObserverLevel | null {
+  const lessons = lessonRatings(rows).filter((l) => l.ratings.length);
+  if (!lessons.length) return null;
+  const value = Math.round(
+    mean(lessons.map((l) => mean(l.ratings)))!,
+  );
+  let lowest = Infinity,
+    lowestDate = "";
+  for (const l of lessons)
+    for (const r of l.ratings)
+      if (r < lowest || (r === lowest && l.date > lowestDate)) {
+        lowest = r;
+        lowestDate = l.date;
+      }
+  return { value, label: RATING_LABELS[value - 1], lowest, lowestDate };
+}
+
+/**
+ * «Нужна методическая поддержка» в двух группах. Сравнение итогов точное, без округления.
+ * А: средний итог по полным урокам ниже 70, полный урок ниже 50 или хотя бы один наблюдатель
+ * поставил «Низкий» / «Ниже среднего».
+ * Б (если не А): полный урок ниже 70 или наблюдатель поставил «Средний» уроку с итогом от 70.
+ * Сначала А, внутри по возрастанию среднего итога.
  */
 export function attentionTeachers<
   T extends { key: string; name: string; rows: ReportVisit[] },
@@ -733,19 +788,29 @@ export function attentionTeachers<
       .map((lesson) => scorePercent(lesson))
       .filter((p): p is number => p != null);
     const below70 = percents.filter((p) => p < 70).length;
-    if (!below70) continue;
     const average = schoolAverage(teacher.rows);
-    const group: AttentionGroup =
-      (average != null && average < 70) || percents.some((p) => p < 50)
-        ? "A"
-        : "B";
+    const lessons = lessonRatings(teacher.rows);
+    const scoreA =
+      (average != null && average < 70) || percents.some((p) => p < 50);
+    const observerA = lessons.some((l) => l.ratings.some((r) => r <= 2));
+    const observerB = lessons.some(
+      (l) => l.percent != null && l.percent >= 70 && l.ratings.includes(3),
+    );
+    if (!below70 && !observerA && !observerB) continue;
+    const group: AttentionGroup = scoreA || observerA ? "A" : "B";
+    const [byScore, byObserver] =
+      group === "A" ? [scoreA, observerA] : [below70 > 0, observerB];
+    const lowest = Math.min(...lessons.flatMap((l) => l.ratings));
     out.push({
       ...teacher,
       group,
+      reason: byScore && byObserver ? "both" : byScore ? "score" : "observer",
       average,
       fullLessons: percents.length,
       below70,
-      repeat: repeatText(percents.length, below70),
+      repeat: below70
+        ? repeatText(percents.length, below70)
+        : `оценка наблюдателя: ${RATING_LABELS[lowest - 1].toLocaleLowerCase("ru")}`,
     });
   }
   return out.sort(
@@ -1065,7 +1130,7 @@ export function newTeacherStats(
   directory: Pick<LessonVisitDirectory, "teachers">,
   newTeacherIds: string[] | undefined,
   rows: ReportVisit[],
-  attention: { key: string }[],
+  attention: { key: string; below70?: number }[],
   options: { from?: string | null; to?: string | null } = {},
 ): NewTeacherStats {
   const ids = new Set(newTeacherIds || []);
@@ -1081,7 +1146,8 @@ export function newTeacherStats(
     notVisited: coverage.notVisited,
     averageNew: schoolAverage(own),
     averageOthers: schoolAverage(others),
-    below70: attention.filter((a) => keys.has(a.key)).length,
+    // Учителя, попавшие в список только по оценке наблюдателя, уроков ниже 70 не имеют.
+    below70: attention.filter((a) => keys.has(a.key) && a.below70 !== 0).length,
   };
 }
 

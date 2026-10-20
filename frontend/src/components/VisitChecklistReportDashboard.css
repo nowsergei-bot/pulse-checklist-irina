@@ -1134,3 +1134,15 @@
     min-width: 560px;
   }
 }
+
+/* Плашки «По баллам» и «Наблюдатель» в списках учителей: переносятся целиком, без разрыва внутри */
+.vcr-scorecell--teacher {
+  gap: 4px 6px;
+}
+.vcr-scorecell--teacher .vcr-scorecell__value {
+  margin-right: 6px;
+}
+.vcr-level--none {
+  background-color: #e3e7e5;
+  color: #4f5d58;
+}

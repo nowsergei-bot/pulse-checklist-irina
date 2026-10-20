@@ -7,7 +7,9 @@ import {
   type ReportVisit,
 } from "./visitChecklistReport.ts";
 import {
+  attentionTeachers,
   COMPACT_LIST_SIZE,
+  observerLevel,
   TEACHER_SORTS,
   compactRows,
   discrepancies,
@@ -455,4 +457,88 @@ test("parseTeacherSort falls back for unknown values", () => {
   assert.equal(parseTeacherSort("alpha", "best"), "alpha");
   assert.equal(parseTeacherSort("nope", "worst"), "worst");
   assert.equal(parseTeacherSort(null, "best"), "best");
+});
+
+// Оценка наблюдателя (10.1): вымышленные учителя и наблюдатели.
+const observed = (
+  id: number,
+  total: number,
+  rating: number | null,
+  key = "a",
+  pair = String(id),
+  date = "2026-09-21",
+): ReportVisit => ({ ...make(id, total, 100, key, pair), rating, date, visitor: `Наблюдатель ${id}` });
+const teacherOf = (key: string, rows: ReportVisit[]) => ({ key, name: `Учитель ${key}`, rows });
+
+test("observer level: mean per lesson, then per teacher, rounded; arrow when one observer is lower", () => {
+  // Урок 1: 4 и 2 → 3; урок 2: 5 → 5; среднее 4 → «Высокий», один наблюдатель ниже.
+  const rows = [
+    observed(1, 80, 4, "a", "L1", "2026-09-10"),
+    observed(2, 80, 2, "a", "L1", "2026-09-10"),
+    observed(3, 90, 5, "a", "L2", "2026-09-17"),
+  ];
+  assert.deepEqual(observerLevel(rows), {
+    value: 4,
+    label: "Высокий",
+    lowest: 2,
+    lowestDate: "2026-09-10",
+  });
+  // 3 и 4 → 3,5 округляется до 4; ниже 4 есть оценка 3.
+  const half = observerLevel([observed(4, 80, 3, "b", "L3"), observed(5, 80, 4, "b", "L4")]);
+  assert.equal(half?.value, 4);
+  assert.equal(half?.lowest, 3);
+  // Все наблюдатели согласны: стрелки нет (самая низкая оценка не ниже уровня).
+  const same = observerLevel([observed(6, 80, 4, "c", "L5"), observed(7, 80, 4, "c", "L5")]);
+  assert.equal(same?.value, 4);
+  assert.equal(same!.lowest < same!.value, false);
+  // Самоанализ не учитывается.
+  const withSelf = observerLevel([observed(8, 80, 5, "d", "L6"), { ...observed(9, 80, 1, "d", "L6"), self: true }]);
+  assert.deepEqual([withSelf?.value, withSelf?.lowest], [5, 5]);
+});
+
+test("observer level: no 10.1 ratings gives null", () => {
+  assert.equal(observerLevel([observed(1, 80, null)]), null);
+  assert.equal(observerLevel([{ ...observed(2, 80, 4), self: true }]), null);
+  assert.equal(observerLevel([]), null);
+});
+
+test("attention by observer rating: groups and reasons", () => {
+  const result = attentionTeachers([
+    teacherOf("t75", [observed(1, 75, 2, "t75")]), // баллы 75, «Ниже среднего»
+    teacherOf("t80", [observed(2, 80, 3, "t80")]), // баллы 80, «Средний»
+    teacherOf("t45", [observed(3, 45, 1, "t45")]), // урок 45, «Низкий»
+    teacherOf("t90", [observed(4, 90, 4, "t90")]), // баллы 90, «Высокий»
+  ]);
+  const byKey = new Map(result.map((t) => [t.key, t]));
+  assert.deepEqual(
+    [byKey.get("t75")?.group, byKey.get("t75")?.reason],
+    ["A", "observer"],
+  );
+  assert.deepEqual(
+    [byKey.get("t80")?.group, byKey.get("t80")?.reason],
+    ["B", "observer"],
+  );
+  assert.deepEqual(
+    [byKey.get("t45")?.group, byKey.get("t45")?.reason],
+    ["A", "both"],
+  );
+  assert.equal(byKey.has("t90"), false);
+  assert.equal(byKey.get("t75")?.below70, 0);
+  assert.equal(byKey.get("t75")?.repeat, "оценка наблюдателя: ниже среднего");
+  assert.equal(byKey.get("t80")?.repeat, "оценка наблюдателя: средний");
+  assert.equal(byKey.get("t45")?.repeat, "единичный результат");
+});
+
+test("attention: one observer of two decides, not the lesson mean", () => {
+  // Наблюдатели поставили 2 и 5 (среднее 3,5), баллы 88: группа А по оценке отдельного наблюдателя.
+  const [t] = attentionTeachers([
+    teacherOf("x", [observed(1, 88, 2, "x", "L1"), observed(2, 88, 5, "x", "L1")]),
+  ]);
+  assert.deepEqual([t.group, t.reason], ["A", "observer"]);
+  // «Средний» уроку ниже 70 не даёт отдельной причины по наблюдателю: только по баллам.
+  const [s] = attentionTeachers([teacherOf("y", [observed(3, 65, 3, "y"), observed(4, 95, 4, "y")])]);
+  assert.deepEqual([s.group, s.reason], ["B", "score"]);
+  // «Средний» уроку с итогом 70 и выше плюс урок ниже 70: группа Б по обеим причинам.
+  const [b] = attentionTeachers([teacherOf("z", [observed(5, 65, 4, "z"), observed(6, 90, 3, "z")])]);
+  assert.deepEqual([b.group, b.reason], ["B", "both"]);
 });
