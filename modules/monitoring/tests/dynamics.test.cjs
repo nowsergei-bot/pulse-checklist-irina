@@ -134,7 +134,7 @@ test('динамика в базе', { skip: !url && 'нет MONITORING_TEST_DAT
     const r = await call(1, '/progress/dynamics');
     assert.equal(r.body.ege.max_points, 62);
     assert.equal(r.body.ege.blocks.length, 11);
-    assert.deepEqual(r.body.ege.blocks[2], { title: 'Задания 3-9', section: 'Аудирование', level: 'high', level_name: 'Повышенный', max: 7 });
+    assert.deepEqual(r.body.ege.blocks[2], { title: 'Задания 3-9', section: 'Аудирование', level: 'high', level_name: 'Высокий', max: 7 });
     const g = r.body.ege.rows.find(x => x.row === '11 А');
     assert.deepEqual([g.complete, g.avg_total, g.avg_percent, g.blocks[0], g.basic, g.high], [5, 31, 50, 50, 44, 54]);
     assert.ok(!JSON.stringify(r.body).includes('"mark"'), 'без отметок');

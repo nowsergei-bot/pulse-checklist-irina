@@ -23,7 +23,18 @@ export type Ege = {
 export const fmt = (v: number) => v.toLocaleString('ru-RU');
 export const signed = (v: number) => (v > 0 ? `+${fmt(v)}` : v < 0 ? `−${fmt(-v)}` : '0');
 export const diffClass = (v: number) => (v > 0 ? 'is-up' : v < 0 ? 'is-down' : 'is-same');
-const share = (part: number, all: number) => (all ? Math.round((100 * part) / all) : 0);
+// Доли в процентах, в сумме ровно 100: целые части, затем по единице долям с наибольшим остатком
+// (при равенстве остатков раньше та, что левее).
+export function shares100(counts: number[]): number[] {
+  const n = counts.reduce((a, b) => a + b, 0);
+  if (!n) return counts.map(() => 0);
+  const raw = counts.map(c => (100 * c) / n);
+  const out = raw.map(Math.floor);
+  const order = raw.map((v, i) => [v - Math.floor(v), i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  const rest = 100 - out.reduce((a, b) => a + b, 0);
+  for (let k = 0; k < rest; k += 1) out[order[k][1]] += 1;
+  return out;
+}
 const COLORS = ['#50708f', '#3f8f5f', '#c27c0e', '#8a5aa8', '#c4473a', '#2f8f9a', '#6b6b6b'];
 
 export function Card({ title, note, legend, children, caption }: { title: string; note?: string; legend?: ReactNode; children: ReactNode; caption?: string }) {
@@ -110,6 +121,8 @@ export function ProgressBars({ rows, section, threshold }: { rows: DynRow[]; sec
       {rows.map(r => {
         const p = r.progress[section];
         const n = p.up + p.same + p.down;
+        const pc = shares100([p.up, p.same, p.down]);
+        const share = (k: 'up' | 'same' | 'down') => pc[k === 'up' ? 0 : k === 'same' ? 1 : 2];
         return (
           <div key={r.row} className={`mon-prog__row is-${r.kind}`}>
             <span className="mon-viz__bar-label">{r.row}</span>
@@ -117,8 +130,8 @@ export function ProgressBars({ rows, section, threshold }: { rows: DynRow[]; sec
               <span className="mon-viz__track">
                 {(['up', 'same', 'down'] as const).map(k => (p[k] ? (
                   <span key={k} className={`mon-viz__seg mon-prog--${k}`} style={{ width: `${(100 * p[k]) / n}%` }}
-                    title={`${k === 'up' ? `рост (+${threshold} и больше)` : k === 'down' ? `снижение (−${threshold} и больше)` : 'без изменений'}: ${p[k]} уч., ${share(p[k], n)} %`}>
-                    {share(p[k], n) >= 9 ? `${share(p[k], n)} %` : ''}
+                    title={`${k === 'up' ? `рост (+${threshold} и больше)` : k === 'down' ? `снижение (−${threshold} и больше)` : 'без изменений'}: ${p[k]} уч., ${share(k)} %`}>
+                    {share(k) >= 9 ? `${share(k)} %` : ''}
                   </span>
                 ) : null))}
               </span>

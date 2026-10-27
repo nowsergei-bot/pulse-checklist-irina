@@ -459,7 +459,7 @@ async function dynamics(db, userId, caps, query) {
     const tasks = egeSeries.tasks.get(parallel) || [];
     ege = {
       work: work.key, max_points: tasks.reduce((a, t) => a + t.max_points, 0),
-      blocks: tasks.map(t => ({ title: t.title, section: commonName(t.section), level: t.level, level_name: t.level === 'basic' ? 'Базовый' : 'Повышенный', max: t.max_points })),
+      blocks: tasks.map(t => ({ title: t.title, section: commonName(t.section), level: t.level, level_name: t.level === 'basic' ? 'Базовый' : 'Высокий', max: t.max_points })),
       rows: [...groups.map(g => egeRow('group', g.title, data.members.get(g.id).map(m => m.id), egeSeries, parallel)), egeRow('parallel', `${parallel} параллель`, allIds, egeSeries, parallel)],
     };
   }

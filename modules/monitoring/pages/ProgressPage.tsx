@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, useApi } from './api';
 import {
-  Arrow, Card, LineChart, ProgressBars, ProgressLegend, diffClass, fmt, heat, seriesColor, signed,
+  Arrow, Card, LineChart, ProgressBars, ProgressLegend, diffClass, fmt, heat, seriesColor, shares100, signed,
   type Band, type DynRow, type Ege, type Point, type RiskStudent, type Student,
 } from './Dynamics';
 
@@ -151,7 +151,7 @@ function Settings({ threshold, onSaved }: { threshold: number; onSaved: () => vo
 }
 
 const pct = (v: number | null | undefined) => (v === null || v === undefined ? null : v);
-const bandShares = (b: Band) => (b.n ? `${Math.round((100 * b.up) / b.n)} / ${Math.round((100 * b.same) / b.n)} / ${Math.round((100 * b.down) / b.n)}` : '');
+const bandShares = (b: Band) => (b.n ? shares100([b.up, b.same, b.down]).join(' / ') : '');
 
 // Таблицы вкладки: одни и те же описания для экрана и для Excel.
 function tables(d: Dyn, cmp: Data | undefined, section: Section, sections: Section[]): Table[] {
@@ -174,8 +174,8 @@ function tables(d: Dyn, cmp: Data | undefined, section: Section, sections: Secti
       rows: d.rows.flatMap(r => sections.map(s => {
         const p = r.progress[s.code];
         const n = p.up + p.same + p.down;
-        const sh = (x: number) => (n ? Math.round((100 * x) / n) : null);
-        return [r.row, s.name, p.students, p.up, p.same, p.down, sh(p.up), sh(p.same), sh(p.down), p.no_data];
+        const pc = n ? shares100([p.up, p.same, p.down]) : [null, null, null];
+        return [r.row, s.name, p.students, p.up, p.same, p.down, ...pc, p.no_data];
       })),
       bold: d.rows.flatMap(r => sections.map(() => r.kind === 'parallel')),
     },
@@ -215,8 +215,8 @@ function tables(d: Dyn, cmp: Data | undefined, section: Section, sections: Secti
   if (d.ege) {
     out.push({
       key: 'ege', sheet: 'Пробный ЕГЭ', title: `${workTitle}: первичный балл и блоки`,
-      note: `Только полные работы. Средний первичный балл из ${d.ege.max_points} и процент; процент выполнения каждого блока, базового и высокого уровня (в аналитике «Повышенный»). Отметок нет.`,
-      head: ['Группа', 'Полных работ', `Средний балл из ${d.ege.max_points}`, 'Средний %', 'Базовый, %', 'Повышенный, %', ...d.ege.blocks.map(b => `${b.title} (${b.max})`)],
+      note: `Только полные работы. Средний первичный балл из ${d.ege.max_points} и процент; процент выполнения каждого блока, базового и высокого уровня. Отметок нет.`,
+      head: ['Группа', 'Полных работ', `Средний балл из ${d.ege.max_points}`, 'Средний %', 'Базовый, %', 'Высокий, %', ...d.ege.blocks.map(b => `${b.title} (${b.max})`)],
       rows: d.ege.rows.map(r => [r.row, r.complete, r.avg_total, r.avg_percent, r.basic, r.high, ...r.blocks]),
       bold: d.ege.rows.map(r => r.kind === 'parallel'),
     });
@@ -435,12 +435,12 @@ export default function ProgressPage({ manage }: { manage: boolean }) {
                 </div>
               ) : null}
               <section className="mon-an__block">
-                <p className="mon-note">Только полные работы. Отметок нет. Уровень «Высокий» по ФИПИ в аналитике «Повышенный».</p>
+                <p className="mon-note">Только полные работы. Отметок нет. Уровни по ФИПИ: базовый и высокий.</p>
                 <div className="mon-an__scroll">
                   <table className="mon-table mon-an__table mon-prog__table">
                     <thead>
                       <tr>
-                        <th>Группа</th><th className="mon-num">Полных</th><th className="mon-num">Балл из {data.ege.max_points}</th><th className="mon-num">%</th><th className="mon-num">Базовый</th><th className="mon-num">Повышенный</th>
+                        <th>Группа</th><th className="mon-num">Полных</th><th className="mon-num">Балл из {data.ege.max_points}</th><th className="mon-num">%</th><th className="mon-num">Базовый</th><th className="mon-num">Высокий</th>
                         {data.ege.blocks.map(b => <th key={b.title} className="mon-num" title={`${b.section}, ${b.level_name.toLowerCase()}, максимум ${b.max}`}>{b.title.replace('Задания ', '').replace('Задание ', '')}</th>)}
                       </tr>
                     </thead>
