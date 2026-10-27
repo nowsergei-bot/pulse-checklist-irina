@@ -195,12 +195,34 @@ async function listSpecs(db) {
 
 async function versionTasks(db, versionId) {
   const r = await db.query(
-    `SELECT t.sort, p.name AS part, t.section, t.level, t.title, t.max_points, t.focus
+    `SELECT t.id, t.sort, p.name AS part, t.section, t.level, t.title, t.max_points, t.focus,
+            EXISTS (SELECT 1 FROM monitoring.half_point_tasks h WHERE h.task_id = t.id) AS half
      FROM monitoring.spec_tasks t JOIN monitoring.spec_parts p ON p.id = t.part_id
      WHERE t.version_id = $1 ORDER BY t.sort`,
     [versionId],
   );
   return { status: 200, body: { tasks: r.rows } };
+}
+
+// Можно ли вносить 0,5 в задание (data_admin). Это не содержание спецификации, поэтому меняется и в утверждённой версии.
+// Снять нельзя, пока в задании есть баллы с половиной.
+async function setHalf(db, userId, taskId, data) {
+  if (typeof data.half !== 'boolean') return bad('Укажите, можно ли вносить 0,5');
+  const task = (await db.query('SELECT id FROM monitoring.spec_tasks WHERE id = $1', [taskId])).rows[0];
+  if (!task) return bad('Задание не найдено', 404);
+  if (data.half) {
+    const named = await db.query('SELECT full_name FROM pulse_read.users WHERE id = $1 AND full_name IS NOT NULL LIMIT 1', [userId]);
+    await db.query(
+      `INSERT INTO monitoring.half_point_tasks (task_id, updated_by, updated_by_name) VALUES ($1, $2, $3)
+       ON CONFLICT (task_id) DO NOTHING`,
+      [taskId, userId, named.rows[0] ? named.rows[0].full_name : ''],
+    );
+  } else {
+    const used = (await db.query('SELECT count(*)::int AS n FROM monitoring.task_scores WHERE task_id = $1 AND score <> trunc(score)', [taskId])).rows[0].n;
+    if (used) return bad(`Уже внесено баллов с половиной: ${used}. Сначала исправьте их.`);
+    await db.query('DELETE FROM monitoring.half_point_tasks WHERE task_id = $1', [taskId]);
+  }
+  return { status: 200, body: { ok: true, half: data.half } };
 }
 
 async function approveVersion(db, userId, versionId) {
@@ -219,4 +241,4 @@ async function deleteDraft(db, versionId) {
   return { status: 200, body: { ok: true } };
 }
 
-module.exports = { preview, createFrame, saveSpec, listSpecs, versionTasks, approveVersion, deleteDraft, cellReader };
+module.exports = { preview, createFrame, saveSpec, listSpecs, versionTasks, setHalf, approveVersion, deleteDraft, cellReader };

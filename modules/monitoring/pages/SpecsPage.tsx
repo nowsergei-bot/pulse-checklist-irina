@@ -7,7 +7,7 @@ type Type = { id: number; code: string; name: string };
 type Version = { id: number; version: number; status: 'draft' | 'approved'; max_points: number; frame_name: string; tasks: number; works: number };
 type Spec = { id: number; title: string; type_name: string; versions: Version[] };
 type SpecsData = { types: Type[]; specs: Spec[] };
-type Task = { sort?: number; row?: number; part: string; section: string; level: string; title: string; max_points: number; focus: string | null };
+type Task = { id?: number; half?: boolean; sort?: number; row?: number; part: string; section: string; level: string; title: string; max_points: number; focus: string | null };
 type Preview = {
   spec_title: string; class_hint: string | null; dates: { writing: string | null; test: string | null };
   tasks: Task[]; max_points: number; errors: string[];
@@ -22,22 +22,27 @@ function formatDate(value: string | null) {
   return `${d}.${m}.${y}`;
 }
 
-export function TasksTable({ tasks, total }: { tasks: Task[]; total?: number }) {
+export function TasksTable({ tasks, total, onHalf, busy }: { tasks: Task[]; total?: number; onHalf?: (task: Task, half: boolean) => void; busy?: number | null }) {
   return (
     <table className="mon-table mon-tasks">
       <thead>
-        <tr><th>№</th><th>Часть</th><th>Раздел</th><th>Уровень</th><th>Задание</th><th className="mon-num">Баллы</th><th>Фокус</th></tr>
+        <tr><th>№</th><th>Часть</th><th>Раздел</th><th>Уровень</th><th>Задание</th><th className="mon-num">Баллы</th><th>Фокус</th>{onHalf ? <th title="Можно вносить половину балла">Можно 0,5</th> : null}</tr>
       </thead>
       <tbody>
         {tasks.map((t, i) => (
           <tr key={i}>
             <td className="mon-muted">{i + 1}</td><td>{t.part}</td><td>{t.section}</td><td>{LEVEL_NAMES[t.level] || t.level}</td>
             <td>{t.title}</td><td className="mon-num">{t.max_points}</td><td className="mon-muted">{t.focus || ''}</td>
+            {onHalf ? (
+              <td>
+                <input type="checkbox" checked={Boolean(t.half)} disabled={busy === t.id} onChange={e => onHalf(t, e.target.checked)} aria-label={`Можно вносить 0,5: ${t.title}`} />
+              </td>
+            ) : null}
           </tr>
         ))}
       </tbody>
       {total !== undefined ? (
-        <tfoot><tr><td colSpan={5}>Итого</td><td className="mon-num">{total}</td><td /></tr></tfoot>
+        <tfoot><tr><td colSpan={5}>Итого</td><td className="mon-num">{total}</td><td />{onHalf ? <td /> : null}</tr></tfoot>
       ) : null}
     </table>
   );
@@ -196,6 +201,18 @@ export default function SpecsPage() {
   const tasks = useApi<{ tasks: Task[] }>(open ? `/specs/versions/${open}` : null);
   const [confirm, setConfirm] = useState<{ action: 'approve' | 'delete'; spec: Spec; version: Version } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [halfBusy, setHalfBusy] = useState<number | null>(null);
+
+  // Половина балла: отметка у задания, меняется и в утверждённой версии.
+  async function setHalf(task: Task, half: boolean) {
+    if (!task.id) return;
+    setHalfBusy(task.id); setMessage('');
+    try {
+      await api(`/specs/tasks/${task.id}/half`, { method: 'POST', body: { half } });
+      setMessage(half ? `«${task.title}»: можно вносить 0,5` : `«${task.title}»: только целые баллы`);
+      tasks.reload();
+    } catch (e) { setMessage((e as Error).message); } finally { setHalfBusy(null); }
+  }
 
   async function run() {
     if (!confirm) return;
@@ -213,7 +230,7 @@ export default function SpecsPage() {
   return (
     <div>
       <div className="mon-toolbar">
-        <p className="mon-note mon-hint">Утверждённую версию изменить нельзя: правка создаёт новую версию. Работы создаются только по утверждённым версиям.</p>
+        <p className="mon-note mon-hint">Утверждённую версию изменить нельзя: правка создаёт новую версию. Работы создаются только по утверждённым версиям. Отметку «можно 0,5» у задания можно менять и в утверждённой версии.</p>
         {!uploading ? <button type="button" className="mon-btn mon-btn--primary" onClick={() => { setUploading(true); setMessage(''); }}>Загрузить из Excel</button> : null}
       </div>
       {uploading && data ? <Upload types={data.types} onClose={() => setUploading(false)} onSaved={text => { setUploading(false); setMessage(text); reload(); }} /> : null}
@@ -250,7 +267,7 @@ export default function SpecsPage() {
             </tbody>
           </table>
           {spec.versions.some(v => v.id === open) ? (
-            tasks.data ? <TasksTable tasks={tasks.data.tasks} total={tasks.data.tasks.reduce((s, t) => s + t.max_points, 0)} /> : <p className="mon-note">Загружаем задания…</p>
+            tasks.data ? <TasksTable tasks={tasks.data.tasks} total={tasks.data.tasks.reduce((s, t) => s + t.max_points, 0)} onHalf={setHalf} busy={halfBusy} /> : <p className="mon-note">Загружаем задания…</p>
           ) : null}
         </section>
       ))}

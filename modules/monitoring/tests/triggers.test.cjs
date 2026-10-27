@@ -92,8 +92,8 @@ test('триггеры миграции 003', { skip: !url && 'нет MONITORING
     await assert.rejects(db.query('UPDATE monitoring.part_status SET part_id = $2 WHERE work_id = $1', [work.id, v2.part]), /Часть не относится к спецификации этой работы/);
   });
 
-  await t.test('половинок баллов нет', async () => {
-    // Баллы приходят параметром запроса: дробное значение база не принимает.
-    await assert.rejects(db.query('UPDATE monitoring.task_scores SET score = $2 WHERE work_id = $1', [work.id, 2.5]), /integer/);
+  await t.test('половина балла без отметки у задания не принимается', async () => {
+    // Баллы приходят параметром запроса: дробное значение база не принимает, если у задания нет отметки «можно 0,5».
+    await assert.rejects(db.query('UPDATE monitoring.task_scores SET score = $2 WHERE work_id = $1', [work.id, 2.5]), /только целый/, 'половина балла только в задании с отметкой «можно 0,5» (миграция 011)');
   });
 });

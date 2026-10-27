@@ -1535,3 +1535,10 @@ a.mon-btn {
   border-color: #a30000;
   box-shadow: 0 2px 10px rgba(192, 0, 0, 0.28);
 }
+.mon-sheet__half {
+  display: block;
+  color: var(--mon-red);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}

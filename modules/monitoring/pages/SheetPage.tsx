@@ -6,7 +6,7 @@ import Dialog from './Dialog';
 import { GroupName, STATUS_NAMES, versionLabel } from './labels';
 
 type Part = { id: number; code: string; name: string; held_on: string | null };
-type Task = { id: number; part_id: number; sort: number; section: string; level: string; level_name: string | null; title: string; max_points: number };
+type Task = { id: number; part_id: number; sort: number; section: string; level: string; level_name: string | null; title: string; max_points: number; half?: boolean };
 type Student = {
   id: number; full_name: string; result: Result; gentle: boolean;
   scores: Record<string, number | null>; absent: Record<string, boolean>; foreign: Record<string, string>;
@@ -326,12 +326,12 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                   <input
                     className={`mon-sheet__input${bad ? ' is-wrong' : ''}${foreign ? ' is-foreign' : ''}`}
                     data-cell={isLeft ? undefined : cell}
-                    inputMode="numeric"
+                    inputMode={t.half ? 'decimal' : 'numeric'}
                     autoComplete="off"
-                    value={bad ? bad.text : value === null ? '' : String(value)}
+                    value={bad ? bad.text : value === null ? '' : decimal(value)}
                     disabled={!rowEditable || isAbsent}
                     readOnly={Boolean(foreign)}
-                    title={foreign ? `Внесено в другой группе: ${foreign}` : `${t.title}: от 0 до ${t.max_points}`}
+                    title={foreign ? `Внесено в другой группе: ${foreign}` : `${t.title}: от 0 до ${t.max_points}${t.half ? ', можно 0,5' : ''}`}
                     aria-label={`${s.full_name}, ${t.title}, из ${t.max_points}`}
                     aria-invalid={bad ? true : undefined}
                     onFocus={e => e.target.select()}
@@ -341,10 +341,13 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                       if (foreign) return;
                       const v = e.target.value.trim();
                       if (v === '') { setWrong(null); change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: null }); return; }
-                      if (!/^\d+$/.test(v)) { setWrong({ cell, text: e.target.value, message: `целое число от 0 до ${t.max_points}` }); return; }
-                      if (Number(v) > t.max_points) { setWrong({ cell, text: v, message: `максимум ${t.max_points}` }); return; }
+                      // В задании с отметкой «можно 0,5» допускается половина балла: 1,5 или 1.5.
+                      const ok = t.half ? /^\d+([.,][05])?$/.test(v) : /^\d+$/.test(v);
+                      if (!ok) { setWrong({ cell, text: e.target.value, message: t.half ? `от 0 до ${t.max_points}, шаг 0,5` : `целое число от 0 до ${t.max_points}` }); return; }
+                      const num = Number(v.replace(',', '.'));
+                      if (num > t.max_points) { setWrong({ cell, text: v, message: `максимум ${t.max_points}` }); return; }
                       setWrong(null);
-                      change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: Number(v) });
+                      change(`${s.id}:t${t.id}`, { student_id: s.id, task_id: t.id, score: num });
                     }}
                   />
                   {bad ? <span className="mon-sheet__tip" role="alert">{bad.message}</span> : null}
@@ -353,7 +356,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
             }),
           ];
         })}
-        <td className="mon-num mon-sheet__res-start mon-sheet__total">{empty || allAbsent ? '' : r.total}</td>
+        <td className="mon-num mon-sheet__res-start mon-sheet__total">{empty || allAbsent ? '' : decimal(r.total)}</td>
         <td className={`mon-num mon-sheet__pct${r.complete ? '' : ' is-wait'}`}>{wasAbsent || empty ? '' : r.percent}</td>
         {/* Отметка плашкой; «щадящий», только если по щадящим порогам отметка выше обычной. Пока работа не полная, вместо отметки её состояние. */}
         <td className="mon-sheet__mark">
@@ -504,6 +507,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                     <span className="mon-sheet__level">{t.level_name || t.level}</span>
                     {sameTitle(t) ? null : <span className="mon-sheet__task-title">{t.title}</span>}
                     <span className="mon-sheet__max">из {t.max_points}</span>
+                    {t.half ? <span className="mon-sheet__half">шаг 0,5</span> : null}
                   </th>
                 )))}
               </tr>

@@ -46,7 +46,8 @@ async function structure(db, work) {
     [work.spec_version_id, work.id],
   )).rows;
   const tasks = (await db.query(
-    `SELECT t.id, t.part_id, t.sort, t.section, t.level, l.name AS level_name, t.title, t.max_points
+    `SELECT t.id, t.part_id, t.sort, t.section, t.level, l.name AS level_name, t.title, t.max_points,
+            EXISTS (SELECT 1 FROM monitoring.half_point_tasks h WHERE h.task_id = t.id) AS half
      FROM monitoring.spec_tasks t LEFT JOIN monitoring.levels l ON l.code = t.level
      WHERE t.version_id = $1 ORDER BY t.sort`,
     [work.spec_version_id],
@@ -170,15 +171,15 @@ async function writeScore(db, work, groupId, userId, studentId, taskId, score) {
        SELECT score, group_id FROM monitoring.task_scores WHERE work_id = $1 AND task_id = $2 AND student_id = $3
      ), up AS (
        INSERT INTO monitoring.task_scores AS t (work_id, task_id, student_id, group_id, score, updated_by)
-       VALUES ($1, $2, $3, $4, $5::integer, $6)
+       VALUES ($1, $2, $3, $4, $5::float8, $6)
        ON CONFLICT (work_id, task_id, student_id) DO UPDATE
          SET score = EXCLUDED.score, group_id = EXCLUDED.group_id, updated_by = EXCLUDED.updated_by, updated_at = now()
          WHERE t.group_id = EXCLUDED.group_id OR t.score IS NULL
        RETURNING 1
      ), h AS (
        INSERT INTO monitoring.score_history (work_id, student_id, group_id, task_id, old_value, new_value, changed_by)
-       SELECT $1, $3, $4, $2, (SELECT score::text FROM old), ($5::integer)::text, $6
-       WHERE EXISTS (SELECT 1 FROM up) AND (SELECT score FROM old) IS DISTINCT FROM $5::integer
+       SELECT $1, $3, $4, $2, (SELECT score::text FROM old), ($5::float8)::text, $6
+       WHERE EXISTS (SELECT 1 FROM up) AND (SELECT score FROM old) IS DISTINCT FROM $5::float8
      )
      SELECT (SELECT count(*) FROM up)::int AS written, (SELECT group_id FROM old) AS old_group`,
     [work.id, taskId, studentId, groupId, score, userId],
@@ -245,8 +246,10 @@ async function saveSheet(db, userId, caps, workId, data) {
       const task = tasks.get(Number(c.task_id));
       if (!task) { errors.push('Задание не из этой работы'); continue; }
       const score = c.score === null || c.score === '' ? null : Number(c.score);
-      if (score !== null && (!Number.isInteger(score) || score < 0 || score > task.max_points)) {
-        errors.push(`Балл должен быть целым числом от 0 до ${task.max_points}`);
+      // Половина балла только в заданиях, отмеченных data_admin (monitoring.half_point_tasks).
+      const step = task.half ? 2 : 1;
+      if (score !== null && (!Number.isFinite(score) || !Number.isInteger(score * step) || score < 0 || score > task.max_points)) {
+        errors.push(task.half ? `Балл должен быть от 0 до ${task.max_points} с шагом 0,5` : `Балл должен быть целым числом от 0 до ${task.max_points}`);
         continue;
       }
       const absentElsewhere = foreignAbsent.get(`${studentId}:${task.part_id}`);

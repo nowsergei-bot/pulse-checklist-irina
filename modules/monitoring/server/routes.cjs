@@ -81,6 +81,8 @@ module.exports = async function route({ path, method, query, body, user, db, fil
       if (m[2] === '/approve' && method === 'POST') return specs.approveVersion(db, userId, id);
       if (m[2] === '/delete' && method === 'POST') return specs.deleteDraft(db, id);
     }
+    m = path.match(/^\/specs\/tasks\/(\d+)\/half$/);
+    if (m && method === 'POST') return specs.setHalf(db, userId, Number(m[1]), data);
     if (path === '/works/options' && method === 'GET') return works.options(db, query);
     if (path === '/works' && method === 'POST') return works.createWorks(db, userId, data);
     m = path.match(/^\/works\/(\d+)$/);
