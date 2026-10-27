@@ -7,16 +7,18 @@ import { GroupName, STATUS_NAMES, versionLabel } from './labels';
 type Group = { id: number; title: string; parallel: number | null; digital: boolean };
 type Version = { id: number; title: string; type_id: number; version: number; max_points: number; class_hint: string | null; parts: { code: string; name: string }[] };
 type Options = {
-  types: { id: number; code: string; name: string }[];
+  types: { id: number; code: string; name: string; graded: boolean }[];
   years: { id: number; label: string; is_current: boolean }[];
   year_id: number | null;
   groups: Group[];
   versions: Version[];
   scales: { id: number; name: string; is_default: boolean }[];
+  // Сколько разных названий работ каждого вида уже есть в году.
+  titles_by_type?: Record<string, number>;
 };
 type Work = {
   id: number; type_id: number; title: string; academic_year_id: number; parallel: number; spec_version_id: number;
-  scale_id: number; status: string; is_test: boolean; dates: Record<string, string> | null; groups: number[]; has_results: boolean;
+  scale_id: number | null; status: string; is_test: boolean; dates: Record<string, string> | null; groups: number[]; has_results: boolean;
 };
 
 // Даты в форме в виде ДД.ММ.ГГГГ, на сервер уходят как ГГГГ-ММ-ДД.
@@ -76,7 +78,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
       if (!work) return;
       if (yearId === null && work.academic_year_id !== o.year_id) { setYearId(work.academic_year_id); return; }
       setTypeId(work.type_id); setTitle(work.title); setTitleTouched(true); setParallels([work.parallel]);
-      setVersionId(work.spec_version_id); setScaleId(work.scale_id); setDates(Object.fromEntries(Object.entries(work.dates || {}).map(([k, v]) => [k, toDisplay(v)])));
+      setVersionId(work.spec_version_id); setScaleId(work.scale_id ?? o.scales.find(s => s.is_default)?.id); setDates(Object.fromEntries(Object.entries(work.dates || {}).map(([k, v]) => [k, toDisplay(v)])));
       setGroups(work.groups.map(Number)); setStatus(work.status); setIsTest(work.is_test);
     } else {
       setTypeId(o.types.find(t => t.code === 'module')?.id || o.types[0]?.id);
@@ -85,6 +87,9 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
     setReady(true);
   }, [o, work, workId, ready, yearId]);
 
+  const type = o?.types.find(t => t.id === typeId);
+  // Вид работы без отметки (пробный ЕГЭ): шкалы нет.
+  const graded = type ? type.graded !== false : true;
   const allParallels = useMemo(() => [...new Set((o?.groups || []).map(g => g.parallel).filter((p): p is number => p !== null))].sort((a, b) => a - b), [o]);
   const versions = (o?.versions || []).filter(v => v.type_id === typeId);
   const version = versions.find(v => v.id === versionId);
@@ -102,6 +107,21 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
     setVersionId(id);
     const v = versions.find(x => x.id === id);
     if (v && !titleTouched) setTitle(v.title.split(',')[0]);
+  }
+
+  // Пробный ЕГЭ: единственная спецификация, название «Пробный ЕГЭ N», по умолчанию 11 параллель со всеми группами.
+  // Параллель можно сменить на любую, например 10.
+  function chooseType(id: number) {
+    setTypeId(id);
+    const t = o?.types.find(x => x.id === id);
+    const own = (o?.versions || []).filter(v => v.type_id === id);
+    setVersionId(own.length === 1 ? own[0].id : undefined);
+    if (workId || !t || t.code !== 'ege_mock') return;
+    if (!titleTouched) setTitle(`Пробный ЕГЭ ${(o?.titles_by_type?.[String(id)] || 0) + 1}`);
+    if (!parallels.length && allParallels.includes(11)) {
+      setParallels([11]);
+      setGroups(groupsOf(11).map(g => g.id));
+    }
   }
 
   function changeYear(id: number) {
@@ -136,7 +156,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
     if (!iso) return;
     setBusy(true); setError('');
     const body = {
-      type_id: typeId, title, academic_year_id: yearId ?? o?.year_id, parallels, spec_version_id: versionId, scale_id: scaleId,
+      type_id: typeId, title, academic_year_id: yearId ?? o?.year_id, parallels, spec_version_id: versionId, scale_id: graded ? scaleId : null,
       status, is_test: isTest, groups, dates: iso,
     };
     try {
@@ -165,7 +185,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
         <span className="mon-label">Вид работы</span>
         <span className="mon-segmented" role="group">
           {o.types.map(t => (
-            <button type="button" key={t.id} className={t.id === typeId ? 'is-current' : undefined} aria-pressed={t.id === typeId} disabled={locked} onClick={() => { setTypeId(t.id); setVersionId(undefined); }}>{t.name}</button>
+            <button type="button" key={t.id} className={t.id === typeId ? 'is-current' : undefined} aria-pressed={t.id === typeId} disabled={locked} onClick={() => chooseType(t.id)}>{t.name}</button>
           ))}
         </span>
       </div>
@@ -192,12 +212,19 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
             {o.years.map(y => <option key={y.id} value={y.id}>{y.label}{y.is_current ? ' (текущий)' : ''}</option>)}
           </select>
         </label>
-        <label className="mon-field">
-          <span className="mon-label">Шкала отметок</span>
-          <select className="mon-input mon-select" value={scaleId ?? ''} onChange={e => setScaleId(Number(e.target.value))}>
-            {o.scales.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </label>
+        {graded ? (
+          <label className="mon-field">
+            <span className="mon-label">Шкала отметок</span>
+            <select className="mon-input mon-select" value={scaleId ?? ''} onChange={e => setScaleId(Number(e.target.value))}>
+              {o.scales.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </label>
+        ) : (
+          <div className="mon-field">
+            <span className="mon-label">Отметка</span>
+            <span className="mon-muted mon-field__text">Без отметки: только первичный балл и процент выполнения</span>
+          </div>
+        )}
       </div>
 
       {version ? (

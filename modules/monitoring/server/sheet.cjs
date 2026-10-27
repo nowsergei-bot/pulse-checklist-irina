@@ -2,6 +2,12 @@
 // Один балл на работу + задание + ученика; в результате хранится группа, где его внесли.
 
 const { studentResult, GENTLE_SCALE, GENTLE_CHANGES_MARK } = require('./lib/calc.cjs');
+const { commonSectionName } = require('./lib/compare.cjs');
+
+// Виды работ, где над клетками названия разделов по-русски, как в ФИПИ.
+const RUSSIAN_SECTION_TYPES = ['ege_mock'];
+// Работа без отметки: graded = false у вида работы (миграция 012).
+const isGraded = (work) => work.graded !== false;
 const { teacherGroupIds, groupStudents } = require('./lib/groups.cjs');
 
 const MAX_CHANGES = 1000;
@@ -9,8 +15,10 @@ const bad = (message, status = 400) => ({ status, body: { error: 'bad_request', 
 
 async function loadWork(db, workId) {
   const r = await db.query(
-    `SELECT w.id, w.title, w.parallel, w.status, w.spec_version_id, w.scale_id, s.title AS spec_title, v.version, v.max_points
+    `SELECT w.id, w.title, w.parallel, w.status, w.spec_version_id, w.scale_id, s.title AS spec_title, v.version, v.max_points,
+            t.code AS type_code, t.graded
      FROM monitoring.works w
+     JOIN monitoring.assessment_types t ON t.id = w.type_id
      JOIN monitoring.spec_versions v ON v.id = w.spec_version_id
      JOIN monitoring.specs s ON s.id = v.spec_id
      WHERE w.id = $1`,
@@ -46,13 +54,19 @@ async function structure(db, work) {
     [work.spec_version_id, work.id],
   )).rows;
   const tasks = (await db.query(
-    `SELECT t.id, t.part_id, t.sort, t.section, t.level, l.name AS level_name, t.title, t.max_points,
+    `SELECT t.id, t.part_id, t.sort, t.section, t.level, l.name AS level_name, t.title, t.max_points, t.focus,
             EXISTS (SELECT 1 FROM monitoring.half_point_tasks h WHERE h.task_id = t.id) AS half
      FROM monitoring.spec_tasks t LEFT JOIN monitoring.levels l ON l.code = t.level
      WHERE t.version_id = $1 ORDER BY t.sort`,
     [work.spec_version_id],
   )).rows;
-  const scale = (await db.query('SELECT mark, min_percent FROM monitoring.grade_scale_rows WHERE scale_id = $1', [work.scale_id])).rows;
+  // У работы без отметки шкалы нет.
+  const scale = work.scale_id === null || work.scale_id === undefined ? []
+    : (await db.query('SELECT mark, min_percent FROM monitoring.grade_scale_rows WHERE scale_id = $1', [work.scale_id])).rows;
+  // Над клетками пробного ЕГЭ названия разделов ФИПИ (аудирование, чтение, грамматика и лексика, письменная речь).
+  if (RUSSIAN_SECTION_TYPES.includes(work.type_code)) {
+    for (const t of tasks) t.section_label = commonSectionName(t.section) || t.section;
+  }
   return { parts, tasks, scale };
 }
 
@@ -110,8 +124,9 @@ async function buildStudents(db, work, groupId, students, struct, gentleIds = ne
       if (Number(row.group_id) !== groupId && row.status === 'absent') own.foreign[`p${row.part_id}`] = titles.get(Number(row.group_id))?.title || '';
     }
     const gentle = gentleIds.has(scoreGroup(scores.filter(row => Number(row.student_id) === id), groupId));
-    const result = studentResult({ parts: struct.parts, tasks: struct.tasks, maxPoints: work.max_points, scale: struct.scale, absentPartIds: absentIds, scores: scoreMap, gentle });
-    return { id, full_name: s.full_name, ...own, gentle, result };
+    const graded = isGraded(work);
+    const result = studentResult({ parts: struct.parts, tasks: struct.tasks, maxPoints: work.max_points, scale: struct.scale, absentPartIds: absentIds, scores: scoreMap, gentle, graded });
+    return graded ? { id, full_name: s.full_name, ...own, gentle, result } : { id, full_name: s.full_name, ...own, result };
   });
 }
 
@@ -152,15 +167,19 @@ async function getSheet(db, userId, caps, workId, groupId) {
     [a.work.id, groupId],
   )).rows : [];
   const w = a.work;
-  return {
-    status: 200,
-    body: {
-      work: { id: w.id, title: w.title, parallel: w.parallel, status: w.status, spec_title: w.spec_title, version: w.version, max_points: w.max_points },
-      group, can_edit: a.canEdit, reason: a.reason, parts: struct.parts, tasks: struct.tasks, scale: struct.scale, gentle_scale: GENTLE_SCALE, gentle_changes_mark: GENTLE_CHANGES_MARK,
-      students, left_students: leftRows,
-      gentle: { enabled: gentle, can_change: canChangeGentle(caps, a.work), groups_on: gentleIds.size, groups_total: groupCount, history },
-    },
+  const body = {
+    work: { id: w.id, title: w.title, parallel: w.parallel, status: w.status, spec_title: w.spec_title, version: w.version, max_points: w.max_points, graded: isGraded(w) },
+    group, can_edit: a.canEdit, reason: a.reason, parts: struct.parts, tasks: struct.tasks,
+    students, left_students: leftRows,
   };
+  // Работа без отметки: ни шкалы, ни щадящего режима в ответе.
+  if (isGraded(w)) {
+    Object.assign(body, {
+      scale: struct.scale, gentle_scale: GENTLE_SCALE, gentle_changes_mark: GENTLE_CHANGES_MARK,
+      gentle: { enabled: gentle, can_change: canChangeGentle(caps, a.work), groups_on: gentleIds.size, groups_total: groupCount, history },
+    });
+  }
+  return { status: 200, body };
 }
 
 // Балл: запись своей группы или пустая запись меняется; балл другой группы не трогается.
@@ -283,7 +302,7 @@ async function saveSheet(db, userId, caps, workId, data) {
 
 // Щадящий режим меняют роли из GENTLE_SWITCH_ROLES (lib/access.cjs); черновик работы только data_admin.
 function canChangeGentle(caps, work) {
-  return Boolean(caps.switchGentle && (caps.manage || work.status !== 'draft'));
+  return Boolean(isGraded(work) && caps.switchGentle && (caps.manage || work.status !== 'draft'));
 }
 
 // Сколько отметок изменится, если в группах groupIds режим станет enabled; on: где включён сейчас.

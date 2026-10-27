@@ -88,6 +88,7 @@ async function moduleAnalytics(db, yearId, title) {
     `SELECT w.id, w.title, w.parallel, w.status, w.spec_version_id, w.scale_id, v.max_points
      FROM monitoring.works w JOIN monitoring.spec_versions v ON v.id = w.spec_version_id
      WHERE w.academic_year_id = $1 AND w.status <> 'draft' AND w.title = $2
+       AND (SELECT graded FROM monitoring.assessment_types t WHERE t.id = w.type_id)
      ORDER BY w.parallel NULLS LAST, w.id`,
     [yearId, title],
   )).rows;
@@ -229,10 +230,12 @@ async function placementAnalytics(db, yearId, parallels) {
   return { missing: [], rows, parallels: byParallel, students };
 }
 
+// Работы с отметкой. Работы без отметки (пробный ЕГЭ) в этот блок с отметками и зоной риска не входят.
 async function titles(db, yearId) {
   return (await db.query(
-    `SELECT title FROM monitoring.works WHERE academic_year_id = $1 AND status <> 'draft'
-     GROUP BY title ORDER BY min(id)`,
+    `SELECT w.title FROM monitoring.works w JOIN monitoring.assessment_types t ON t.id = w.type_id
+     WHERE w.academic_year_id = $1 AND w.status <> 'draft' AND t.graded
+     GROUP BY w.title ORDER BY min(w.id)`,
     [yearId],
   )).rows.map(r => r.title);
 }

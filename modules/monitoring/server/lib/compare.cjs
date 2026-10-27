@@ -31,4 +31,10 @@ function suggestCommonSection(field) {
   return null;
 }
 
-module.exports = { COMMON_SECTIONS, MODULE_SECTION_MAP, suggestCommonSection };
+function commonSectionName(section) {
+  const code = MODULE_SECTION_MAP[section];
+  const found = COMMON_SECTIONS.find(s => s.code === code);
+  return found ? found.name : null;
+}
+
+module.exports = { COMMON_SECTIONS, MODULE_SECTION_MAP, suggestCommonSection, commonSectionName };

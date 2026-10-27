@@ -54,7 +54,9 @@ function higherMark(gentleMark, normalMark) {
 // parts: [{ id, name }]; tasks: [{ id, part_id, max_points }];
 // absentPartIds: Set части со статусом «отсутствовал»; scores: Map task_id -> целое или null.
 // gentle: щадящий режим включён для группы; на отметку влияет, только если gentleChangesMark.
-function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, gentle = false, gentleScale = GENTLE_SCALE, gentleChangesMark = GENTLE_CHANGES_MARK }) {
+// graded = false (вид работы без отметки, например пробный ЕГЭ): только итог и процент,
+// в результате нет ни отметки, ни щадящего режима.
+function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, gentle = false, gentleScale = GENTLE_SCALE, gentleChangesMark = GENTLE_CHANGES_MARK, graded = true }) {
   let total = 0;
   let missing = 0;
   for (const task of tasks) {
@@ -70,6 +72,7 @@ function studentResult({ parts, tasks, maxPoints, scale, absentPartIds, scores, 
   if (absentParts.length) state = 'отсутствовал: ' + absentParts.map(p => p.name.toLowerCase()).join(' и ');
   else if (missing) state = 'не внесено баллов: ' + missing;
   else state = 'полная работа';
+  if (!graded) return { total, percent, complete, missing, state };
   const normalMark = complete ? markFor(percent, scale) : null;
   const mark = complete && gentle && gentleChangesMark ? markFor(percent, gentleScale) : normalMark;
   return {

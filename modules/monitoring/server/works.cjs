@@ -27,7 +27,7 @@ async function options(db, query) {
   const current = years.find(y => y.is_current) || years[0] || null;
   const yearId = Number(query && query.year) || (current && current.id);
   // Запросы по очереди: подключение модуля может быть одним клиентом.
-  const types = await db.query('SELECT id, code, name FROM monitoring.assessment_types WHERE active ORDER BY sort, id');
+  const types = await db.query('SELECT id, code, name, graded FROM monitoring.assessment_types WHERE active ORDER BY sort, id');
   const versions = await db.query(
     `SELECT v.id, s.title, s.type_id, v.version, v.max_points, v.class_hint,
             json_agg(json_build_object('code', p.code, 'name', p.name) ORDER BY p.sort) AS parts
@@ -40,9 +40,17 @@ async function options(db, query) {
   );
   const scales = await db.query('SELECT id, name, is_default FROM monitoring.grade_scales ORDER BY is_default DESC, name');
   const groups = yearId ? await yearGroups(db, yearId) : [];
+  // Сколько разных названий работ каждого вида уже есть в году: для названия «Пробный ЕГЭ 2» и т. д.
+  const titles = yearId ? (await db.query(
+    'SELECT type_id, count(DISTINCT title)::int AS n FROM monitoring.works WHERE academic_year_id = $1 GROUP BY type_id',
+    [yearId],
+  )).rows : [];
   return {
     status: 200,
-    body: { types: types.rows, years, year_id: yearId || null, groups, versions: versions.rows, scales: scales.rows },
+    body: {
+      types: types.rows, years, year_id: yearId || null, groups, versions: versions.rows, scales: scales.rows,
+      titles_by_type: Object.fromEntries(titles.map(r => [r.type_id, r.n])),
+    },
   };
 }
 
@@ -148,11 +156,12 @@ const intList = (value) => (Array.isArray(value) ? [...new Set(value.map(Number)
 async function check(db, data, { parallels }) {
   const title = String(data.title || '').trim().slice(0, 200);
   if (!title) return { error: bad('Укажите название работы') };
-  const type = (await db.query('SELECT id FROM monitoring.assessment_types WHERE id = $1 AND active', [Number(data.type_id)])).rows[0];
+  const type = (await db.query('SELECT id, graded FROM monitoring.assessment_types WHERE id = $1 AND active', [Number(data.type_id)])).rows[0];
   if (!type) return { error: bad('Выберите вид работы') };
   const version = (await db.query("SELECT v.id FROM monitoring.spec_versions v JOIN monitoring.specs s ON s.id = v.spec_id WHERE v.id = $1 AND v.status = 'approved' AND s.type_id = $2", [Number(data.spec_version_id), type.id])).rows[0];
   if (!version) return { error: bad('Выберите утверждённую спецификацию этого вида работы') };
-  const scale = (await db.query('SELECT id FROM monitoring.grade_scales WHERE id = $1', [Number(data.scale_id)])).rows[0];
+  // Вид работы без отметки (пробный ЕГЭ) хранится без шкалы, что бы ни пришло в запросе.
+  const scale = type.graded ? (await db.query('SELECT id FROM monitoring.grade_scales WHERE id = $1', [Number(data.scale_id)])).rows[0] : { id: null };
   if (!scale) return { error: bad('Выберите шкалу') };
   if (!STATUSES.includes(data.status)) return { error: bad('Выберите статус') };
   const yearId = Number(data.academic_year_id);

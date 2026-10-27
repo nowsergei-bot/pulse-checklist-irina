@@ -873,6 +873,7 @@ a.mon-btn {
   color: #3d342e;
 }
 .mon-sheet__task-title {
+  white-space: nowrap;
   font-size: 0.75rem;
   font-weight: 400;
   color: #8a8079;
@@ -1061,6 +1062,14 @@ a.mon-btn {
   border-top: 2px solid var(--mon-line);
   border-bottom: 0;
   background: #faf8f6;
+}
+.mon-sheet__pct .mon-sheet__state {
+  white-space: nowrap;
+}
+.mon-sheet__block-avg {
+  text-align: center !important;
+  font-weight: 600;
+  color: #3d342e;
 }
 .mon-sheet__marks {
   padding-left: 0.6rem !important;
@@ -1541,4 +1550,7 @@ a.mon-btn {
   font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
+}
+.mon-field__text {
+  padding: 0.55rem 0;
 }

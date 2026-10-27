@@ -14,7 +14,7 @@ type Preview = {
   frame: { id: number; name: string } | null; matched: boolean; diffs: string[]; suggested_frame_name: string;
 };
 
-export const LEVEL_NAMES: Record<string, string> = { basic: 'Базовый', advanced: 'Повышенный' };
+export const LEVEL_NAMES: Record<string, string> = { basic: 'Базовый', advanced: 'Повышенный', high: 'Высокий' };
 
 function formatDate(value: string | null) {
   if (!value) return '';

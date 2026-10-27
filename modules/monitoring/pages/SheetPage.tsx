@@ -6,17 +6,19 @@ import Dialog from './Dialog';
 import { GroupName, STATUS_NAMES, versionLabel } from './labels';
 
 type Part = { id: number; code: string; name: string; held_on: string | null };
-type Task = { id: number; part_id: number; sort: number; section: string; level: string; level_name: string | null; title: string; max_points: number; half?: boolean };
+type Task = { id: number; part_id: number; sort: number; section: string; section_label?: string; level: string; level_name: string | null; title: string; max_points: number; focus?: string | null; half?: boolean };
 type Student = {
-  id: number; full_name: string; result: Result; gentle: boolean;
+  id: number; full_name: string; result: Result; gentle?: boolean;
   scores: Record<string, number | null>; absent: Record<string, boolean>; foreign: Record<string, string>;
 };
 type Sheet = {
-  work: { id: number; title: string; parallel: number; status: 'draft' | 'open' | 'closed'; spec_title: string; version: number; max_points: number };
+  work: { id: number; title: string; parallel: number; status: 'draft' | 'open' | 'closed'; spec_title: string; version: number; max_points: number; graded?: boolean };
   group: { id: number; title: string; digital: boolean };
-  can_edit: boolean; reason: string; parts: Part[]; tasks: Task[]; scale: ScaleRow[]; gentle_scale: ScaleRow[]; gentle_changes_mark?: boolean;
+  can_edit: boolean; reason: string; parts: Part[]; tasks: Task[];
+  // У работы без отметки (пробный ЕГЭ) шкалы и щадящего режима нет.
+  scale?: ScaleRow[]; gentle_scale?: ScaleRow[]; gentle_changes_mark?: boolean;
   students: Student[]; left_students: Student[];
-  gentle: Gentle;
+  gentle?: Gentle;
 };
 type Gentle = {
   enabled: boolean; can_change: boolean; groups_on: number; groups_total: number;
@@ -52,12 +54,14 @@ function splitName(full: string) {
 }
 
 // Подряд идущие задания одного раздела: название раздела над их столбцами.
+// У пробного ЕГЭ сервер присылает section_label (раздел ФИПИ): грамматика и лексика одной шапкой.
 function bySection(list: Task[]) {
   const out: { section: string; tasks: Task[] }[] = [];
   for (const t of list) {
+    const label = t.section_label || t.section;
     const last = out[out.length - 1];
-    if (last && last.section === t.section) last.tasks.push(t);
-    else out.push({ section: t.section, tasks: [t] });
+    if (last && last.section === label) last.tasks.push(t);
+    else out.push({ section: label, tasks: [t] });
   }
   return out;
 }
@@ -243,7 +247,9 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   if (!sheet) return <div><BackLink base={base} /><p className="mon-note">Загружаем…</p></div>;
 
   const { work, parts, tasks, students } = sheet;
-  const gentle = sheet.gentle;
+  // Работа без отметки: нет столбца «Отметка», строки щадящего режима и счёта отметок внизу.
+  const graded = work.graded !== false;
+  const gentle: Gentle = sheet.gentle || { enabled: false, can_change: false, groups_on: 0, groups_total: 0, history: [] };
   const editable = sheet.can_edit;
   const scoreOf = (s: Student, t: Task) => {
     const p = pending.current[`${s.id}:t${t.id}`];
@@ -255,12 +261,12 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   };
   // Итог, процент и отметка по тому, что сейчас в полях, включая ещё не отправленное.
   const resultOf = (s: Student) => studentResult({
-    parts, tasks, maxPoints: work.max_points, scale: sheet.scale, gentleScale: sheet.gentle_scale,
-    gentleChangesMark: Boolean(sheet.gentle_changes_mark),
+    parts, tasks, maxPoints: work.max_points, scale: sheet.scale || [], gentleScale: sheet.gentle_scale || [],
+    gentleChangesMark: Boolean(sheet.gentle_changes_mark), graded,
     absentPartIds: new Set(parts.filter(p => absentOf(s, p)).map(p => p.id)),
     scoreOf: taskId => scoreOf(s, tasks.find(t => t.id === taskId) as Task),
     // Режим группы, где внесены баллы ученика (у ученика из двух групп может отличаться).
-    gentle: s.gentle,
+    gentle: Boolean(s.gentle),
   });
   const results = new Map(students.map(s => [s.id, resultOf(s)]));
   const left = sheet.left_students || [];
@@ -273,9 +279,12 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
   const avgPercent = done.length ? done.reduce((a, r) => a + r.percent, 0) / done.length : null;
   // Щадящие пороги для подсказок (когда режим меняет отметку).
   const gentleChanges = Boolean(sheet.gentle_changes_mark);
-  const gentleRule = [...sheet.gentle_scale].sort((a, b) => Number(b.min_percent) - Number(a.min_percent))
+  const gentleRule = [...(sheet.gentle_scale || [])].sort((a, b) => Number(b.min_percent) - Number(a.min_percent))
     .filter(x => Number(x.min_percent) > 0).map(x => `«${x.mark}» от ${x.min_percent}%`).join(', ');
   const partTasks = (p: Part) => tasks.filter(t => t.part_id === p.id);
+  // Среднее по блоку: только полные работы, как средний итог.
+  const doneStudents = students.filter(s => results.get(s.id)?.complete);
+  const blockAvg = (t: Task) => (doneStudents.length ? doneStudents.reduce((a, s) => a + (scoreOf(s, t) || 0), 0) / doneStudents.length : null);
   // Первое задание каждого раздела, кроме первого в части: тонкая линия между разделами.
   const sectionStart = new Set(parts.flatMap(p => bySection(partTasks(p)).slice(1).map(g => g.tasks[0].id)));
   // Кнопки щадящего режима и полный подзаголовок видит только data_admin (переключение доступно только ему).
@@ -357,13 +366,12 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
           ];
         })}
         <td className="mon-num mon-sheet__res-start mon-sheet__total">{empty || allAbsent ? '' : decimal(r.total)}</td>
-        <td className={`mon-num mon-sheet__pct${r.complete ? '' : ' is-wait'}`}>{wasAbsent || empty ? '' : r.percent}</td>
-        {/* Отметка плашкой; «щадящий», только если по щадящим порогам отметка выше обычной. Пока работа не полная, вместо отметки её состояние. */}
-        <td className="mon-sheet__mark">
-          {r.mark ? <span className={`mon-mark mon-mark--${MARKS.includes(r.mark) ? r.mark : 'other'}`} title={r.gentle_used ? `Отметка по щадящим порогам: ${gentleRule}` : r.state}>{r.mark}</span>
-            : <span className={`mon-sheet__state${wasAbsent ? ' is-absent' : ''}`} title={r.state}>{r.complete ? 'нет отметки' : wasAbsent ? (parts.length > 1 ? r.state : 'отсутствовал') : `не внесено: ${r.missing}`}</span>}
-          {r.gentle_used ? <span className="mon-sheet__pct-mode">щадящий</span> : null}
+        <td className={`mon-num mon-sheet__pct${r.complete ? '' : ' is-wait'}`} title={graded ? undefined : r.state}>
+          {graded ? (wasAbsent || empty ? '' : r.percent)
+            : wasAbsent ? <span className="mon-sheet__state is-absent">{parts.length > 1 ? r.state : 'отсутствовал'}</span>
+              : empty ? '' : r.complete ? r.percent : <span className="mon-sheet__state" title={r.state}>не внесено: {r.missing}</span>}
         </td>
+        {graded ? <MarkCell r={r} wasAbsent={wasAbsent} parts={parts.length} gentleRule={gentleRule} /> : null}
       </tr>
     );
   }
@@ -488,7 +496,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                     {parts.length === 1 ? work.title : p.name}{p.held_on ? ` · ${date(p.held_on)}` : ''}
                   </th>
                 ))}
-                <th colSpan={3} className="mon-sheet__part mon-sheet__res-start">Результат</th>
+                <th colSpan={graded ? 3 : 2} className="mon-sheet__part mon-sheet__res-start">Результат</th>
               </tr>
               <tr>
                 {parts.map(p => [
@@ -499,11 +507,11 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                 ])}
                 <th rowSpan={2} className="mon-num mon-sheet__res-start mon-sheet__res-head">Итого<span className="mon-sheet__max">из {work.max_points}</span></th>
                 <th rowSpan={2} className="mon-num mon-sheet__res-head" title="Процент: итог / максимум, округление до целого">%</th>
-                <th rowSpan={2} className="mon-sheet__mark-head mon-sheet__res-head">Отметка</th>
+                {graded ? <th rowSpan={2} className="mon-sheet__mark-head mon-sheet__res-head">Отметка</th> : null}
               </tr>
               <tr>
                 {parts.map(p => partTasks(p).map(t => (
-                  <th key={t.id} className={`mon-sheet__task${sectionStart.has(t.id) ? ' is-sec-start' : ''}`} title={t.title}>
+                  <th key={t.id} className={`mon-sheet__task${sectionStart.has(t.id) ? ' is-sec-start' : ''}`} title={t.focus && t.section_label ? `${t.title}: ${t.focus}` : t.title}>
                     <span className="mon-sheet__level">{t.level_name || t.level}</span>
                     {sameTitle(t) ? null : <span className="mon-sheet__task-title">{t.title}</span>}
                     <span className="mon-sheet__max">из {t.max_points}</span>
@@ -523,15 +531,28 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
                     <span className="mon-sheet__fio">Среднее по группе</span>
                     <span className="mon-sheet__patronymic">полных работ: {done.length}</span>
                   </td>
-                  <td colSpan={tasks.length + parts.length} className="mon-sheet__marks">
-                    <span className="mon-muted">Отметки:</span>
-                    {MARKS.map(m => (
-                      <span key={m} className="mon-sheet__mark-count"><span className={`mon-mark mon-mark--${m}`}>{m}</span>{done.filter(r => r.mark === m).length}</span>
-                    ))}
-                  </td>
+                  {graded ? (
+                    <td colSpan={tasks.length + parts.length} className="mon-sheet__marks">
+                      <span className="mon-muted">Отметки:</span>
+                      {MARKS.map(m => (
+                        <span key={m} className="mon-sheet__mark-count"><span className={`mon-mark mon-mark--${m}`}>{m}</span>{done.filter(r => r.mark === m).length}</span>
+                      ))}
+                    </td>
+                  ) : parts.map(p => [
+                    // Работа без отметки: среднее по каждому блоку (по полным работам), в подсказке процент от максимума блока.
+                    <td key={`a${p.id}`} className="mon-sheet__absent mon-sheet__part-start" />,
+                    ...partTasks(p).map(t => {
+                      const v = blockAvg(t);
+                      return (
+                        <td key={t.id} className={`mon-num mon-sheet__block-avg${sectionStart.has(t.id) ? ' is-sec-start' : ''}`} title={v === null ? undefined : `${t.title}: ${decimal((100 * v) / t.max_points)} % от максимума`}>
+                          {v === null ? '' : decimal(v)}
+                        </td>
+                      );
+                    }),
+                  ])}
                   <td className="mon-num mon-sheet__res-start mon-sheet__total">{avgTotal === null ? '' : decimal(avgTotal)}</td>
                   <td className="mon-num mon-sheet__pct">{avgPercent === null ? '' : decimal(avgPercent)}</td>
-                  <td />
+                  {graded ? <td /> : null}
                 </tr>
               </tfoot>
             ) : null}
@@ -540,6 +561,17 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
       )}
       {editable ? <p className="mon-note">Баллы сохраняются сами. Enter и Tab переводят к следующей клетке, Shift+Tab назад, стрелки вверх и вниз к соседнему ученику. Пустое поле: балл не внесён.</p> : null}
     </div>
+  );
+}
+
+// Отметка плашкой; «щадящий», только если по щадящим порогам отметка выше обычной. Пока работа не полная, вместо отметки её состояние.
+function MarkCell({ r, wasAbsent, parts, gentleRule }: { r: Result; wasAbsent: boolean; parts: number; gentleRule: string }) {
+  return (
+    <td className="mon-sheet__mark">
+      {r.mark ? <span className={`mon-mark mon-mark--${MARKS.includes(r.mark) ? r.mark : 'other'}`} title={r.gentle_used ? `Отметка по щадящим порогам: ${gentleRule}` : r.state}>{r.mark}</span>
+        : <span className={`mon-sheet__state${wasAbsent ? ' is-absent' : ''}`} title={r.state}>{r.complete ? 'нет отметки' : wasAbsent ? (parts > 1 ? r.state : 'отсутствовал') : `не внесено: ${r.missing}`}</span>}
+      {r.gentle_used ? <span className="mon-sheet__pct-mode">щадящий</span> : null}
+    </td>
   );
 }
 
