@@ -1554,3 +1554,67 @@ a.mon-btn {
 .mon-field__text {
   padding: 0.55rem 0;
 }
+
+/* Вкладка «Динамика»: входное и работа парой полос, разница в процентных пунктах. */
+.mon-prog--start { background: #b4c1ce; }
+.mon-prog--work { background: #50708f; color: #fff; }
+.mon-prog__chart {
+  display: grid;
+  gap: 0.55rem;
+}
+.mon-prog__row {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr) 8rem;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.98rem;
+}
+.mon-prog__row.is-parallel {
+  font-weight: 700;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px dashed var(--mon-line);
+}
+.mon-prog__pair {
+  display: grid;
+  gap: 2px;
+  background: #f4f5f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mon-prog__bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 1rem;
+  min-width: 1.8rem;
+  padding-right: 0.3rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+.mon-prog__bar b { font-weight: 700; }
+.mon-prog__diff {
+  display: inline-block;
+  min-width: 2.2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mon-prog__diff.is-up { color: #3f8f5f; }
+.mon-prog__diff.is-down { color: #c4473a; }
+.mon-prog__diff.is-same { color: var(--mon-muted); }
+.mon-prog__caption {
+  margin: 0.75rem 0 0;
+  color: var(--mon-muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+.mon-prog__table td.mon-num { white-space: nowrap; }
+.mon-prog__table tr.is-parallel td { font-weight: 700; }
+.mon-prog__map summary { cursor: pointer; }
+.mon-prog__spec {
+  margin: 1rem 0 0.4rem;
+  font-size: 1rem;
+}
+.mon-prog__ok { color: #3f8f5f; }
+.mon-prog__off { color: var(--mon-muted); font-style: italic; }
+.mon-prog__table td:first-child { white-space: nowrap; }

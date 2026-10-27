@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useApi } from './api';
 import AnalyticsPage from './AnalyticsPage';
 import CabinetDirectoryPage from './CabinetDirectoryPage';
+import ProgressPage from './ProgressPage';
 import RolesPage from './RolesPage';
 import RostersPage from './RostersPage';
 import SchemaPage from './SchemaPage';
@@ -13,7 +14,7 @@ import './monitoring.css';
 
 const BASE = '/cabinet/monitoring';
 
-type Me = { full_name?: string; roles: string[]; capabilities: { manage: boolean; seeAnalytics?: boolean } };
+type Me = { full_name?: string; roles: string[]; capabilities: { manage: boolean; seeAnalytics?: boolean; editOwnGroups?: boolean } };
 
 // Все /cabinet/monitoring/* обслуживаются здесь.
 export default function MonitoringPage() {
@@ -24,10 +25,13 @@ export default function MonitoringPage() {
   const manage = Boolean(me?.capabilities.manage);
   // Заведующая кафедрой: вкладка «Аналитика» рядом с «Работами», только просмотр.
   const seeAnalytics = Boolean(me?.capabilities.seeAnalytics);
+  // «Динамика»: сравнение с входным. Заведующая и data_admin видят все группы, учитель свои.
+  const seeProgress = seeAnalytics || Boolean(me?.capabilities.editOwnGroups);
   const message = (location.state as { message?: string } | null)?.message;
   const tabs: { path: string; label: string }[] = [{ path: '/', label: 'Работы' }];
   if (seeAnalytics && !manage) tabs.push({ path: '/analytics', label: 'Аналитика' });
-  if (manage) tabs.push({ path: '/specs', label: 'Спецификации' }, { path: '/rosters', label: 'Составы групп' }, { path: '/roles', label: 'Роли' }, { path: '/analytics', label: 'Аналитика' }, { path: '/directory', label: 'Кабинеты' });
+  if (seeProgress && !manage) tabs.push({ path: '/progress', label: 'Динамика' });
+  if (manage) tabs.push({ path: '/specs', label: 'Спецификации' }, { path: '/rosters', label: 'Составы групп' }, { path: '/roles', label: 'Роли' }, { path: '/analytics', label: 'Аналитика' }, { path: '/progress', label: 'Динамика' }, { path: '/directory', label: 'Кабинеты' });
   const workMatch = sub.match(/^\/works\/(\d+)$/);
   const sheetMatch = sub.match(/^\/works\/(\d+)\/groups\/(\d+)$/);
   const current = sub.startsWith('/works') ? '/' : sub;
@@ -36,6 +40,7 @@ export default function MonitoringPage() {
   if (error) content = <p className="mon-err" role="alert">{error}</p>;
   else if (!me) content = <p className="mon-note">Проверяем доступ…</p>;
   else if (sub === '/analytics' && seeAnalytics) content = <AnalyticsPage manage={manage} />;
+  else if (sub === '/progress' && seeProgress) content = <ProgressPage manage={manage} />;
   else if (sub === '/directory' && manage) content = <CabinetDirectoryPage />;
   else if (sub === '/roles' && manage) content = <RolesPage />;
   else if (sub === '/rosters' && manage) content = <RostersPage />;

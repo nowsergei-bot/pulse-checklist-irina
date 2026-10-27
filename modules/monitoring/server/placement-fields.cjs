@@ -49,13 +49,10 @@ async function optionalRows(db, sql) {
   }
 }
 
-async function placementFields(db) {
-  const all = columnMap(await catalogColumns(db));
+// Спецификации входного из старого раздела: Map spec_id -> { spec_id, source, grade, total_max, fields, approval }.
+// Сначала загруженные (неархивные), затем каталог; по spec_id берётся первая найденная.
+async function loadSpecs(db, all, notes = []) {
   const has = (t, c) => (all.get(t) || []).includes(c);
-  const year = await currentYear(db);
-  const notes = [];
-
-  // Спецификации: сначала загруженные (неархивные), затем каталог; по spec_id берётся первая найденная.
   const specs = new Map();
   const addSpec = (spec, source, extra = {}) => {
     const id = text(spec.id ?? spec.spec_id ?? extra.spec_id);
@@ -80,12 +77,20 @@ async function placementFields(db) {
     if (rows === null) notes.push('placement_spec_catalog не прочитано');
     for (const r of rows || []) for (const s of findSpecs(r.catalog)) addSpec(s, 'каталог');
   } else notes.push('нет placement_spec_catalog.catalog');
-
   // Утверждение спецификации в старом разделе.
   if (has('placement_approvals', 'spec_id') && has('placement_approvals', 'status')) {
     const rows = await optionalRows(db, 'SELECT spec_id::text AS spec_id, status::text AS status FROM pulse_read.placement_approvals');
     for (const r of rows || []) if (specs.has(r.spec_id)) specs.get(r.spec_id).approval = r.status;
   }
+  return specs;
+}
+
+async function placementFields(db) {
+  const all = columnMap(await catalogColumns(db));
+  const has = (t, c) => (all.get(t) || []).includes(c);
+  const year = await currentYear(db);
+  const notes = [];
+  const specs = await loadSpecs(db, all, notes);
 
   // Какие спецификации и поля использованы в текущем году: параллели, ученики, заполненность полей.
   const used = new Map();
@@ -140,4 +145,4 @@ async function placementFields(db) {
   };
 }
 
-module.exports = { placementFields, findSpecs, specFields };
+module.exports = { placementFields, loadSpecs, findSpecs, specFields };

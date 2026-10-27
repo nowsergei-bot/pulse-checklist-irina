@@ -12,6 +12,7 @@ const rosters = require('./rosters.cjs');
 const rosterImport = require('./roster-import.cjs');
 const groupTeachers = require('./group-teachers.cjs');
 const { analytics, riskList } = require('./analytics.cjs');
+const progress = require('./progress.cjs');
 
 function parseBody(body) {
   if (body === null || body === undefined || body === '') return {};
@@ -130,6 +131,23 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (!caps.seeAnalytics) return forbidden;
     if (method !== 'GET') return { status: 405, body: { error: 'method_not_allowed' } };
     return path === '/analytics' ? analytics(db, query, caps) : riskList(db, query);
+  }
+  // /progress/compare: сравнение с входным. Заведующая кафедрой и data_admin видят все группы, учитель только свои
+  // (отбор групп в progress.cjs). /progress/placement-map: сопоставление полей входного, только data_admin.
+  if (path === '/progress/compare') {
+    if (method !== 'GET') return { status: 405, body: { error: 'method_not_allowed' } };
+    if (!caps.seeAnalytics && !caps.editOwnGroups) return forbidden;
+    return progress.compare(db, userId, caps, query);
+  }
+  if (path === '/progress/placement-map') {
+    if (!caps.manage) return forbidden;
+    if (method === 'GET') return progress.getMap(db);
+    if (method === 'POST') {
+      const data = parseBody(body);
+      if (!data) return { status: 400, body: { error: 'bad_request' } };
+      return progress.setMap(db, userId, data);
+    }
+    return { status: 405, body: { error: 'method_not_allowed' } };
   }
   if (path === '/schema' || path.startsWith('/schema/placement') || path.startsWith('/roles')) {
     if (!caps.manage) return forbidden;
