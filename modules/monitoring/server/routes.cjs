@@ -3,6 +3,7 @@
 
 const { loadRoles, capabilities, visibleRoles } = require('./lib/access.cjs');
 const { schema, placementSchema } = require('./schema.cjs');
+const { placementFields } = require('./placement-fields.cjs');
 const roles = require('./roles.cjs');
 const specs = require('./specs.cjs');
 const works = require('./works.cjs');
@@ -130,10 +131,11 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (method !== 'GET') return { status: 405, body: { error: 'method_not_allowed' } };
     return path === '/analytics' ? analytics(db, query, caps) : riskList(db, query);
   }
-  if (path === '/schema' || path === '/schema/placement' || path.startsWith('/roles')) {
+  if (path === '/schema' || path.startsWith('/schema/placement') || path.startsWith('/roles')) {
     if (!caps.manage) return forbidden;
     if (path === '/schema' && method === 'GET') return schema(db, user);
     if (path === '/schema/placement' && method === 'GET') return placementSchema(db);
+    if (path === '/schema/placement-fields' && method === 'GET') return placementFields(db);
     if (path === '/roles' && method === 'GET') return { status: 200, body: { users: await roles.listUsers(db, query && query.q), names: roles.ROLE_NAMES } };
     if (path === '/roles' && method === 'POST') {
       const data = parseBody(body);

@@ -209,6 +209,72 @@ function PlacementSection() {
   );
 }
 
+type PlacementFieldRow = {
+  field_id: string | null; section: string | null; section_code: string | null; excel_label: string | null;
+  max: number | null; max_approved: boolean; proposed: boolean; suggested: string | null;
+  filled: number; max_seen: number | null; not_in_spec?: boolean;
+};
+type PlacementFieldsData = {
+  current_year: string | null;
+  sections: { code: string; name: string }[];
+  specs_found: number;
+  notes: string[];
+  specs: { spec_id: string; source: string; grade: number | null; approval: string | null; parallels: number[]; students: number; total_max: number | null; fields: PlacementFieldRow[] }[];
+};
+
+// Поля входного тестирования по параллелям: название, максимум и предложенный общий раздел сравнения.
+// Только чтение: сопоставление здесь не сохраняется.
+function PlacementFieldsSection() {
+  const { data, error } = useApi<PlacementFieldsData>('/schema/placement-fields');
+  const sectionName = (code: string | null) => (code ? data?.sections.find(s => s.code === code)?.name || code : 'не сопоставлено');
+  return (
+    <>
+      <h3>Поля входного тестирования по параллелям {data?.current_year || ''}</h3>
+      {error ? <p className="mon-err" role="alert">Не удалось загрузить: {error}</p> : !data ? <p>Загружаем…</p> : (
+        <>
+          <p>
+            Названия и максимумы из спецификаций старого раздела (найдено спецификаций: {data.specs_found}), заполненность по баллам текущего года.
+            Последний столбец: предложение, с каким общим разделом сравнивать поле. Поле «не сопоставлено» в итог сравнения не войдёт.
+          </p>
+          {data.notes.length ? <p className="mon-err">{data.notes.join('; ')}</p> : null}
+          {data.specs.map(sp => (
+            <div key={sp.spec_id} style={{ marginBottom: 20 }}>
+              <h4 style={{ margin: '12px 0 4px' }}>
+                {sp.parallels.length ? `${sp.parallels.join(', ')} класс` : 'параллель не найдена'} · spec_id: {sp.spec_id}
+              </h4>
+              <p style={{ margin: '0 0 6px' }}>
+                Спецификация: {sp.source}{sp.approval ? ` (${sp.approval})` : ''} · учеников с баллами: {sp.students} · максимум: {sp.total_max ?? 'не указан'}
+              </p>
+              <table style={{ borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={cell}>Поле</th><th style={cell}>Раздел</th><th style={cell}>Подпись столбца</th>
+                    <th style={num}>Макс.</th><th style={num}>Заполнено</th><th style={num}>Наиб. балл</th><th style={cell}>Сравнивать как</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sp.fields.map((f, i) => (
+                    <tr key={`${f.field_id}-${i}`}>
+                      <td style={cell}>{f.field_id}</td>
+                      <td style={cell}>{f.not_in_spec ? 'нет в спецификации' : [f.section, f.section_code && f.section_code !== f.section ? `(${f.section_code})` : ''].filter(Boolean).join(' ')}</td>
+                      <td style={cell}>{f.excel_label ?? ''}</td>
+                      <td style={num}>{f.max ?? ''}{f.max !== null && f.proposed ? ' (предложен)' : ''}</td>
+                      <td style={num}>{f.filled}</td>
+                      <td style={num}>{f.max_seen ?? ''}</td>
+                      <td style={cell}>{sectionName(f.suggested)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+          {!data.specs.length && !data.notes.length ? <p>Баллов входного тестирования за текущий год нет.</p> : null}
+        </>
+      )}
+    </>
+  );
+}
+
 function SchemaTables({ data }: { data: SchemaData }) {
   return (
     <section>
@@ -259,6 +325,7 @@ function SchemaTables({ data }: { data: SchemaData }) {
             </table>
           ) : <p>В pulse_read нет представлений placement_* и section_scores</p>}
           {data.placement_breakdown ? <PlacementByGroups data={data.placement_breakdown} year={data.result_counts.current_year} /> : null}
+          <PlacementFieldsSection />
           <PlacementSection />
         </>
       ) : null}
