@@ -139,6 +139,21 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (!caps.seeAnalytics && !caps.editOwnGroups) return forbidden;
     return progress.compare(db, userId, caps, query);
   }
+  if (path === '/progress/dynamics') {
+    if (method !== 'GET') return { status: 405, body: { error: 'method_not_allowed' } };
+    if (!caps.seeAnalytics && !caps.editOwnGroups) return forbidden;
+    return progress.dynamics(db, userId, caps, query);
+  }
+  if (path === '/progress/settings') {
+    if (!caps.manage) return forbidden;
+    if (method === 'GET') return progress.getSettings(db);
+    if (method === 'POST') {
+      const data = parseBody(body);
+      if (!data) return { status: 400, body: { error: 'bad_request' } };
+      return progress.setSettings(db, userId, data);
+    }
+    return { status: 405, body: { error: 'method_not_allowed' } };
+  }
   if (path === '/progress/placement-map') {
     if (!caps.manage) return forbidden;
     if (method === 'GET') return progress.getMap(db);

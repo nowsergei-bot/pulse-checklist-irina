@@ -1618,3 +1618,24 @@ a.mon-btn {
 .mon-prog__ok { color: #3f8f5f; }
 .mon-prog__off { color: var(--mon-muted); font-style: italic; }
 .mon-prog__table td:first-child { white-space: nowrap; }
+.mon-prog--up { background: #3f8f5f; color: #fff; }
+.mon-prog--same { background: #c9ced3; color: var(--mon-ink); }
+.mon-prog--down { background: #c4473a; color: #fff; }
+.mon-prog__line-label { font-size: 13px; font-weight: 700; }
+.mon-prog__heat--high { background: rgba(63, 143, 95, 0.16); }
+.mon-prog__heat--mid { background: rgba(224, 169, 59, 0.16); }
+.mon-prog__heat--low { background: rgba(196, 71, 58, 0.14); }
+.mon-prog__arrow { font-size: 0.75rem; margin-left: 0.15rem; }
+.mon-prog__arrow.is-up { color: #3f8f5f; }
+.mon-prog__arrow.is-down { color: #c4473a; }
+.mon-prog__arrow.is-same { color: #8a8f94; }
+.mon-prog__students {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.mon-prog__pick { cursor: pointer; }
+.mon-prog__pick:hover td { background: rgba(80, 112, 143, 0.06); }
+.mon-prog__pick.is-picked td { background: rgba(80, 112, 143, 0.12); }
+.mon-prog__num { width: 6rem; }

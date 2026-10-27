@@ -304,4 +304,198 @@ async function setMap(db, userId, data) {
   return { status: 200, body: { ok: true } };
 }
 
-module.exports = { CAPTION, SECTION_CODES, placementMap, placementResults, workSeries, workResults, visibleGroups, loadAll, compareRows, compare, getMap, setMap, pick, mean, round1 };
+
+// ---------- Динамика: от входного через модули к пробному ЕГЭ ----------
+
+const DROP_TO_START = 10;
+const BANDS = Object.freeze([
+  { code: 'low', name: 'меньше 50 %', test: v => v < 50 },
+  { code: 'mid', name: '50-74 %', test: v => v >= 50 && v < 75 },
+  { code: 'high', name: '75 % и выше', test: v => v >= 75 },
+]);
+const ALL_SECTIONS = [...SECTION_CODES, 'total'];
+
+async function getThreshold(db) {
+  const r = await db.query('SELECT threshold FROM monitoring.progress_settings WHERE id');
+  return r.rows[0] ? Number(r.rows[0].threshold) : 5;
+}
+
+// Изменение к старту: рост, без изменений, снижение по порогу (в процентных пунктах, включительно).
+function trend(diff, threshold) {
+  if (diff === null || diff === undefined) return null;
+  if (diff >= threshold) return 'up';
+  if (diff <= -threshold) return 'down';
+  return 'same';
+}
+
+// Риск по динамике (итог): падение к старту на DROP_TO_START пунктов и больше; два снижения подряд
+// (каждое не меньше порога) между соседними работами с результатом, считая входное.
+function dynamicsRisk(values, threshold) {
+  const list = values.filter(v => v !== null);
+  const reasons = [];
+  if (list.length >= 2 && list[list.length - 1] - list[0] <= -DROP_TO_START && values[0] !== null) {
+    reasons.push({ code: 'drop_to_start', text: `ниже входного на ${list[0] - list[list.length - 1]} пунктов` });
+  }
+  let run = 0;
+  let two = false;
+  for (let i = 1; i < list.length; i += 1) {
+    run = list[i] - list[i - 1] <= -threshold ? run + 1 : 0;
+    if (run >= 2) two = true;
+  }
+  if (two) reasons.push({ code: 'two_drops', text: 'два снижения подряд' });
+  return reasons;
+}
+
+function studentValues(data, points, id) {
+  const out = {};
+  for (const p of points) {
+    const res = p.key === 'placement' ? data.placement.get(id) : (data.series.find(s => s.key === p.key).results.get(id) || null);
+    const v = {};
+    for (const code of ALL_SECTIONS) v[code] = pick(res || null, code);
+    out[p.key] = v;
+  }
+  return out;
+}
+
+// Строка группы или параллели: средние по точкам и разделам, прогресс к выбранной работе, стартовые группы.
+function dynamicsRow(kind, title, ids, values, points, workKey, threshold, extra = {}) {
+  const lines = {};
+  for (const p of points) {
+    lines[p.key] = {};
+    for (const code of ALL_SECTIONS) {
+      const list = ids.map(id => values.get(id)[p.key][code]).filter(v => v !== null);
+      lines[p.key][code] = list.length ? { avg: mean(list), n: list.length } : null;
+    }
+  }
+  const progress = {};
+  const bands = {};
+  for (const code of ALL_SECTIONS) {
+    const pr = { up: 0, same: 0, down: 0, no_data: 0, students: ids.length };
+    const bd = BANDS.map(b => ({ code: b.code, name: b.name, n: 0, up: 0, same: 0, down: 0, gains: [] }));
+    for (const id of ids) {
+      const start = values.get(id).placement[code];
+      const now = workKey ? values.get(id)[workKey][code] : null;
+      const t = start === null || now === null ? null : trend(now - start, threshold);
+      if (!t) { pr.no_data += 1; continue; }
+      pr[t] += 1;
+      const b = bd[BANDS.findIndex(x => x.test(start))];
+      b.n += 1;
+      b[t] += 1;
+      b.gains.push(now - start);
+    }
+    progress[code] = pr;
+    bands[code] = bd.map(({ gains, ...b }) => ({ ...b, avg_gain: mean(gains) }));
+  }
+  return { kind, row: title, ...extra, students: ids.length, lines, progress, bands };
+}
+
+// Пробный ЕГЭ: средний первичный балл из 62 и %, процент каждого блока, базовый и высокий уровень.
+function egeRow(kind, title, ids, series, parallel) {
+  const tasks = series.tasks.get(parallel) || [];
+  const done = ids.map(id => series.results.get(id)).filter(r => r && r.parallel === parallel);
+  const sumPct = (list) => {
+    const max = list.reduce((a, t) => a + t.max_points, 0);
+    if (!done.length || !max) return null;
+    return mean(done.map(r => percentOf(list.reduce((a, t) => a + Number(r.scores.get(t.id) || 0), 0), max)));
+  };
+  return {
+    kind, row: title, students: ids.length, complete: done.length,
+    avg_total: mean(done.map(r => r.total)), avg_percent: mean(done.map(r => r.percent)),
+    blocks: tasks.map(t => sumPct([t])),
+    basic: sumPct(tasks.filter(t => t.level === 'basic')),
+    high: sumPct(tasks.filter(t => t.level !== 'basic')),
+  };
+}
+
+// GET /progress/dynamics?parallel=&work=&group=: всё для вкладки «Динамика» по одной параллели.
+// Учитель получает только свои группы (и средние по параллели), группа из запроса проверяется по видимым.
+async function dynamics(db, userId, caps, query) {
+  const data = await loadAll(db, userId, caps);
+  const threshold = await getThreshold(db);
+  const sections = [{ code: 'total', name: 'Итог' }, ...COMMON_SECTIONS];
+  const empty = { year: data ? data.year.label : null, sections, threshold, parallels: [], parallel: null, points: [], work: null, rows: [], groups: [], group: null, students: [], risk: null, ege: null, caption: CAPTION };
+  if (!data) return { status: 200, headers: { 'Cache-Control': 'no-store' }, body: empty };
+  const parallels = [...new Set(data.groups.map(g => g.parallel))].filter(p => p !== null);
+  const wantedP = Number(query && query.parallel);
+  const withWorks = parallels.filter(p => data.series.some(s => s.works.some(w => Number(w.parallel) === p)));
+  const parallel = parallels.includes(wantedP) ? wantedP : (withWorks[withWorks.length - 1] ?? parallels[0] ?? null);
+  if (parallel === null) return { status: 200, headers: { 'Cache-Control': 'no-store' }, body: { ...empty, parallels } };
+  const points = [{ key: 'placement', title: 'Входное', type_code: 'placement', held_on: null, parallel }];
+  for (const s of data.series) {
+    const w = s.works.find(x => Number(x.parallel) === parallel);
+    if (w) points.push({ key: s.key, title: s.title, type_code: s.type_code, held_on: w.held_on || s.held_on, parallel });
+  }
+  const works = points.filter(p => p.key !== 'placement');
+  const wantedW = String((query && query.work) || '');
+  const work = works.find(p => p.key === wantedW) || works[works.length - 1] || null;
+  const groups = data.groups.filter(g => g.parallel === parallel);
+  const allIds = [...(data.parallelIds.get(parallel) || [])];
+  const values = new Map(allIds.map(id => [id, studentValues(data, points, id)]));
+  for (const g of groups) for (const m of data.members.get(g.id)) if (!values.has(m.id)) values.set(m.id, studentValues(data, points, m.id));
+  const rows = groups.map(g => dynamicsRow('group', g.title, data.members.get(g.id).map(m => m.id), values, points, work && work.key, threshold, { group_id: g.id, digital: g.digital }));
+  rows.push(dynamicsRow('parallel', `${parallel} параллель`, allIds, values, points, work && work.key, threshold));
+  const wantedG = Number(query && query.group);
+  const group = groups.find(g => g.id === wantedG) || groups[0] || null;
+  const students = group ? data.members.get(group.id).map(m => {
+    const v = values.get(m.id);
+    const start = v.placement.total;
+    const last = [...works].reverse().map(p => v[p.key].total).find(x => x !== null);
+    return { id: m.id, full_name: m.full_name, values: v, to_start: start === null || last === undefined ? null : last - start };
+  }) : [];
+  let risk = null;
+  if (caps.seeAnalytics) {
+    risk = [];
+    for (const g of groups) {
+      for (const m of data.members.get(g.id)) {
+        const v = values.get(m.id);
+        const reasons = dynamicsRisk(points.map(p => v[p.key].total), threshold);
+        if (reasons.length) risk.push({ group: g.title, full_name: m.full_name, values: points.map(p => v[p.key].total), reasons });
+      }
+    }
+  }
+  let ege = null;
+  const egeSeries = work && work.type_code === 'ege_mock' ? data.series.find(s => s.key === work.key) : null;
+  if (egeSeries) {
+    const tasks = egeSeries.tasks.get(parallel) || [];
+    ege = {
+      work: work.key, max_points: tasks.reduce((a, t) => a + t.max_points, 0),
+      blocks: tasks.map(t => ({ title: t.title, section: commonName(t.section), level: t.level, level_name: t.level === 'basic' ? 'Базовый' : 'Повышенный', max: t.max_points })),
+      rows: [...groups.map(g => egeRow('group', g.title, data.members.get(g.id).map(m => m.id), egeSeries, parallel)), egeRow('parallel', `${parallel} параллель`, allIds, egeSeries, parallel)],
+    };
+  }
+  return {
+    status: 200,
+    headers: { 'Cache-Control': 'no-store' },
+    body: {
+      year: data.year.label, sections, threshold, drop_to_start: DROP_TO_START, bands: BANDS.map(b => ({ code: b.code, name: b.name })),
+      parallels, parallel, points: points.map(({ parallel: _p, ...p }) => p), work: work ? work.key : null,
+      rows, groups: groups.map(g => ({ id: g.id, title: g.title, digital: g.digital })), group: group ? group.id : null,
+      students, risk, ege, caption: CAPTION,
+    },
+  };
+}
+
+const commonName = (section) => {
+  const code = MODULE_SECTION_MAP[section];
+  const found = COMMON_SECTIONS.find(s => s.code === code);
+  return found ? found.name : section;
+};
+
+// GET/POST /progress/settings (data_admin): порог роста и снижения.
+async function getSettings(db) {
+  const r = await db.query('SELECT threshold, updated_by_name, updated_at FROM monitoring.progress_settings WHERE id');
+  return { status: 200, headers: { 'Cache-Control': 'no-store' }, body: r.rows[0] || { threshold: 5 } };
+}
+async function setSettings(db, userId, data) {
+  const t = data && data.threshold;
+  if (!Number.isInteger(t) || t < 1 || t > 30) return { status: 400, body: { error: 'bad_request', message: 'Порог: целое число от 1 до 30' } };
+  const named = await db.query('SELECT full_name FROM pulse_read.users WHERE id = $1 AND full_name IS NOT NULL LIMIT 1', [userId]);
+  await db.query(
+    `INSERT INTO monitoring.progress_settings (id, threshold, updated_by, updated_by_name, updated_at) VALUES (true, $1, $2, $3, now())
+     ON CONFLICT (id) DO UPDATE SET threshold = EXCLUDED.threshold, updated_by = EXCLUDED.updated_by, updated_by_name = EXCLUDED.updated_by_name, updated_at = now()`,
+    [t, userId, named.rows[0] ? named.rows[0].full_name : ''],
+  );
+  return getSettings(db);
+}
+
+module.exports = { dynamics, getSettings, setSettings, trend, dynamicsRisk,  CAPTION, SECTION_CODES, placementMap, placementResults, workSeries, workResults, visibleGroups, loadAll, compareRows, compare, getMap, setMap, pick, mean, round1 };
