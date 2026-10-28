@@ -12,7 +12,7 @@ const FILTERS: { role: string; label: string }[] = [
   { role: '', label: 'Все' },
   { role: 'teacher', label: 'Учителя' },
   { role: 'department_head', label: 'Заведующая' },
-  { role: 'deputy', label: 'Завуч' },
+  { role: 'deputy', label: 'Заместитель директора' },
   { role: 'data_admin', label: 'Администраторы данных' },
 ];
 

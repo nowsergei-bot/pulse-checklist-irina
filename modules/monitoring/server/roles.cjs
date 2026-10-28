@@ -6,7 +6,7 @@ const { TEACHER_GROUPS_SQL } = require('./lib/groups.cjs');
 const ROLE_NAMES = {
   teacher: 'Учитель',
   department_head: 'Заведующая кафедрой',
-  deputy: 'Завуч',
+  deputy: 'Заместитель директора',
   data_admin: 'Администратор данных',
 };
 
