@@ -30,7 +30,7 @@ test('сравнение с входным', { skip: !url && 'нет MONITORING_
     INSERT INTO pulse_read.academic_years VALUES (1, '2026/2027', true, '2026-09-01');
     INSERT INTO pulse_read.groups VALUES (1, '11 А', '11A', 'main', 11, 1, NULL), (2, '11 Ц', '11D', 'digital', 11, 1, NULL), (3, '10 А', '10A', 'main', 10, 1, NULL);
     INSERT INTO pulse_read.english_teachers VALUES (1, 101, 'Учитель 1', NULL), (2, 102, 'Учитель 2', NULL);
-    INSERT INTO pulse_read.users VALUES (1, 'Администратор'), (2, 'Заведующая'), (101, 'Учитель 1'), (102, 'Учитель 2');
+    INSERT INTO pulse_read.users VALUES (1, 'Администратор'), (2, 'Заведующая'), (3, 'Заместитель'), (101, 'Учитель 1'), (102, 'Учитель 2');
     INSERT INTO pulse_read.group_teachers VALUES (1, 1), (2, 2), (1, 3);
     INSERT INTO pulse_read.students SELECT i, 'Ученик ' || i FROM generate_series(1, 6) i;
     INSERT INTO pulse_read.group_memberships VALUES (1, 1, 1), (2, 2, 1), (3, 3, 1), (4, 4, 2), (5, 5, 3), (6, 6, 3);
@@ -61,7 +61,7 @@ test('сравнение с входным', { skip: !url && 'нет MONITORING_
   for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
     await db.query(fs.readFileSync(path.join(dir, file), 'utf8'));
   }
-  await db.query("INSERT INTO monitoring.user_roles (user_id, role) VALUES (1, 'data_admin'), (2, 'department_head'), (101, 'teacher'), (102, 'teacher') ON CONFLICT DO NOTHING");
+  await db.query("INSERT INTO monitoring.user_roles (user_id, role) VALUES (1, 'data_admin'), (2, 'department_head'), (3, 'deputy'), (101, 'teacher'), (102, 'teacher') ON CONFLICT DO NOTHING");
   const { createWorks } = require('../server/works.cjs');
   const route = require('../server/routes.cjs');
   const one = async (sql, params) => (await db.query(sql, params)).rows[0];
@@ -120,7 +120,7 @@ test('сравнение с входным', { skip: !url && 'нет MONITORING_
     assert.ok(r.body.placement_fields, 'поля входного видит data_admin');
   });
 
-  await t.test('учитель видит только свои группы, заведующая все', async () => {
+  await t.test('учитель видит только свои группы, заведующая и заместитель директора все', async () => {
     const own = await call(102, '/progress/compare', 'GET', { work: 'Пробный ЕГЭ 1' });
     assert.equal(own.status, 200);
     assert.deepEqual(own.body.rows.map(x => x.row), ['11 Ц', '11 параллель']);
@@ -130,6 +130,8 @@ test('сравнение с входным', { skip: !url && 'нет MONITORING_
     const head = await call(2, '/progress/compare');
     assert.equal(head.body.rows.length, 5);
     assert.equal(head.body.placement_fields, undefined);
+    assert.deepEqual((await call(3, '/progress/compare')).body, head.body);
+    assert.equal((await call(3, '/progress/placement-map', 'POST', {}, { spec_id: 'p11', field_id: 'r1', section: 'none' })).status, 403, 'заместитель только смотрит');
     assert.equal((await call(999, '/progress/compare')).status, 403, 'без роли модуля нет доступа');
     assert.equal((await call(1, '/progress/compare', 'POST')).status, 405);
   });

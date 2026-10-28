@@ -23,9 +23,9 @@ export default function MonitoringPage() {
   const { data: me, error } = useApi<Me>('/me');
 
   const manage = Boolean(me?.capabilities.manage);
-  // Заведующая кафедрой: вкладка «Аналитика» рядом с «Работами», только просмотр.
+  // Заведующая кафедрой и заместитель директора: вкладка «Аналитика» рядом с «Работами», только просмотр.
   const seeAnalytics = Boolean(me?.capabilities.seeAnalytics);
-  // «Динамика»: сравнение с входным. Заведующая и data_admin видят все группы, учитель свои.
+  // «Динамика»: сравнение с входным. Заведующая, заместитель директора и data_admin видят все группы, учитель свои.
   const seeProgress = seeAnalytics || Boolean(me?.capabilities.editOwnGroups);
   const message = (location.state as { message?: string } | null)?.message;
   const tabs: { path: string; label: string }[] = [{ path: '/', label: 'Работы' }];

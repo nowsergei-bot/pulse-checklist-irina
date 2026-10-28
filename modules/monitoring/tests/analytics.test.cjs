@@ -97,10 +97,10 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
 
   const call = (id, q = {}, p = '/analytics') => route({ path: p, method: 'GET', query: q, body: null, user: { id }, db });
 
-  await t.test('аналитику и зону риска получают только data_admin и заведующая кафедрой, проверка на сервере', async () => {
+  await t.test('аналитику и зону риска получают data_admin, заведующая кафедрой и заместитель директора, проверка на сервере', async () => {
     for (const p of ['/analytics', '/analytics/risk']) {
       assert.equal((await call(101, {}, p)).status, 403, `учитель ${p}`);
-      assert.equal((await call(105, {}, p)).status, 403, `завуч ${p}`);
+      assert.equal((await call(105, {}, p)).status, 200, `заместитель директора ${p}`);
       assert.equal((await call(999, {}, p)).status, 403, `без роли ${p}`);
       assert.equal((await call(104, {}, p)).status, 200, `заведующая ${p}`);
       assert.equal((await call(100, {}, p)).status, 200, `data_admin ${p}`);
@@ -115,6 +115,8 @@ test('аналитика для data_admin', { skip: !url && 'нет MONITORING_
     assert.ok(r.module.rows.every(x => x.rule === undefined && x.gentle === undefined));
     assert.ok(r.module.rows.find(x => x.row === '7 AA').risk.at_risk);
     assert.doesNotMatch(JSON.stringify(r), /Ученик|Учитель|Администратор|Заведующий|@/);
+    // Заместитель директора видит то же, что заведующая кафедрой.
+    assert.deepEqual((await call(105)).body, r);
   });
 
   let body;

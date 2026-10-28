@@ -12,7 +12,7 @@ test('права складываются', () => {
 
 test('завуч только смотрит', () => {
   const c = capabilities(new Set(['deputy']));
-  assert.deepEqual([c.editOwnGroups, c.editAnyGroup, c.editClosed, c.seeHistory, c.manage], [false, false, false, false, false]);
+  assert.deepEqual([c.editOwnGroups, c.editAnyGroup, c.editClosed, c.seeHistory, c.manage, c.switchGentle], [false, false, false, false, false, false]);
 });
 
 test('заведующий исправляет любую группу и закрытую работу', () => {
@@ -35,10 +35,11 @@ test('щадящий режим переключает только data_admin, 
   assert.equal(capabilities(new Set(['department_head']), ['data_admin', 'department_head']).switchGentle, true);
 });
 
-test('вкладку «Аналитика» видят только заведующая кафедрой и data_admin', () => {
+test('вкладку «Аналитика» видят заведующая кафедрой, заместитель директора и data_admin', () => {
   assert.equal(capabilities(new Set(['data_admin'])).seeAnalytics, true);
   assert.equal(capabilities(new Set(['department_head'])).seeAnalytics, true);
-  for (const role of ['teacher', 'deputy']) assert.equal(capabilities(new Set([role])).seeAnalytics, false);
-  assert.equal(capabilities(new Set(['teacher', 'deputy'])).seeAnalytics, false);
+  assert.equal(capabilities(new Set(['deputy'])).seeAnalytics, true);
+  assert.equal(capabilities(new Set(['teacher'])).seeAnalytics, false);
+  assert.equal(capabilities(new Set(['teacher', 'deputy'])).seeAnalytics, true);
   assert.equal(capabilities(new Set()).seeAnalytics, false);
 });

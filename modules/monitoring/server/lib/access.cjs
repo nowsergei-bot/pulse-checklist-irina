@@ -22,8 +22,8 @@ function capabilities(roles, gentleSwitchRoles = GENTLE_SWITCH_ROLES) {
     editOwnGroups: has('teacher'),
     seeHistory: has('department_head') || has('data_admin'),
     manage: has('data_admin'),
-    // Вкладка «Аналитика»: графики и зона риска. Только просмотр; учителям и заместителям директора недоступна.
-    seeAnalytics: has('department_head') || has('data_admin'),
+    // Вкладки «Аналитика» и «Динамика» по всем группам: только просмотр; учителям недоступны.
+    seeAnalytics: has('department_head') || has('deputy') || has('data_admin'),
     switchGentle: gentleSwitchRoles.some(has),
   };
 }
