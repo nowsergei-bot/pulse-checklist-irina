@@ -1,7 +1,8 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
+import { BAND_LEGEND, percentBand } from './palette';
 
 // Графики вкладки «Аналитика»: SVG и CSS без сторонних библиотек.
-// Цвета отметок те же, что у плашек на экране ввода, только насыщеннее для полос.
+// Цвета отметок те же, что у плашек на экране ввода (palette.ts).
 
 export type Risk = { at_risk: boolean; students: number; twos_share: number | null; reasons: { code: string; text: string }[] };
 export type Row = {
@@ -154,7 +155,7 @@ export function PercentColumns({ title, items }: { title: string; items: { label
   );
 }
 
-const heatClass = (v: number) => (v < 50 ? 'is-low' : v < 75 ? 'is-mid' : 'is-high');
+const heatClass = (v: number) => `mon-band--${percentBand(v)}`;
 
 // Раздел × уровень по группам: % от максимума.
 export function SectionHeatmap({ title, groups, keys }: { title: string; groups: Row[]; keys: SectionKey[] }) {
@@ -162,7 +163,7 @@ export function SectionHeatmap({ title, groups, keys }: { title: string; groups:
   const used = keys.filter(k => groups.some(g => g.sections[k.key] !== null && g.sections[k.key] !== undefined));
   return (
     <Card title={title} note="Процент от максимума заданий раздела этого уровня, по полным работам."
-      legend={<div className="mon-viz__legend"><span><i className="mon-viz__swatch mon-viz__heat is-low" />ниже 50 %</span><span><i className="mon-viz__swatch mon-viz__heat is-mid" />50–74 %</span><span><i className="mon-viz__swatch mon-viz__heat is-high" />от 75 %</span></div>}>
+      legend={<div className="mon-viz__legend">{BAND_LEGEND.map(b => <span key={b.band}><i className={`mon-viz__swatch mon-band--${b.band}`} />{b.label} %</span>)}</div>}>
       {used.length ? (
         <div className="mon-an__scroll">
           <table className="mon-viz__heatmap">
@@ -176,7 +177,7 @@ export function SectionHeatmap({ title, groups, keys }: { title: string; groups:
                   <th scope="row">{g.row}</th>
                   {used.map(k => {
                     const v = g.sections[k.key];
-                    if (v === null || v === undefined) return <td key={k.key} className="mon-viz__heat is-none">—</td>;
+                    if (v === null || v === undefined) return <td key={k.key} className="mon-viz__heat mon-band--empty">нет</td>;
                     return <td key={k.key} className={`mon-viz__heat ${heatClass(v)}`} {...bind([g.row, `${k.section}, ${LEVEL[k.level] || k.level_name} уровень`, `${num(v)} % от максимума`])}>{num(Math.round(v))}</td>;
                   })}
                 </tr>

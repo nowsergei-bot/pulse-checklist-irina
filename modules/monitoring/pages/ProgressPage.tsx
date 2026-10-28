@@ -3,6 +3,7 @@ import { api, useApi } from './api';
 import { fmt, shares100, type Band, type DynRow, type Ege, type Point, type RiskStudent, type Student } from './Dynamics';
 import DynamicsScreen, { type Screen } from './DynamicsScreen';
 import WorkTable, { type WorkTableData } from './WorkTable';
+import { xlsxNote, xlsxPercent, xlsxRisk } from './palette';
 
 // Вкладка «Динамика» по макету 28.10: параллель, вкладки работ (входное первым), экран выбранной работы.
 // Заведующая кафедрой, заместитель директора и data_admin видят все группы, учитель свои группы; отбор групп делает сервер.
@@ -30,7 +31,8 @@ type Dyn = {
   tab?: string; screen?: Screen; table?: WorkTableData;
 };
 type Cell = string | number | null;
-type Table = { key: string; sheet: string; title: string; note: string; head: string[]; rows: Cell[][]; bold: boolean[] };
+// heat: столбцы с процентом, в Excel заливаются по шкале палитры; risk: столбец «Риск».
+type Table = { key: string; sheet: string; title: string; note: string; head: string[]; rows: Cell[][]; bold: boolean[]; heat?: number[]; risk?: number };
 
 function MapEditor({ onSaved }: { onSaved: () => void }) {
   const { data, error, reload } = useApi<MapData>('/progress/placement-map');
@@ -128,6 +130,7 @@ function screenTables(d: Dyn, s: Screen): Table[] {
     rows: [...s.groups.map(g => [g.title, g.n, ...(s.max_points ? [g.avg_total] : []), g.percent]),
       ['Параллель', s.parallel_row.n, ...(s.max_points ? [s.cards.avg_total] : []), s.parallel_row.percent]],
     bold: [...s.groups.map(() => false), true],
+    heat: [s.max_points ? 3 : 2],
   });
   out.push({
     key: 'sections', sheet: 'Разделы', title: `${s.title}: разделы по группам`,
@@ -136,6 +139,7 @@ function screenTables(d: Dyn, s: Screen): Table[] {
     rows: [...s.groups.map(g => [g.title, ...s.sections.map(x => g.sections[x.code] ?? null), g.percent_int]),
       ['Параллель', ...s.sections.map(x => s.parallel_row.sections[x.code] ?? null), s.parallel_row.percent_int]],
     bold: [...s.groups.map(() => false), true],
+    heat: s.sections.map((_, i) => i + 1).concat(s.sections.length + 1),
   });
   if (s.blocks.length) {
     out.push({
@@ -144,6 +148,7 @@ function screenTables(d: Dyn, s: Screen): Table[] {
       head: ['Задания', 'Раздел', 'Макс.', 'Параллель, %', ...s.groups.map(g => `${g.title}, %`), 'Слабое'],
       rows: s.blocks.map((b, i) => [b.label, b.section, b.max, s.blocks_parallel[i], ...s.groups.map(g => s.blocks_by_group[String(g.group_id)]?.[i] ?? null), s.weak.includes(i) ? 'да' : '']),
       bold: s.blocks.map(() => false),
+      heat: [3, ...s.groups.map((_, i) => i + 4)],
     });
   }
   if (s.position) {
@@ -166,6 +171,8 @@ function screenTables(d: Dyn, s: Screen): Table[] {
       ? [x.full_name, x.wrote ? x.percent : 'не писал(а)', x.place, x.risk ? 'да' : '']
       : [x.full_name, x.start, x.wrote ? x.total : 'не писал(а)', x.wrote ? x.percent : null, x.place, posText(x), x.risk ? 'да' : ''])),
     bold: s.students.map(() => false),
+    heat: placement ? [1] : [1, 3],
+    risk: placement ? 3 : 6,
   });
   return out;
 }
@@ -211,6 +218,7 @@ function tables(d: Dyn, cmp: Data | undefined, section: Section, sections: Secti
       head: ['Раздел', ...d.points.map(p => p.title)],
       rows: sections.map(s => [s.name, ...d.points.map(p => pct(groupRow.lines[p.key][s.code]?.avg))]),
       bold: sections.map(s => s.code === 'total'),
+      heat: d.points.map((_, i) => i + 1),
     });
   }
   if (d.risk) {
@@ -253,10 +261,15 @@ async function download(d: Dyn, list: Table[]) {
   for (const t of list) {
     const ws = wb.addWorksheet(t.sheet);
     ws.addRow([t.title]).font = { bold: true, size: 12 };
-    ws.addRow([t.note]).font = { italic: true, color: { argb: 'FF6B5D52' } };
+    ws.addRow([t.note]).font = { italic: true, color: { argb: xlsxNote } };
     ws.addRow([]);
     ws.addRow(t.head).font = { bold: true };
-    t.rows.forEach((r, i) => { const row = ws.addRow(r.map(c => (c === null ? '' : c))); if (t.bold[i]) row.font = { bold: true }; });
+    t.rows.forEach((r, i) => {
+      const row = ws.addRow(r.map(c => (c === null ? '' : c)));
+      if (t.bold[i]) row.font = { bold: true };
+      (t.heat || []).forEach(j => xlsxPercent(row.getCell(j + 1), r[j]));
+      if (t.risk !== undefined && r[t.risk] === 'да') xlsxRisk(row.getCell(t.risk + 1));
+    });
     ws.views = [{ state: 'frozen', ySplit: 4 }];
     t.head.forEach((h, i) => { ws.getColumn(i + 1).width = Math.max(10, Math.min(26, h.length + 2)); });
     ws.getColumn(1).width = t.key === 'students' ? 30 : 18;

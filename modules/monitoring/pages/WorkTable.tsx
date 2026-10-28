@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Point } from './Dynamics';
+import { BAND_LEGEND, percentBand } from './palette';
 
 // Таблица «группа × работа» над вкладками работ (Ира, 28.10): процент по каждой работе со значком к предыдущей
 // работе группы, «К старту» в пунктах. Строка параллели посчитана сервером только по ученикам с входным.
@@ -12,7 +13,7 @@ export type WorkTableData = {
   parallel: Record<string, Row>;
 };
 
-const heat = (v: number) => (v >= 85 ? 'is-h85' : v >= 75 ? 'is-h75' : v >= 60 ? 'is-h60' : v >= 50 ? 'is-h50' : 'is-hlow');
+const heat = (v: number) => `mon-band--${percentBand(v)}`;
 const ICON = { up: '▲', down: '▼', same: '●' } as const;
 const signed = (v: number) => (v > 0 ? `+${v}` : v < 0 ? `−${-v}` : '+0');
 
@@ -23,7 +24,7 @@ function Td({ c, total, par }: { c: Cell; total: Cell; par: boolean }) {
   return (
     <td>
       <span className={`mon-wt__cell ${heat(c.percent)}`} title={par ? `${c.n} ${c.n % 10 === 1 && c.n % 100 !== 11 ? 'ученик' : 'учеников'} с этой работой и входным` : `${c.n} уч.`}>
-        {c.percent}%{c.trend ? <i>{ICON[c.trend]}</i> : null}
+        {c.percent}%{c.trend ? <i className={`is-${c.trend}`}>{ICON[c.trend]}</i> : null}
       </span>
     </td>
   );
@@ -82,7 +83,11 @@ export default function WorkTable({ table, points, sections, parallel, threshold
           </tbody>
         </table>
       </div>
-      <p className="mon-dyn__muted">▲ рост на {threshold} пунктов и больше к предыдущей работе, ▼ снижение, ● без изменений. Цвет: от 85 % тёмно-зелёный, 75-84 светло-зелёный, 60-74 жёлтый, 50-59 оранжевый, ниже 50 красный. Наведи на клетку параллели, чтобы увидеть число учеников.</p>
+      <div className="mon-dyn__legend">
+        {BAND_LEGEND.map(b => <span key={b.band}><i className={`mon-band--${b.band}`} />{b.label}</span>)}
+        <span><i className="mon-band--empty" />не внесено</span>
+      </div>
+      <p className="mon-dyn__muted"><b className="mon-wt__sign is-up">▲</b> рост на {threshold} пунктов и больше к предыдущей работе, <b className="mon-wt__sign is-down">▼</b> снижение, <b className="mon-wt__sign is-same">●</b> без изменений. Наведи на клетку параллели, чтобы увидеть число учеников.</p>
     </section>
   );
 }

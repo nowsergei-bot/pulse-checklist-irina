@@ -11,6 +11,7 @@ import SpecsPage from './SpecsPage';
 import WorkForm from './WorkForm';
 import WorksPage from './WorksPage';
 import './monitoring.css';
+import { paletteCss } from './palette';
 
 const BASE = '/cabinet/monitoring';
 
@@ -54,6 +55,7 @@ export default function MonitoringPage() {
 
   return (
     <section className="mon-page">
+      <style>{paletteCss}</style>
       <p className="mon-kicker">Мониторинг результатов</p>
       <nav className="mon-nav">
         {tabs.map(t => (

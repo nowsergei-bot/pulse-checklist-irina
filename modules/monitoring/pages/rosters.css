@@ -98,7 +98,7 @@
   background: none;
 }
 .mon-rost__pick.is-picked {
-  background: #f6e9e9;
+  background: var(--mon-p-sand);
   box-shadow: inset 3px 0 0 var(--mon-red);
 }
 .mon-rost__kind {
@@ -309,7 +309,7 @@
   color: #7a5200;
 }
 .mon-gt__st--err {
-  background: #f6e3e3;
+  background: var(--mon-p-sand);
   color: var(--mon-red);
 }
 .mon-gt__norole {

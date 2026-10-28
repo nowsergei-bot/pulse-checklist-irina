@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { PALETTE, percentBand, seriesColor as paletteSeries } from './palette';
 
 // Графики и таблицы вкладки «Динамика»: SVG и CSS без сторонних библиотек.
 // Все значения: проценты выполнения (работы разные, максимумы разные). Разница: процентные пункты.
@@ -35,7 +36,6 @@ export function shares100(counts: number[]): number[] {
   for (let k = 0; k < rest; k += 1) out[order[k][1]] += 1;
   return out;
 }
-const COLORS = ['#50708f', '#3f8f5f', '#c27c0e', '#8a5aa8', '#c4473a', '#2f8f9a', '#6b6b6b'];
 
 export function Card({ title, note, legend, children, caption }: { title: string; note?: string; legend?: ReactNode; children: ReactNode; caption?: string }) {
   return (
@@ -51,7 +51,7 @@ export function Card({ title, note, legend, children, caption }: { title: string
   );
 }
 
-// Линии: x по работам (входное первым), y процент 0-100. Группы цветом, параллель пунктиром.
+// Линии: x по работам (входное первым), y процент 0-100. Группы оттенками морского, параллель серым пунктиром.
 export function LineChart({ points, series, height = 300, width = 820 }: {
   points: Point[];
   series: { label: string; values: (number | null)[]; dashed?: boolean; color?: string }[];
@@ -84,7 +84,7 @@ export function LineChart({ points, series, height = 300, width = 820 }: {
         <text key={p.key} className="mon-viz__xlabel" x={x(i)} y={top + h + 24} textAnchor="middle">{p.title}</text>
       ))}
       {series.map((s, k) => {
-        const color = s.color || COLORS[k % COLORS.length];
+        const color = s.color || (s.dashed ? PALETTE.line.parallel : paletteSeries(k));
         const pts = s.values.map((v, i) => (v === null ? null : [x(i), y(v), v] as const));
         const segs: string[] = [];
         let cur = '';
@@ -111,7 +111,7 @@ export function LineChart({ points, series, height = 300, width = 820 }: {
 }
 
 export function seriesColor(i: number) {
-  return COLORS[i % COLORS.length];
+  return paletteSeries(i);
 }
 
 // Прогресс к старту: доли роста, без изменений и снижения, 100 % полоса.
@@ -155,12 +155,10 @@ export function ProgressLegend({ threshold }: { threshold: number }) {
   );
 }
 
-// Фон клетки по проценту: те же границы, что у стартовых групп.
+// Фон клетки по проценту: одна шкала палитры, как в тепловых таблицах.
 export function heat(v: number | null) {
   if (v === null) return undefined;
-  if (v >= 75) return 'mon-prog__heat--high';
-  if (v >= 50) return 'mon-prog__heat--mid';
-  return 'mon-prog__heat--low';
+  return `mon-band--${percentBand(v)}`;
 }
 
 export function Arrow({ diff, threshold }: { diff: number | null; threshold: number }) {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ProgressBars, type DynRow } from './Dynamics';
+import { BAND_LEGEND, percentBand } from './palette';
 
 // Экран «Динамика» по макету 28.10: одна выбранная работа параллели, блоки сверху вниз.
 // Графики на HTML и CSS (полосы, клетки, точки), без библиотек. Все числа видны сразу, не только при наведении.
@@ -48,18 +49,14 @@ function ofWork(t: string) {
   if (/^Модуль/.test(t)) return `модуля${t.slice('Модуль'.length)}`;
   return `«${t}»`;
 }
-// Цвет полосы и столбика: те же границы, что у клеток разделов.
-const fill = (v: number | null) => (v === null ? 'is-empty' : v >= 90 ? 'is-g' : v >= 85 ? 'is-g2' : v >= 70 ? 'is-y' : 'is-o');
 const WEAK_BELOW = 85;
 
-// Цвет клетки раздела: 90 и выше, 85-89, 70-84, ниже 70.
+// Цвет клетки, полосы и столбика: одна шкала палитры, 90 и выше, 85-89, 70-84, ниже 70.
 export function band(v: number | null) {
-  if (v === null || v === undefined) return 'is-empty';
-  if (v >= 90) return 'is-b90';
-  if (v >= 85) return 'is-b85';
-  if (v >= 70) return 'is-b70';
-  return 'is-blow';
+  if (v === null || v === undefined) return 'mon-band--empty';
+  return `mon-band--${percentBand(v)}`;
 }
+const fill = band;
 
 function weakOf(values: (number | null)[]) {
   return values.map((percent, index) => ({ percent, index }))
@@ -170,10 +167,7 @@ function SectionTable({ s }: { s: Screen }) {
             </table>
           </div>
           <div className="mon-dyn__legend">
-            <span><i className="is-b90" />90 и выше</span>
-            <span><i className="is-b85" />85-89</span>
-            <span><i className="is-b70" />70-84</span>
-            <span><i className="is-blow" />ниже 70</span>
+            {BAND_LEGEND.map(b => <span key={b.band}><i className={`mon-band--${b.band}`} />{b.label}</span>)}
           </div>
         </>
       ) : <p className="mon-note">Результатов пока нет</p>}
@@ -198,7 +192,7 @@ function BlockChart({ s }: { s: Screen }) {
   return (
     <Block
       title="Выполнение по заданиям"
-      note={`Средний процент выполнения каждого блока заданий по ${who === 'par' ? 'параллели' : 'группе'}. Красным отмечены задания с самым низким результатом: их стоит разобрать в первую очередь.`}
+      note={`Средний процент выполнения каждого блока заданий по ${who === 'par' ? 'параллели' : 'группе'}. Тёмно-красным отмечены задания с самым низким результатом: их стоит разобрать в первую очередь.`}
       side={s.groups.length ? (
         <div className="mon-segmented" role="group" aria-label="Параллель или группа">
           <button type="button" className={who === 'par' ? 'is-current' : undefined} onClick={() => setWho('par')}>Параллель</button>
@@ -290,8 +284,8 @@ function Students({ s, onGroup, groups }: { s: Screen; onGroup: (id: number) => 
     <Block
       title={`Ученики: ${title}`}
       note={placement
-        ? 'Процент входного и место в параллели. Красным только те, кто в зоне риска по самой работе.'
-        : `Балл и процент ${ofWork(s.title)}, место в параллели по этой работе и как изменилось положение относительно параллели по сравнению с входным. Красным только те, кто в зоне риска по самой работе.`}
+        ? 'Процент входного и место в параллели. Тёмно-красной полосой отмечены только те, кто в зоне риска по самой работе.'
+        : `Балл и процент ${ofWork(s.title)}, место в параллели по этой работе и как изменилось положение относительно параллели по сравнению с входным. Тёмно-красной полосой отмечены только те, кто в зоне риска по самой работе.`}
       side={(
         <label className="mon-field">
           <span className="mon-label">Группа</span>

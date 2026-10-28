@@ -92,7 +92,7 @@
   transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 .mon-btn:hover:not(:disabled) {
-  border-color: rgba(227, 6, 19, 0.45);
+  border-color: rgba(127, 10, 16, 0.45);
   box-shadow: 0 2px 8px rgba(26, 21, 18, 0.12);
 }
 .mon-btn:disabled {
@@ -130,8 +130,8 @@
 }
 .mon-input:focus {
   outline: none;
-  border-color: rgba(227, 6, 19, 0.45);
-  box-shadow: 0 0 0 3px rgba(227, 6, 19, 0.1);
+  border-color: rgba(127, 10, 16, 0.45);
+  box-shadow: 0 0 0 3px rgba(127, 10, 16, 0.1);
 }
 .mon-search {
   position: relative;
@@ -535,7 +535,7 @@ a.mon-btn {
   border-right: 0;
 }
 .mon-segmented button.is-current {
-  background: rgba(127, 10, 16, 0.08);
+  background: rgba(26, 21, 18, 0.06);
   color: #7f0a10;
 }
 .mon-segmented button:disabled {
@@ -611,7 +611,8 @@ a.mon-btn {
   padding-left: 1.2rem;
 }
 .mon-alert--err {
-  background: #fbecec;
+  background: var(--mon-p-sand);
+  box-shadow: inset 3px 0 0 #7f0a10;
   color: #7f0a10;
 }
 .mon-alert--warn {
@@ -926,13 +927,13 @@ a.mon-btn {
 }
 /* Число больше максимума: клетка красная, значение не сохраняется. */
 .mon-sheet__cell.is-wrong {
-  background: #fbe9e9 !important;
+  background: var(--mon-p-sand) !important;
 }
 .mon-sheet__input.is-wrong {
-  border-color: #b3261e;
-  background: #fff5f5;
-  color: #b3261e;
-  box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.16);
+  border-color: #7f0a10;
+  background: #fff;
+  color: #7f0a10;
+  box-shadow: 0 0 0 3px rgba(127, 10, 16, 0.14);
 }
 .mon-sheet__tip {
   position: absolute;
@@ -942,7 +943,7 @@ a.mon-btn {
   transform: translateX(-50%);
   padding: 0.15rem 0.45rem;
   border-radius: 6px;
-  background: #b3261e;
+  background: #7f0a10;
   color: #fff;
   font-size: 0.78rem;
   font-weight: 600;
@@ -1018,10 +1019,10 @@ a.mon-btn {
   background: rgba(26, 21, 18, 0.07);
   color: var(--mon-ink);
 }
-.mon-mark--5 { background: #e3f1e6; color: #2f6340; }
-.mon-mark--4 { background: #e3eef9; color: #2c4f7c; }
-.mon-mark--3 { background: #fbf1d6; color: #7a5a12; }
-.mon-mark--2 { background: #f9e3e1; color: #8c2a22; }
+.mon-mark--5 { background: var(--mon-p-m5-bg); color: var(--mon-p-m5-ink); }
+.mon-mark--4 { background: var(--mon-p-m4-bg); color: var(--mon-p-m4-ink); }
+.mon-mark--3 { background: var(--mon-p-m3-bg); color: var(--mon-p-m3-ink); }
+.mon-mark--2 { background: var(--mon-p-m2-bg); color: var(--mon-p-m2-ink); }
 .mon-sheet__mark {
   width: 4.6rem;
   padding-right: 0.5rem !important;
@@ -1243,14 +1244,6 @@ a.mon-btn {
 .mon-viz,
 .mon-risk {
   --viz-red: #c00000;
-  --viz-m5: #3f8f5f;
-  --viz-m4: #4a7db5;
-  --viz-m3: #e0a93b;
-  --viz-m2: #c4473a;
-  --viz-col: #50708f;
-  --viz-done: #50708f;
-  --viz-absent: #b4c1ce;
-  --viz-rest: #eef0f2;
 }
 .mon-viz__section {
   margin: 2rem 0 0.75rem;
@@ -1275,7 +1268,7 @@ a.mon-btn {
   font-size: 1rem;
 }
 .mon-viz .mon-segmented button.is-current {
-  background: rgba(192, 0, 0, 0.08);
+  background: rgba(26, 21, 18, 0.06);
   color: var(--viz-red);
 }
 .mon-viz__grid {
@@ -1328,10 +1321,10 @@ a.mon-btn {
   height: 0.9rem;
   border-radius: 3px;
 }
-.mon-viz--m5 { background: var(--viz-m5); color: #fff; }
-.mon-viz--m4 { background: var(--viz-m4); color: #fff; }
-.mon-viz--m3 { background: var(--viz-m3); color: var(--mon-ink); }
-.mon-viz--m2 { background: var(--viz-m2); color: #fff; }
+.mon-viz--m5 { background: var(--mon-p-m5-bg); color: var(--mon-p-m5-ink); }
+.mon-viz--m4 { background: var(--mon-p-m4-bg); color: var(--mon-p-m4-ink); }
+.mon-viz--m3 { background: var(--mon-p-m3-bg); color: var(--mon-p-m3-ink); }
+.mon-viz--m2 { background: var(--mon-p-m2-bg); color: var(--mon-p-m2-ink); }
 .mon-viz__bars {
   display: grid;
   gap: 0.45rem;
@@ -1386,11 +1379,14 @@ a.mon-btn {
   filter: brightness(0.93);
 }
 .mon-viz__fill {
-  background: var(--viz-rest);
+  background: var(--mon-p-empty-bg);
+  border: 1px dashed var(--mon-p-empty-border);
+  box-sizing: border-box;
+  color: var(--mon-p-empty-ink);
 }
-.mon-viz__fill-done { background: var(--viz-done); }
-.mon-viz__fill-absent { background: var(--viz-absent); }
-.mon-viz__swatch.mon-viz__fill-rest { background: var(--viz-rest); border: 1px solid #d5d9dd; }
+.mon-viz__fill-done { background: var(--mon-p-p90-bg); color: var(--mon-p-p90-ink); border: 0; }
+.mon-viz__fill-absent { background: var(--mon-p-same-bg); color: var(--mon-p-same-ink); border: 0; }
+.mon-viz__swatch.mon-viz__fill-rest { background: var(--mon-p-empty-bg); border: 1px dashed var(--mon-p-empty-border); box-sizing: border-box; }
 .mon-viz__bars:has(.mon-viz__fill-n) .mon-viz__bar-row {
   grid-template-columns: 7.5rem minmax(0, 1fr) 8.5rem;
 }
@@ -1422,17 +1418,17 @@ a.mon-btn {
   font-weight: 700;
 }
 .mon-viz__col {
-  fill: var(--viz-col);
+  fill: var(--mon-p-line-group);
 }
 .mon-viz__svg rect:hover + .mon-viz__col {
-  fill: #3e5a76;
+  filter: brightness(0.82);
 }
 .mon-viz__ref {
   stroke-width: 1.5;
   stroke-dasharray: 6 4;
 }
-.mon-viz__ref--75 { stroke: var(--viz-m5); }
-.mon-viz__ref--50 { stroke: var(--viz-red); }
+.mon-viz__ref--75 { stroke: var(--mon-p-p90-bg); }
+.mon-viz__ref--50 { stroke: var(--mon-p-low-bg); }
 .mon-viz__ref-label {
   fill: var(--mon-muted);
   font-size: 12px;
@@ -1482,10 +1478,7 @@ a.mon-btn {
   font-weight: 700;
   cursor: default;
 }
-.mon-viz__heat.is-low { background: #f4cfcb; color: #7d2119; }
-.mon-viz__heat.is-mid { background: #f8e6b0; color: #6b4e0c; }
-.mon-viz__heat.is-high { background: #cfe8d5; color: #24563a; }
-.mon-viz__heat.is-none { background: #f4f2f0; color: var(--mon-muted); font-weight: 400; }
+
 .mon-risk__card + .mon-risk__card {
   margin-top: 1rem;
 }
@@ -1512,7 +1505,7 @@ a.mon-btn {
   white-space: nowrap;
 }
 .mon-risk__table tr.is-chosen td {
-  background: rgba(192, 0, 0, 0.05);
+  background: var(--mon-p-pick);
 }
 .mon-risk__reasons {
   display: flex;
@@ -1529,12 +1522,12 @@ a.mon-btn {
   line-height: 1.4;
 }
 .mon-risk__reason.is-two,
-.mon-risk__reason.is-twos { background: #f9e3e1; color: #8c2a22; }
+.mon-risk__reason.is-twos { background: var(--mon-p-down-bg); color: var(--mon-p-down-ink); }
 .mon-risk__reason.is-gentle,
 .mon-risk__reason.is-edge,
-.mon-risk__reason.is-avg { background: #fbf1d6; color: #7a5a12; }
+.mon-risk__reason.is-avg { background: var(--mon-p-p70-bg); color: var(--mon-p-p70-ink); }
 .mon-risk__reason.is-basic,
-.mon-risk__reason.is-share { background: #e8edf3; color: #34495e; }
+.mon-risk__reason.is-share { background: var(--mon-p-same-bg); color: var(--mon-p-same-ink); }
 .mon-an .mon-toolbar .mon-btn--primary {
   background: #c00000;
   border-color: #c00000;
@@ -1556,8 +1549,8 @@ a.mon-btn {
 }
 
 /* Вкладка «Динамика»: входное и работа парой полос, разница в процентных пунктах. */
-.mon-prog--start { background: #b4c1ce; }
-.mon-prog--work { background: #50708f; color: #fff; }
+.mon-prog--start { background: var(--mon-p-same-bg); color: var(--mon-p-same-ink); }
+.mon-prog--work { background: var(--mon-p-p90-bg); color: var(--mon-p-p90-ink); }
 .mon-prog__chart {
   display: grid;
   gap: 0.55rem;
@@ -1577,7 +1570,7 @@ a.mon-btn {
 .mon-prog__pair {
   display: grid;
   gap: 2px;
-  background: #f4f5f6;
+  background: var(--mon-p-sand);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -1599,8 +1592,8 @@ a.mon-btn {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.mon-prog__diff.is-up { color: #3f8f5f; }
-.mon-prog__diff.is-down { color: #c4473a; }
+.mon-prog__diff.is-up { color: var(--mon-p-up-bg); }
+.mon-prog__diff.is-down { color: var(--mon-p-down-bg); }
 .mon-prog__diff.is-same { color: var(--mon-muted); }
 .mon-prog__caption {
   margin: 0.75rem 0 0;
@@ -1615,20 +1608,17 @@ a.mon-btn {
   margin: 1rem 0 0.4rem;
   font-size: 1rem;
 }
-.mon-prog__ok { color: #3f8f5f; }
+.mon-prog__ok { color: var(--mon-p-up-bg); }
 .mon-prog__off { color: var(--mon-muted); font-style: italic; }
 .mon-prog__table td:first-child { white-space: nowrap; }
-.mon-prog--up { background: #3f8f5f; color: #fff; }
-.mon-prog--same { background: #c9ced3; color: var(--mon-ink); }
-.mon-prog--down { background: #c4473a; color: #fff; }
+.mon-prog--up { background: var(--mon-p-up-bg); color: var(--mon-p-up-ink); }
+.mon-prog--same { background: var(--mon-p-same-bg); color: var(--mon-p-same-ink); }
+.mon-prog--down { background: var(--mon-p-down-bg); color: var(--mon-p-down-ink); }
 .mon-prog__line-label { font-size: 13px; font-weight: 700; }
-.mon-prog__heat--high { background: rgba(63, 143, 95, 0.16); }
-.mon-prog__heat--mid { background: rgba(224, 169, 59, 0.16); }
-.mon-prog__heat--low { background: rgba(196, 71, 58, 0.14); }
 .mon-prog__arrow { font-size: 0.75rem; margin-left: 0.15rem; }
-.mon-prog__arrow.is-up { color: #3f8f5f; }
-.mon-prog__arrow.is-down { color: #c4473a; }
-.mon-prog__arrow.is-same { color: #8a8f94; }
+.mon-prog__arrow.is-up { color: var(--mon-p-up-bg); }
+.mon-prog__arrow.is-down { color: var(--mon-p-down-bg); }
+.mon-prog__arrow.is-same { color: var(--mon-p-same-ink); }
 .mon-prog__students {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
@@ -1636,19 +1626,14 @@ a.mon-btn {
   align-items: start;
 }
 .mon-prog__pick { cursor: pointer; }
-.mon-prog__pick:hover td { background: rgba(80, 112, 143, 0.06); }
-.mon-prog__pick.is-picked td { background: rgba(80, 112, 143, 0.12); }
+.mon-prog__pick:hover td { background: var(--mon-p-sand); }
+.mon-prog__pick.is-picked td { background: var(--mon-p-pick); }
 .mon-prog__num { width: 6rem; }
 
-/* Экран «Динамика» по макету 28.10: шапка, вкладки работ, баннер охвата, карточки, блоки на HTML и CSS. Цвета из макета. */
+/* Экран «Динамика» по макету 28.10: шапка, вкладки работ, баннер охвата, карточки, блоки на HTML и CSS. Цвета данных из palette.ts. */
 .mon-dyn,
 .mon-dyn__head,
 .mon-dyn__tabs {
-  --dyn-g: #2f7d55;
-  --dyn-g2: #79af54;
-  --dyn-y: #e7b522;
-  --dyn-o: #e98932;
-  --dyn-r: #c8463a;
   --dyn-muted: #8a8079;
   --dyn-line: #e8e2dc;
 }
@@ -1684,8 +1669,9 @@ a.mon-btn {
   cursor: pointer;
 }
 .mon-dyn__tabs button.is-current {
-  border-color: #e7b7b7;
-  background: #fbe9e9;
+  border-color: #7f0a10;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #7f0a10;
   color: #7f0a10;
 }
 .mon-dyn {
@@ -1695,13 +1681,13 @@ a.mon-btn {
 }
 .mon-dyn__banner {
   padding: 0.75rem 1rem;
-  border: 1px solid #f1d9a4;
+  border: 1px solid var(--mon-p-p70-bg);
   border-radius: 12px;
-  background: #fff7e6;
+  background: var(--mon-p-sand);
   color: var(--mon-ink);
   line-height: 1.45;
 }
-.mon-dyn__banner b { color: #7a5a12; }
+.mon-dyn__banner b { color: var(--mon-p-p70-ink); }
 .mon-dyn__block {
   min-width: 0;
   padding: 1.1rem 1.25rem;
@@ -1815,10 +1801,6 @@ a.mon-btn {
   font-size: 0.78rem;
   color: var(--mon-ink);
 }
-.mon-dyn .is-g { background: var(--dyn-g); }
-.mon-dyn .is-g2 { background: var(--dyn-g2); }
-.mon-dyn .is-y { background: var(--dyn-y); }
-.mon-dyn .is-o { background: var(--dyn-o); }
 
 /* Разделы по группам: тепловая таблица, целые проценты. */
 .mon-dyn__table {
@@ -1844,15 +1826,6 @@ a.mon-btn {
 .mon-dyn__table .is-l {
   text-align: left;
   white-space: nowrap;
-}
-.mon-dyn .is-b90 { background: #dcefe2; color: #1f5a3a; }
-.mon-dyn .is-b85 { background: #eaf4dd; color: #3f6a1f; }
-.mon-dyn .is-b70 { background: #fbf1d6; color: #7a5a12; }
-.mon-dyn .is-blow { background: #f9e3e1; color: #8c2a22; }
-.mon-dyn__heat.is-empty {
-  background: #f3f0ec;
-  color: #b3aaa2;
-  font-weight: 400;
 }
 .mon-dyn__legend {
   display: flex;
@@ -1905,8 +1878,9 @@ a.mon-btn {
   width: 100%;
   border-radius: 5px 5px 0 0;
 }
-.mon-dyn__col.is-weak .mon-dyn__col-fill { background: var(--dyn-r); }
-.mon-dyn__col.is-weak .mon-dyn__col-v { color: var(--dyn-r); }
+.mon-dyn__col.is-weak .mon-dyn__col-fill { background: var(--mon-p-low-bg); }
+.mon-dyn__col.is-weak .mon-dyn__col-v,
+.mon-dyn__col.is-weak .mon-dyn__col-label { color: var(--mon-p-low-bg); font-weight: 700; }
 .mon-dyn__col-label {
   padding-top: 4px;
   color: var(--dyn-muted);
@@ -1941,7 +1915,7 @@ a.mon-btn {
   position: relative;
   height: 30px;
   border-radius: 6px;
-  background: linear-gradient(90deg, #f9e3e1 0 50%, #dcefe2 50% 100%);
+  background: linear-gradient(90deg, var(--mon-p-sand) 0 50%, var(--mon-p-pick) 50% 100%);
 }
 .mon-dyn__pos-legend {
   display: flex;
@@ -1981,9 +1955,9 @@ a.mon-btn {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
   transform: translate(-50%, -50%);
 }
-.mon-dyn__pos-dot.is-before { background: #888; }
-.mon-dyn__pos-dot.is-up { background: var(--dyn-g); }
-.mon-dyn__pos-dot.is-down { background: var(--dyn-r); }
+.mon-dyn__pos-dot.is-before { background: var(--mon-p-line-parallel); }
+.mon-dyn__pos-dot.is-up { background: var(--mon-p-up-bg); }
+.mon-dyn__pos-dot.is-down { background: var(--mon-p-down-bg); }
 .mon-dyn__pos-dot.is-zero { background: var(--mon-ink); }
 .mon-dyn__pos-text {
   color: var(--dyn-muted);
@@ -2002,7 +1976,8 @@ a.mon-btn {
   white-space: nowrap;
 }
 .mon-dyn__students td.is-l { font-weight: 600; }
-.mon-dyn__students tbody tr.is-risk td { background: #f9e3e1; }
+.mon-dyn__students tbody tr.is-risk td { background: var(--mon-p-sand); }
+.mon-dyn__students tbody tr.is-risk td:first-child { box-shadow: inset 4px 0 0 var(--mon-p-down-bg); color: var(--mon-p-down-bg); }
 .mon-dyn__none { color: var(--dyn-muted); }
 .mon-dyn__tag {
   display: inline-block;
@@ -2012,9 +1987,9 @@ a.mon-btn {
   font-weight: 700;
   white-space: nowrap;
 }
-.mon-dyn__tag.is-same { background: #eee; color: #555; }
-.mon-dyn__tag.is-up { background: #dcefe2; color: #1f5a3a; }
-.mon-dyn__tag.is-down { background: #fbf1d6; color: #7a5a12; }
+.mon-dyn__tag.is-same { background: var(--mon-p-same-bg); color: var(--mon-p-same-ink); }
+.mon-dyn__tag.is-up { background: var(--mon-p-up-bg); color: var(--mon-p-up-ink); }
+.mon-dyn__tag.is-down { background: var(--mon-p-down-bg); color: var(--mon-p-down-ink); }
 .mon-dyn .mon-prog__row { grid-template-columns: 6rem minmax(0, 1fr) 11rem; }
 
 @media (max-width: 700px) {
@@ -2057,22 +2032,49 @@ a.mon-btn {
   font-weight: 700;
   white-space: nowrap;
 }
-.mon-wt__cell i { font-style: normal; font-size: 0.85em; }
-.mon-wt__cell.is-h85 { background: #1e5631; color: #fff; }
-.mon-wt__cell.is-h75 { background: #a8d08d; color: var(--mon-ink); }
-.mon-wt__cell.is-h60 { background: #ffe599; color: var(--mon-ink); }
-.mon-wt__cell.is-h50 { background: #f4b183; color: var(--mon-ink); }
-.mon-wt__cell.is-hlow { background: #c00000; color: #fff; }
+/* Значок к предыдущей работе: белый кружок на цветной клетке, цвет значка из палитры. */
+.mon-wt__cell i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: #fff;
+  font-style: normal;
+  font-size: 0.68rem;
+  line-height: 1;
+}
+.mon-wt__cell i.is-up { color: var(--mon-p-up-bg); }
+.mon-wt__cell i.is-down { color: var(--mon-p-down-bg); }
+.mon-wt__cell i.is-same { background: var(--mon-p-same-bg); color: var(--mon-p-same-ink); box-shadow: 0 0 0 1px #fff; }
 .mon-wt__cell.is-none,
 .mon-wt__cell.is-nodata {
-  border: 1.5px dashed #cfc8c1;
-  background: #fff;
-  color: #9a918a;
+  border: 1.5px dashed var(--mon-p-empty-border);
+  background: var(--mon-p-empty-bg);
+  color: var(--mon-p-empty-ink);
   font-weight: 400;
   font-size: 0.85rem;
 }
 .mon-wt__start { font-weight: 700; white-space: nowrap; padding: 0 0.5rem !important; }
-.mon-wt__start.is-up { color: #2f7d55; }
-.mon-wt__start.is-down { color: #c00000; }
-.mon-wt__start.is-same { color: #5c5148; }
-.mon-wt__start.is-note { color: #9a918a; font-weight: 400; font-size: 0.85rem; }
+.mon-wt__sign.is-up { color: var(--mon-p-up-bg); }
+.mon-wt__sign.is-down { color: var(--mon-p-down-bg); }
+.mon-wt__sign.is-same { color: var(--mon-p-same-bg); }
+.mon-wt__start.is-up { color: var(--mon-p-up-bg); }
+.mon-wt__start.is-down { color: var(--mon-p-down-bg); }
+.mon-wt__start.is-same { color: var(--mon-p-same-ink); }
+.mon-wt__start.is-note { color: var(--mon-p-empty-ink); font-weight: 400; font-size: 0.85rem; }
+
+/* Одна шкала процента для всех таблиц, полос и столбиков (palette.ts): 90 и выше, 85-89, 70-84, ниже 70.
+   Последними в файле, чтобы перекрывать базовые цвета блоков. */
+.mon-band--p90 { background: var(--mon-p-p90-bg); color: var(--mon-p-p90-ink); }
+.mon-band--p85 { background: var(--mon-p-p85-bg); color: var(--mon-p-p85-ink); }
+.mon-band--p70 { background: var(--mon-p-p70-bg); color: var(--mon-p-p70-ink); }
+.mon-band--low { background: var(--mon-p-low-bg); color: var(--mon-p-low-ink); }
+.mon-band--empty {
+  background: var(--mon-p-empty-bg);
+  outline: 1px dashed var(--mon-p-empty-border);
+  outline-offset: -1px;
+  color: var(--mon-p-empty-ink);
+  font-weight: 400 !important;
+}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApi } from './api';
 import AnalyticsCharts, { type Risk, type Row, type SectionKey } from './AnalyticsCharts';
 import RiskZone, { riskNotes, type RiskStudent, type Thresholds } from './RiskZone';
+import { xlsxMark, xlsxMuted, xlsxNote, xlsxPercent } from './palette';
 
 // Вкладка «Аналитика»: графики, зона риска и таблицы. Видят data_admin, заведующая кафедрой и заместители директора, только просмотр.
 // manage (data_admin): ещё входное тестирование и щадящий режим. Права проверяет сервер.
@@ -17,7 +18,8 @@ type Data = {
 };
 type RiskData = { title: string | null; students: RiskStudent[]; thresholds: Thresholds };
 type Cell = string | number | null;
-type Table = { key: string; title: string; note: string; head: string[]; rows: Cell[][]; kinds: string[] };
+// heat: столбцы с процентом, в Excel заливаются по шкале палитры.
+type Table = { key: string; title: string; note: string; head: string[]; rows: Cell[][]; kinds: string[]; heat?: number[] };
 
 const NO_PERCENT = 'нет: входное ещё не переведено в проценты';
 const MOVES = ['2→3', '3→4', '4→5'];
@@ -39,6 +41,7 @@ function tables(d: Data, manage: boolean): Table[] {
       head: ['Параллель', 'Группа', 'Учеников', 'Полных работ', 'Отсутствовали', 'Не внесено', 'Средний итог', 'Средний %', '«5»', '«4»', '«3»', '«2»'],
       rows: rows.map(r => [r.parallel, r.row, r.students, r.complete, r.absent, r.not_entered, r.avg_total, r.avg_percent, r.marks[5], r.marks[4], r.marks[3], r.marks[2]]),
       kinds,
+      heat: [7],
     },
     {
       key: 'sections', title: `${title}: разделы и уровни, средний %`,
@@ -46,6 +49,7 @@ function tables(d: Data, manage: boolean): Table[] {
       head: ['Параллель', 'Группа', ...keys.map(k => `${k.section} ${LEVEL[k.level] || k.level_name}`)],
       rows: bySection.map(r => [r.parallel, r.row, ...keys.map(k => r.sections[k.key] ?? null)]),
       kinds: bySection.map(r => r.kind),
+      heat: keys.map((_, i) => i + 2),
     },
     {
       key: 'gentle', title: `${title}: щадящий режим`,
@@ -92,6 +96,7 @@ function riskTables(d: Data, students: RiskStudent[]): Table[] {
       head: ['Группа', 'Ученик', 'Итог', '%', 'Причина'],
       rows: students.map(s => [s.group, s.full_name, s.total, s.percent, s.reasons.map(x => x.text).join('; ')]),
       kinds: students.map(() => 'group'),
+      heat: [3],
     },
     {
       key: 'risk_groups', title: `${d.title || 'работа'}: группы в зоне риска`, note: notes.group,
@@ -115,14 +120,16 @@ async function download(d: Data, list: Table[], manage: boolean) {
   for (const t of list) {
     const ws = wb.addWorksheet(sheetNames[t.key]);
     ws.addRow([t.title]).font = { bold: true, size: 12 };
-    ws.addRow([t.note]).font = { italic: true, color: { argb: 'FF6B5D52' } };
+    ws.addRow([t.note]).font = { italic: true, color: { argb: xlsxNote } };
     ws.addRow([]);
     const head = ws.addRow(t.head);
     head.font = { bold: true };
+    t.head.forEach((h, j) => { const m = /^«([2-5])»$/.exec(h); if (m) xlsxMark(head.getCell(j + 1), m[1]); });
     t.rows.forEach((r, i) => {
       const row = ws.addRow(r.map(c => (c === null ? '' : c)));
       if (t.kinds[i] === 'parallel' || t.kinds[i] === 'total') row.font = { bold: true };
-      if (t.kinds[i].includes('left')) row.font = { italic: true, color: { argb: 'FF8A8079' } };
+      if (t.kinds[i].includes('left')) row.font = { italic: true, color: { argb: xlsxMuted } };
+      (t.heat || []).forEach(j => xlsxPercent(row.getCell(j + 1), r[j]));
     });
     ws.views = [{ state: 'frozen', ySplit: 4 }];
     t.head.forEach((h, i) => { ws.getColumn(i + 1).width = Math.max(10, Math.min(28, h.length + 2)); });
