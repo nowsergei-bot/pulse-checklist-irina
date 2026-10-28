@@ -1639,3 +1639,389 @@ a.mon-btn {
 .mon-prog__pick:hover td { background: rgba(80, 112, 143, 0.06); }
 .mon-prog__pick.is-picked td { background: rgba(80, 112, 143, 0.12); }
 .mon-prog__num { width: 6rem; }
+
+/* Экран «Динамика» по макету 28.10: шапка, вкладки работ, баннер охвата, карточки, блоки на HTML и CSS. Цвета из макета. */
+.mon-dyn,
+.mon-dyn__head,
+.mon-dyn__tabs {
+  --dyn-g: #2f7d55;
+  --dyn-g2: #79af54;
+  --dyn-y: #e7b522;
+  --dyn-o: #e98932;
+  --dyn-r: #c8463a;
+  --dyn-muted: #8a8079;
+  --dyn-line: #e8e2dc;
+}
+.mon-dyn__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.9rem;
+}
+.mon-dyn__h {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--mon-ink);
+}
+.mon-dyn__head .mon-toolbar { margin: 0; }
+.mon-dyn__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.1rem;
+}
+.mon-dyn__tabs button {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--dyn-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--mon-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mon-dyn__tabs button.is-current {
+  border-color: #e7b7b7;
+  background: #fbe9e9;
+  color: #7f0a10;
+}
+.mon-dyn {
+  display: grid;
+  gap: 1.1rem;
+  min-width: 0;
+}
+.mon-dyn__banner {
+  padding: 0.75rem 1rem;
+  border: 1px solid #f1d9a4;
+  border-radius: 12px;
+  background: #fff7e6;
+  color: var(--mon-ink);
+  line-height: 1.45;
+}
+.mon-dyn__banner b { color: #7a5a12; }
+.mon-dyn__block {
+  min-width: 0;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--dyn-line);
+  border-radius: 14px;
+  background: #fff;
+}
+.mon-dyn__cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.mon-dyn__card {
+  min-width: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: #faf8f6;
+}
+.mon-dyn__big {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--mon-ink);
+  font-variant-numeric: tabular-nums;
+}
+.mon-dyn__small {
+  color: var(--dyn-muted);
+  font-size: 0.82rem;
+}
+.mon-dyn__block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.9rem;
+}
+.mon-dyn__title {
+  margin: 0 0 0.1rem;
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--mon-ink);
+}
+.mon-dyn__title--kpi { margin-bottom: 0.8rem; }
+.mon-dyn__note {
+  margin: 0;
+  max-width: 56rem;
+  color: var(--dyn-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.mon-dyn__muted,
+.mon-dyn__weak {
+  margin: 0.6rem 0 0;
+  color: var(--dyn-muted);
+  font-size: 0.82rem;
+}
+.mon-dyn__scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Группы: горизонтальные полосы, пунктир параллели в каждой полосе, подпись под ними. */
+.mon-dyn__bars { display: grid; gap: 0.5rem; }
+.mon-dyn__bar-row {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr) 6rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+.mon-dyn__bar-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mon-dyn__track {
+  position: relative;
+  height: 1.65rem;
+  border-radius: 6px;
+  background: #f3efea;
+}
+.mon-dyn__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 3.6rem;
+  padding-right: 0.5rem;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mon-dyn__bar-n {
+  color: var(--dyn-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.mon-dyn__par {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  border-left: 2px dashed var(--mon-ink);
+}
+.mon-dyn__par-label {
+  margin-left: 6.6rem;
+  font-size: 0.78rem;
+  color: var(--mon-ink);
+}
+.mon-dyn .is-g { background: var(--dyn-g); }
+.mon-dyn .is-g2 { background: var(--dyn-g2); }
+.mon-dyn .is-y { background: var(--dyn-y); }
+.mon-dyn .is-o { background: var(--dyn-o); }
+
+/* Разделы по группам: тепловая таблица, целые проценты. */
+.mon-dyn__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.mon-dyn__table th {
+  padding: 0.25rem;
+  color: var(--dyn-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+.mon-dyn__table td {
+  padding: 0.55rem 0.4rem;
+  border-radius: 8px;
+  font-weight: 600;
+  text-align: center;
+}
+.mon-dyn__table .is-l {
+  text-align: left;
+  white-space: nowrap;
+}
+.mon-dyn .is-b90 { background: #dcefe2; color: #1f5a3a; }
+.mon-dyn .is-b85 { background: #eaf4dd; color: #3f6a1f; }
+.mon-dyn .is-b70 { background: #fbf1d6; color: #7a5a12; }
+.mon-dyn .is-blow { background: #f9e3e1; color: #8c2a22; }
+.mon-dyn__heat.is-empty {
+  background: #f3f0ec;
+  color: #b3aaa2;
+  font-weight: 400;
+}
+.mon-dyn__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  margin-top: 0.5rem;
+  color: var(--dyn-muted);
+  font-size: 0.8rem;
+}
+.mon-dyn__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.mon-dyn__legend i {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+/* Выполнение по заданиям: вертикальные столбики, разделы под своими блоками. */
+.mon-dyn__cols {
+  display: grid;
+  column-gap: 6px;
+  row-gap: 0.2rem;
+  min-width: 30rem;
+}
+.mon-dyn__col {
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+.mon-dyn__col-v {
+  margin-bottom: 3px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mon-dyn__col-track {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  height: 9rem;
+  border-bottom: 1px solid var(--dyn-line);
+}
+.mon-dyn__col-fill {
+  width: 100%;
+  border-radius: 5px 5px 0 0;
+}
+.mon-dyn__col.is-weak .mon-dyn__col-fill { background: var(--dyn-r); }
+.mon-dyn__col.is-weak .mon-dyn__col-v { color: var(--dyn-r); }
+.mon-dyn__col-label {
+  padding-top: 4px;
+  color: var(--dyn-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.mon-dyn__col-section {
+  grid-row: 2;
+  padding-top: 2px;
+  border-top: 2px solid var(--dyn-line);
+  color: var(--mon-ink);
+  font-size: 0.72rem;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Положение группы относительно параллели: шкала с нулём посередине. */
+.mon-dyn__pos {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 30rem;
+}
+.mon-dyn__pos-row {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr) 8.5rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+.mon-dyn__pos-scale {
+  position: relative;
+  height: 30px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f9e3e1 0 50%, #dcefe2 50% 100%);
+}
+.mon-dyn__pos-legend {
+  display: flex;
+  justify-content: space-between;
+  color: var(--dyn-muted);
+  font-size: 0.8rem;
+}
+.mon-dyn__pos-zero {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 50%;
+  border-left: 2px solid var(--mon-ink);
+}
+.mon-dyn__pos-line {
+  position: absolute;
+  top: calc(50% - 1px);
+  height: 2px;
+  background: var(--mon-ink);
+}
+.mon-dyn__pos-head {
+  position: absolute;
+  top: -4px;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+.mon-dyn__pos-head.is-right { right: 6px; border-left: 7px solid var(--mon-ink); }
+.mon-dyn__pos-head.is-left { left: 6px; border-right: 7px solid var(--mon-ink); }
+.mon-dyn__pos-dot {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  transform: translate(-50%, -50%);
+}
+.mon-dyn__pos-dot.is-before { background: #888; }
+.mon-dyn__pos-dot.is-up { background: var(--dyn-g); }
+.mon-dyn__pos-dot.is-down { background: var(--dyn-r); }
+.mon-dyn__pos-dot.is-zero { background: var(--mon-ink); }
+.mon-dyn__pos-text {
+  color: var(--dyn-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ученики группы. */
+.mon-dyn__students { border-spacing: 0; }
+.mon-dyn__students td {
+  padding: 0.5rem 0.4rem;
+  border-bottom: 1px solid var(--dyn-line);
+  border-radius: 0;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.mon-dyn__students td.is-l { font-weight: 600; }
+.mon-dyn__students tbody tr.is-risk td { background: #f9e3e1; }
+.mon-dyn__none { color: var(--dyn-muted); }
+.mon-dyn__tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mon-dyn__tag.is-same { background: #eee; color: #555; }
+.mon-dyn__tag.is-up { background: #dcefe2; color: #1f5a3a; }
+.mon-dyn__tag.is-down { background: #fbf1d6; color: #7a5a12; }
+.mon-dyn .mon-prog__row { grid-template-columns: 6rem minmax(0, 1fr) 11rem; }
+
+@media (max-width: 700px) {
+  .mon-dyn__cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mon-dyn__bar-row { grid-template-columns: 4.5rem minmax(0, 1fr) 3.5rem; }
+  .mon-dyn__par-label { margin-left: 5.1rem; }
+  .mon-dyn__big { font-size: 1.4rem; }
+  .mon-dyn .mon-prog__row { grid-template-columns: 4.5rem minmax(0, 1fr) 7rem; }
+  .mon-dyn .mon-viz__bar-n { white-space: normal; }
+}

@@ -115,7 +115,8 @@ export function seriesColor(i: number) {
 }
 
 // Прогресс к старту: доли роста, без изменений и снижения, 100 % полоса.
-export function ProgressBars({ rows, section, threshold }: { rows: DynRow[]; section: string; threshold: number }) {
+// labels="all": проценты на всех частях полосы, даже узких (экран по макету: всё видно без наведения).
+export function ProgressBars({ rows, section, threshold, labels }: { rows: DynRow[]; section: string; threshold: number; labels?: 'all' }) {
   return (
     <div className="mon-prog__chart">
       {rows.map(r => {
@@ -131,7 +132,7 @@ export function ProgressBars({ rows, section, threshold }: { rows: DynRow[]; sec
                 {(['up', 'same', 'down'] as const).map(k => (p[k] ? (
                   <span key={k} className={`mon-viz__seg mon-prog--${k}`} style={{ width: `${(100 * p[k]) / n}%` }}
                     title={`${k === 'up' ? `рост (+${threshold} и больше)` : k === 'down' ? `снижение (−${threshold} и больше)` : 'без изменений'}: ${p[k]} уч., ${share(k)} %`}>
-                    {share(k) >= 9 ? `${share(k)} %` : ''}
+                    {labels === 'all' || share(k) >= 9 ? `${share(k)} %` : ''}
                   </span>
                 ) : null))}
               </span>

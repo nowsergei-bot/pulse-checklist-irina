@@ -112,7 +112,7 @@ async function placementResults(db, yearId, map) {
       got += sum;
       max += m;
     }
-    out.set(id, { percent: complete && max ? percentOf(got, max) : null, sections, spec_id: s.spec_id, held_on: s.held_on });
+    out.set(id, { percent: complete && max ? percentOf(got, max) : null, sections, spec_id: s.spec_id, held_on: s.held_on, scores: s.scores });
   }
   return out;
 }
@@ -191,9 +191,12 @@ async function loadAll(db, userId, caps) {
   for (const g of groups) members.set(g.id, (await groupStudents(db, g.id, null)).map(s => ({ id: Number(s.id), full_name: s.full_name })));
   // Ученики параллели (для пунктирной линии и средних параллели): все текущие группы этих параллелей.
   const parallelIds = new Map();
+  // Все текущие группы этих параллелей с составами: для плашки о полноте данных и средних по параллели.
+  const parallelGroups = new Map();
   const allGroups = (await db.query(
-    `SELECT g.id, g.parallel FROM pulse_read.groups g JOIN pulse_read.academic_years y ON y.id = g.academic_year_id
-     WHERE y.is_current AND g.archived_at IS NULL`,
+    `SELECT g.id, g.parallel, coalesce(g.title, g.code) AS title, g.campus FROM pulse_read.groups g JOIN pulse_read.academic_years y ON y.id = g.academic_year_id
+     WHERE y.is_current AND g.archived_at IS NULL
+     ORDER BY g.parallel NULLS LAST, g.campus = 'digital', coalesce(g.title, g.code)`,
   )).rows;
   const wanted = new Set(groups.map(g => g.parallel));
   for (const g of allGroups) {
@@ -202,6 +205,8 @@ async function loadAll(db, userId, caps) {
     if (!parallelIds.has(p)) parallelIds.set(p, new Set());
     const ids = members.has(Number(g.id)) ? members.get(Number(g.id)).map(s => s.id) : (await groupStudents(db, Number(g.id), null)).map(s => Number(s.id));
     for (const id of ids) parallelIds.get(p).add(id);
+    if (!parallelGroups.has(p)) parallelGroups.set(p, []);
+    parallelGroups.get(p).push({ id: Number(g.id), title: g.title, digital: g.campus === 'digital', ids });
   }
   const map = await placementMap(db, year.id);
   const placement = await placementResults(db, year.id, map);
@@ -215,7 +220,7 @@ async function loadAll(db, userId, caps) {
       s.tasks.set(w.parallel, r.tasks);
     }
   }
-  return { year, groups, members, parallelIds, map, placement, series };
+  return { year, groups, members, parallelIds, parallelGroups, map, placement, series };
 }
 
 const pick = (res, section) => (!res ? null : section === 'total' ? res.percent : res.sections[section] ?? null);
@@ -427,7 +432,14 @@ async function dynamics(db, userId, caps, query) {
   }
   const works = points.filter(p => p.key !== 'placement');
   const wantedW = String((query && query.work) || '');
-  const work = works.find(p => p.key === wantedW) || works[works.length - 1] || null;
+  // Вкладка работы: по умолчанию последняя работа параллели, у которой есть результаты (входное тоже вкладка).
+  const allParIds = [...(data.parallelIds.get(parallel) || [])];
+  const hasResults = (p) => allParIds.some(id => {
+    const r = p.key === 'placement' ? data.placement.get(id) : data.series.find(x => x.key === p.key).results.get(id);
+    return r && r.percent !== null && r.percent !== undefined;
+  });
+  const tab = points.find(p => p.key === wantedW) || [...points].reverse().find(hasResults) || points[points.length - 1];
+  const work = works.find(p => p.key === wantedW) || (tab.key !== 'placement' ? tab : null) || works[works.length - 1] || null;
   const groups = data.groups.filter(g => g.parallel === parallel);
   const allIds = [...(data.parallelIds.get(parallel) || [])];
   const values = new Map(allIds.map(id => [id, studentValues(data, points, id)]));
@@ -463,15 +475,180 @@ async function dynamics(db, userId, caps, query) {
       rows: [...groups.map(g => egeRow('group', g.title, data.members.get(g.id).map(m => m.id), egeSeries, parallel)), egeRow('parallel', `${parallel} параллель`, allIds, egeSeries, parallel)],
     };
   }
+  const screen = workScreen(data, parallel, tab, groups, wantedG);
   return {
     status: 200,
     headers: { 'Cache-Control': 'no-store' },
     body: {
+      tab: tab.key, screen,
       year: data.year.label, sections, threshold, drop_to_start: DROP_TO_START, bands: BANDS.map(b => ({ code: b.code, name: b.name })),
       parallels, parallel, points: points.map(({ parallel: _p, ...p }) => p), work: work ? work.key : null,
       rows, groups: groups.map(g => ({ id: g.id, title: g.title, digital: g.digital })), group: group ? group.id : null,
       students, risk, ege, caption: CAPTION,
     },
+  };
+}
+
+// ---------- Экран «Динамика» по макету 28.10: одна выбранная работа параллели ----------
+
+const WEAK_BELOW = 85;
+const POSITION_SAME = 5;
+const RISK_BELOW = 50;
+const roundInt = (v) => (v === null || v === undefined ? null : Math.floor(v + 0.5));
+
+// Место в параллели по проценту: «5 из 12», при равенстве «1-2 из 12».
+function places(list) {
+  const out = new Map();
+  const n = list.length;
+  for (const x of list) {
+    const higher = list.filter(y => y.percent > x.percent).length;
+    const same = list.filter(y => y.percent === x.percent).length;
+    out.set(x.id, same > 1 ? `${higher + 1}-${higher + same} из ${n}` : `${higher + 1} из ${n}`);
+  }
+  return out;
+}
+
+// Слабые блоки: три с самым низким процентом, если он ниже WEAK_BELOW; по возрастанию.
+function weakBlocks(blocks) {
+  return blocks.filter(b => b.percent !== null && b.percent < WEAK_BELOW)
+    .sort((a, b) => a.percent - b.percent || a.index - b.index).slice(0, 3);
+}
+
+// Нижняя четверть параллели: процент не выше значения на границе первой четверти по возрастанию.
+function lowQuarterCut(percents) {
+  const k = Math.floor(percents.length / 4);
+  if (!k) return null;
+  return [...percents].sort((a, b) => a - b)[k - 1];
+}
+
+// Сдвиг положения ученика к параллели: (отклонение в работе) минус (отклонение на входном), целые пункты.
+function positionChange(start, now, parStart, parNow) {
+  if ([start, now, parStart, parNow].some(v => v === null || v === undefined)) return null;
+  const raw = (now - parNow) - (start - parStart);
+  const diff = Math.sign(raw) * Math.round(Math.abs(raw)) || 0;
+  return { diff, kind: Math.abs(diff) < POSITION_SAME ? 'same' : diff > 0 ? 'up' : 'down' };
+}
+
+const blockLabel = (title) => String(title || '').replace(/^Задани[ея]\s+/, '');
+
+function workScreen(data, parallel, point, visible, groupId) {
+  const isPlacement = point.key === 'placement';
+  const series = isPlacement ? null : data.series.find(x => x.key === point.key);
+  const resOf = (id) => {
+    const r = isPlacement ? data.placement.get(id) : series.results.get(id);
+    return r && r.percent !== null && r.percent !== undefined ? r : null;
+  };
+  const startOf = (id) => { const r = data.placement.get(id); return r && r.percent !== null ? r.percent : null; };
+  const allGroups = data.parallelGroups.get(parallel) || [];
+  const parIds = [...(data.parallelIds.get(parallel) || [])];
+  const done = parIds.filter(id => resOf(id));
+  const groupsWith = allGroups.filter(g => g.ids.some(id => resOf(id)));
+  const groupsWithout = allGroups.filter(g => !g.ids.some(id => resOf(id)));
+  const byTitle = (list) => list.map(g => g.title).sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }));
+
+  // Блоки и разделы работы. Входное: сопоставленные поля спецификации, которую писала параллель.
+  let blocks = [];
+  if (isPlacement) {
+    const count = new Map();
+    for (const id of done) { const sp = data.placement.get(id).spec_id; count.set(sp, (count.get(sp) || 0) + 1); }
+    const specId = [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const spec = data.map.specs.find(x => x.spec_id === specId);
+    blocks = (spec ? spec.fields.filter(f => f.usable) : []).map(f => ({ key: f.field_id, label: f.excel_label || f.field_id, code: f.section, max: Number(f.max) }));
+  } else {
+    blocks = (series.tasks.get(parallel) || []).map(t => ({ key: t.id, label: blockLabel(t.title), code: MODULE_SECTION_MAP[t.section] || null, max: t.max_points, section_raw: t.section }));
+  }
+  const sectionCodes = SECTION_CODES.filter(c => blocks.some(b => b.code === c));
+  const sections = COMMON_SECTIONS.filter(x => sectionCodes.includes(x.code));
+  const blockPercent = (ids) => blocks.map((b, index) => {
+    const rs = ids.map(id => resOf(id)).filter(Boolean);
+    const vals = rs.map(r => r.scores.get(b.key)).filter(v => v !== null && v !== undefined);
+    return { index, percent: vals.length ? percentOf(vals.reduce((a, v) => a + Number(v), 0), b.max * vals.length) : null };
+  });
+  const blockMeta = blocks.map(b => ({
+    label: b.label, multi: /-/.test(b.label), max: b.max,
+    section: b.code ? COMMON_SECTIONS.find(x => x.code === b.code).name : (b.section_raw || ''),
+  }));
+
+  const summary = (ids) => {
+    const rs = ids.map(id => resOf(id)).filter(Boolean);
+    const sec = {};
+    for (const c of sectionCodes) {
+      const vals = rs.map(r => r.sections[c]).filter(v => v !== null && v !== undefined);
+      sec[c] = vals.length ? roundInt(vals.reduce((a, v) => a + v, 0) / vals.length) : null;
+    }
+    return {
+      n: rs.length,
+      percent: mean(rs.map(r => r.percent)),
+      percent_int: rs.length ? roundInt(rs.reduce((a, r) => a + r.percent, 0) / rs.length) : null,
+      avg_total: isPlacement ? null : mean(rs.map(r => r.total)),
+      sections: sec,
+    };
+  };
+  const par = summary(parIds);
+  const visibleWith = visible.filter(g => data.members.get(g.id).some(m => resOf(m.id)));
+  const groupRows = visibleWith.map(g => ({ group_id: g.id, title: g.title, ...summary(data.members.get(g.id).map(m => m.id)) }))
+    .sort((a, b) => b.percent - a.percent || a.title.localeCompare(b.title));
+
+  // Положение к параллели: средние только по ученикам, у которых есть и входное, и эта работа.
+  let position = null;
+  const both = (ids) => ids.filter(id => resOf(id) && startOf(id) !== null);
+  const parBoth = both(parIds);
+  // Средние без округления: округляется только итоговое отклонение.
+  const dev = (v) => Math.sign(v) * Math.round(Math.abs(v) * 10) / 10; // половина от нуля: +11,75 и −11,75 → ±11,8
+  const rawMean = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
+  const parStart = rawMean(parBoth.map(startOf));
+  const parNow = rawMean(parBoth.map(id => resOf(id).percent));
+  if (!isPlacement) {
+    position = {
+      complete: groupsWithout.length === 0,
+      rows: groupRows.map(g => {
+        const ids = both(data.members.get(g.group_id).map(m => m.id));
+        if (!ids.length || parStart === null) return { group_id: g.group_id, title: g.title, n: 0, before: null, after: null };
+        return {
+          group_id: g.group_id, title: g.title, n: ids.length,
+          before: dev(rawMean(ids.map(startOf)) - parStart),
+          after: dev(rawMean(ids.map(id => resOf(id).percent)) - parNow),
+        };
+      }),
+    };
+  }
+
+  // Ученики выбранной группы.
+  const group = visible.find(g => g.id === groupId) || visibleWith[0] || visible[0] || null;
+  const place = places(done.map(id => ({ id, percent: resOf(id).percent })));
+  const cut = lowQuarterCut(done.map(id => resOf(id).percent));
+  const students = group ? data.members.get(group.id).map(m => {
+    const r = resOf(m.id);
+    const start = startOf(m.id);
+    if (!r) return { id: m.id, full_name: m.full_name, start, wrote: false, total: null, percent: null, place: null, position: null, risk: false };
+    return {
+      id: m.id, full_name: m.full_name, start, wrote: true, total: isPlacement ? null : r.total, percent: r.percent,
+      place: place.get(m.id),
+      position: isPlacement ? null : positionChange(start, r.percent, parStart, parNow),
+      risk: r.percent < RISK_BELOW || (cut !== null && r.percent <= cut),
+    };
+  }).sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1) || a.full_name.localeCompare(b.full_name)) : [];
+
+  const blocksPar = blockPercent(parIds);
+  const blocksByGroup = {};
+  for (const g of visibleWith) blocksByGroup[g.id] = blockPercent(data.members.get(g.id).map(m => m.id)).map(b => b.percent);
+  const weak = weakBlocks(blocksPar).map(b => b.index);
+  const maxPoints = isPlacement ? null : blocks.reduce((a, b) => a + b.max, 0);
+  return {
+    key: point.key, title: point.title, type_code: point.type_code, max_points: maxPoints,
+    coverage: {
+      groups_total: allGroups.length, groups_with: groupsWith.length,
+      students_total: parIds.length, students_with: done.length,
+      with: byTitle(groupsWith), without: byTitle(groupsWithout),
+    },
+    cards: { avg_total: par.avg_total, avg_percent: par.percent, complete: done.length, groups_with: groupsWith.length, groups_total: allGroups.length },
+    sections,
+    groups: groupRows,
+    parallel_row: par,
+    blocks: blockMeta, blocks_parallel: blocksPar.map(b => b.percent), blocks_by_group: blocksByGroup, weak,
+    position,
+    group: group ? group.id : null,
+    students,
   };
 }
 
@@ -498,4 +675,4 @@ async function setSettings(db, userId, data) {
   return getSettings(db);
 }
 
-module.exports = { dynamics, getSettings, setSettings, trend, dynamicsRisk,  CAPTION, SECTION_CODES, placementMap, placementResults, workSeries, workResults, visibleGroups, loadAll, compareRows, compare, getMap, setMap, pick, mean, round1 };
+module.exports = { places, weakBlocks, lowQuarterCut, positionChange, workScreen, dynamics, getSettings, setSettings, trend, dynamicsRisk,  CAPTION, SECTION_CODES, placementMap, placementResults, workSeries, workResults, visibleGroups, loadAll, compareRows, compare, getMap, setMap, pick, mean, round1 };

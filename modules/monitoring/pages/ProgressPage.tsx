@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import { api, useApi } from './api';
-import {
-  Arrow, Card, LineChart, ProgressBars, ProgressLegend, diffClass, fmt, heat, seriesColor, shares100, signed,
-  type Band, type DynRow, type Ege, type Point, type RiskStudent, type Student,
-} from './Dynamics';
+import { fmt, shares100, type Band, type DynRow, type Ege, type Point, type RiskStudent, type Student } from './Dynamics';
+import DynamicsScreen, { type Screen } from './DynamicsScreen';
 
-// Вкладка «Динамика»: от входного тестирования через модули к пробному ЕГЭ, только проценты выполнения.
-// Линия по работам, прогресс к старту по порогу, стартовые группы, разделы по работам, ученики группы,
-// пробный ЕГЭ, сравнение с входным по разделам. Заведующая кафедрой и data_admin видят все группы и зону риска,
-// учитель свои группы; отбор групп делает сервер. manage (data_admin): ещё порог и сопоставление полей входного.
+// Вкладка «Динамика» по макету 28.10: параллель, вкладки работ (входное первым), экран выбранной работы.
+// Заведующая кафедрой и data_admin видят все группы, учитель свои группы; отбор групп делает сервер.
+// Excel: листы экрана и прежние таблицы динамики. manage (data_admin): ещё порог и сопоставление полей входного.
 
 type Section = { code: string; name: string };
 type Pair = { start: number; work: number; diff: number; n: number } | null;
@@ -29,44 +26,10 @@ type Dyn = {
   parallels: number[]; parallel: number | null; points: Point[]; work: string | null;
   rows: DynRow[]; groups: { id: number; title: string; digital: boolean }[]; group: number | null;
   students: Student[]; risk: RiskStudent[] | null; ege: Ege | null; caption: string;
+  tab?: string; screen?: Screen;
 };
 type Cell = string | number | null;
 type Table = { key: string; sheet: string; title: string; note: string; head: string[]; rows: Cell[][]; bold: boolean[] };
-
-function CompareChart({ rows, section, work, caption }: { rows: CompareRow[]; section: Section; work: string; caption: string }) {
-  return (
-    <figure className="mon-viz__card">
-      <figcaption>
-        <h4 className="mon-viz__title">Входное и {work}: {section.name.toLowerCase()}</h4>
-        <p className="mon-viz__note">Средний процент выполнения у учеников, у которых есть и входное, и полная работа.</p>
-        <div className="mon-viz__legend">
-          <span><i className="mon-viz__swatch mon-prog--start" />Входное</span>
-          <span><i className="mon-viz__swatch mon-prog--work" />{work}</span>
-        </div>
-      </figcaption>
-      <div className="mon-prog__chart">
-        {rows.map(r => {
-          const p = r.sections[section.code];
-          return (
-            <div key={r.row} className={`mon-prog__row is-${r.kind}`}>
-              <span className="mon-viz__bar-label">{r.row}</span>
-              {p ? (
-                <span className="mon-prog__pair">
-                  <span className="mon-prog__bar mon-prog--start" style={{ width: `${p.start}%` }} title={`Входное: ${fmt(p.start)} %`}><b>{fmt(p.start)}</b></span>
-                  <span className="mon-prog__bar mon-prog--work" style={{ width: `${p.work}%` }} title={`${work}: ${fmt(p.work)} %`}><b>{fmt(p.work)}</b></span>
-                </span>
-              ) : <span className="mon-viz__track is-empty">нет данных для сравнения</span>}
-              <span className="mon-viz__bar-n">
-                {p ? <><span className={`mon-prog__diff ${diffClass(p.diff)}`}>{signed(p.diff)}</span> · {p.n} уч.</> : null}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      <p className="mon-prog__caption">{caption}</p>
-    </figure>
-  );
-}
 
 function MapEditor({ onSaved }: { onSaved: () => void }) {
   const { data, error, reload } = useApi<MapData>('/progress/placement-map');
@@ -154,13 +117,66 @@ const pct = (v: number | null | undefined) => (v === null || v === undefined ? n
 const bandShares = (b: Band) => (b.n ? shares100([b.up, b.same, b.down]).join(' / ') : '');
 
 // Таблицы вкладки: одни и те же описания для экрана и для Excel.
+function screenTables(d: Dyn, s: Screen): Table[] {
+  const out: Table[] = [];
+  const cov = s.coverage;
+  out.push({
+    key: 'groups', sheet: 'Группы', title: `${s.title}: группы, ${d.parallel} параллель`,
+    note: `Средний процент выполнения у учеников с полной работой. Результаты внесены в ${cov.groups_with} из ${cov.groups_total} групп.${cov.without.length ? ` Нет результатов: ${cov.without.join(', ')}.` : ''}`,
+    head: ['Группа', 'Учеников', ...(s.max_points ? [`Средний балл из ${s.max_points}`] : []), 'Средний %'],
+    rows: [...s.groups.map(g => [g.title, g.n, ...(s.max_points ? [g.avg_total] : []), g.percent]),
+      ['Параллель', s.parallel_row.n, ...(s.max_points ? [s.cards.avg_total] : []), s.parallel_row.percent]],
+    bold: [...s.groups.map(() => false), true],
+  });
+  out.push({
+    key: 'sections', sheet: 'Разделы', title: `${s.title}: разделы по группам`,
+    note: 'Процент выполнения каждого раздела. Пусто: нет данных.',
+    head: ['Группа', ...s.sections.map(x => x.name), 'Итого'],
+    rows: [...s.groups.map(g => [g.title, ...s.sections.map(x => g.sections[x.code] ?? null), g.percent_int]),
+      ['Параллель', ...s.sections.map(x => s.parallel_row.sections[x.code] ?? null), s.parallel_row.percent_int]],
+    bold: [...s.groups.map(() => false), true],
+  });
+  if (s.blocks.length) {
+    out.push({
+      key: 'blocks', sheet: 'Задания', title: `${s.title}: выполнение по заданиям`,
+      note: 'Средний процент выполнения блока заданий. «Слабое»: три самых низких блока ниже 85 % по параллели.',
+      head: ['Задания', 'Раздел', 'Макс.', 'Параллель, %', ...s.groups.map(g => `${g.title}, %`), 'Слабое'],
+      rows: s.blocks.map((b, i) => [b.label, b.section, b.max, s.blocks_parallel[i], ...s.groups.map(g => s.blocks_by_group[String(g.group_id)]?.[i] ?? null), s.weak.includes(i) ? 'да' : '']),
+      bold: s.blocks.map(() => false),
+    });
+  }
+  if (s.position) {
+    out.push({
+      key: 'position', sheet: 'Положение', title: `Положение группы относительно параллели: входное и «${s.title}»`,
+      note: 'Среднее группы минус среднее параллели, процентные пункты. Только ученики, у которых есть обе работы.',
+      head: ['Группа', 'Учеников с обеими работами', 'Входное', s.title],
+      rows: s.position.rows.map(r => [r.title, r.n, r.before, r.after]),
+      bold: s.position.rows.map(() => false),
+    });
+  }
+  const placement = s.key === 'placement';
+  const posText = (x: Screen['students'][number]) => (!x.position ? null : x.position.kind === 'same' ? 'как было' : x.position.kind === 'up' ? `выше на ${x.position.diff}` : `ниже на ${-x.position.diff}`);
+  out.push({
+    key: 'students', sheet: 'Ученики', title: `Ученики: ${d.groups.find(g => g.id === s.group)?.title || ''}, «${s.title}»`,
+    note: 'Место в параллели по этой работе. Положение: как изменилось отклонение от среднего по параллели по сравнению с входным. Риск: ниже 50 % или нижняя четверть параллели.',
+    head: placement ? ['Ученик', 'Входное, %', 'Место в параллели', 'Риск']
+      : ['Ученик', 'Входное, %', `${s.title}, балл из ${s.max_points ?? ''}`, '%', 'Место в параллели', 'Положение к параллели', 'Риск'],
+    rows: s.students.map(x => (placement
+      ? [x.full_name, x.wrote ? x.percent : 'не писал(а)', x.place, x.risk ? 'да' : '']
+      : [x.full_name, x.start, x.wrote ? x.total : 'не писал(а)', x.wrote ? x.percent : null, x.place, posText(x), x.risk ? 'да' : ''])),
+    bold: s.students.map(() => false),
+  });
+  return out;
+}
+
 function tables(d: Dyn, cmp: Data | undefined, section: Section, sections: Section[]): Table[] {
   const work = d.points.find(p => p.key === d.work);
   const workTitle = work ? work.title : 'работа';
   const group = d.groups.find(g => g.id === d.group);
   const groupRow = d.rows.find(r => r.group_id === d.group);
-  const out: Table[] = [
-    {
+  const out: Table[] = d.screen ? screenTables(d, d.screen) : [];
+  out.push(
+{
       key: 'lines', sheet: 'Динамика', title: `Динамика по работам: ${d.parallel} параллель`,
       note: 'Средний процент выполнения у учеников группы с результатом (полная работа, во входном все поля раздела). В скобках сколько учеников.',
       head: ['Группа', 'Раздел', ...d.points.map(p => p.title)],
@@ -186,7 +202,7 @@ function tables(d: Dyn, cmp: Data | undefined, section: Section, sections: Secti
       rows: d.rows.map(r => [r.row, ...r.bands[section.code].flatMap(b => [b.n, b.avg_gain, bandShares(b)])]),
       bold: d.rows.map(r => r.kind === 'parallel'),
     },
-  ];
+  );
   if (groupRow && group) {
     out.push({
       key: 'heat', sheet: 'Разделы и работы', title: `Разделы и работы: ${group.title}`,
@@ -194,13 +210,6 @@ function tables(d: Dyn, cmp: Data | undefined, section: Section, sections: Secti
       head: ['Раздел', ...d.points.map(p => p.title)],
       rows: sections.map(s => [s.name, ...d.points.map(p => pct(groupRow.lines[p.key][s.code]?.avg))]),
       bold: sections.map(s => s.code === 'total'),
-    });
-    out.push({
-      key: 'students', sheet: 'Ученики', title: `Ученики: ${group.title}, ${section.name.toLowerCase()}`,
-      note: 'Процент выполнения по каждой работе (полные работы). «К старту»: итог последней работы с результатом минус итог входного.',
-      head: ['Ученик', ...d.points.map(p => p.title), 'К старту, пунктов'],
-      rows: d.students.map(s => [s.full_name, ...d.points.map(p => s.values[p.key][section.code]), s.to_start]),
-      bold: d.students.map(() => false),
     });
   }
   if (d.risk) {
@@ -249,7 +258,8 @@ async function download(d: Dyn, list: Table[]) {
     t.rows.forEach((r, i) => { const row = ws.addRow(r.map(c => (c === null ? '' : c))); if (t.bold[i]) row.font = { bold: true }; });
     ws.views = [{ state: 'frozen', ySplit: 4 }];
     t.head.forEach((h, i) => { ws.getColumn(i + 1).width = Math.max(10, Math.min(26, h.length + 2)); });
-    ws.getColumn(1).width = t.key === 'students' || t.key === 'risk' ? 30 : 18;
+    ws.getColumn(1).width = t.key === 'students' ? 30 : 18;
+    if (t.key === 'risk') ws.getColumn(2).width = 30;
   }
   const info = wb.addWorksheet('Пояснения');
   [
@@ -264,71 +274,17 @@ async function download(d: Dyn, list: Table[]) {
   const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `dinamika_${d.parallel ?? ''}_${latin(d.points.find(p => p.key === d.work)?.title || '')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = `dinamika_${d.parallel ?? ''}_${latin(d.screen?.title || d.points.find(p => p.key === d.work)?.title || '')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// Значение с предыдущим непустым в ряду: для стрелки.
-function withPrev(values: (number | null)[]) {
-  let prev: number | null = null;
-  return values.map(v => { const out = { v, diff: v !== null && prev !== null ? Math.round((v - prev) * 10) / 10 : null }; if (v !== null) prev = v; return out; });
-}
-
-function CompareBlock({ data }: { data: Data }) {
-  const [code, setCode] = useState('total');
-  const sections = [TOTAL, ...data.sections];
-  const section = sections.find(s => s.code === code) || TOTAL;
-  const title = data.works.find(w => w.key === data.work)?.title || '';
-  return (
-    <>
-      <div className="mon-viz__head">
-        <h3 className="mon-viz__section">Сравнение с входным по разделам: {title}</h3>
-        <div className="mon-segmented" role="group" aria-label="Раздел сравнения">
-          {sections.map(s => <button key={s.code} type="button" className={s.code === section.code ? 'is-current' : undefined} onClick={() => setCode(s.code)}>{s.name}</button>)}
-        </div>
-      </div>
-      <div className="mon-viz__grid mon-viz__grid--one">
-        <CompareChart rows={data.rows} section={section} work={title} caption={data.caption} />
-      </div>
-      <section className="mon-an__block">
-        <p className="mon-note">
-          В клетке средний процент входного, затем работы и разница в процентных пунктах. Сравнено: есть итог входного и полная работа.
-          Раздел считается, если во входном внесены все поля этого раздела. Нет данных: нет входного, нет полной работы или не хватает полей.
-        </p>
-        <div className="mon-an__scroll">
-          <table className="mon-table mon-an__table mon-prog__table">
-            <thead><tr><th>Группа</th><th className="mon-num">Учеников</th><th className="mon-num">Сравнено</th><th className="mon-num">Нет данных</th>{sections.map(s => <th key={s.code} className="mon-num">{s.name}</th>)}</tr></thead>
-            <tbody>
-              {data.rows.map(r => (
-                <tr key={r.row} className={`is-${r.kind}`}>
-                  <td>{r.row}</td>
-                  <td className="mon-num">{r.students}</td>
-                  <td className="mon-num">{r.compared}</td>
-                  <td className="mon-num">{r.no_data}</td>
-                  {sections.map(s => {
-                    const p = r.sections[s.code];
-                    return <td key={s.code} className="mon-num">{p ? <>{fmt(p.start)} → {fmt(p.work)} <span className={`mon-prog__diff ${diffClass(p.diff)}`}>{signed(p.diff)}</span></> : ''}</td>;
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="mon-prog__caption">{data.caption}</p>
-      </section>
-    </>
-  );
-}
-
 export default function ProgressPage({ manage }: { manage: boolean }) {
   const [parallel, setParallel] = useState('');
   const [work, setWork] = useState('');
   const [group, setGroup] = useState('');
-  const [code, setCode] = useState('total');
-  const [student, setStudent] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState('');
   const params = new URLSearchParams();
@@ -339,212 +295,42 @@ export default function ProgressPage({ manage }: { manage: boolean }) {
   const { data, error, reload } = useApi<Dyn>(`/progress/dynamics${qs ? `?${qs}` : ''}`);
   const cmpWork = data?.work || '';
   const { data: cmp, reload: reloadCmp } = useApi<Data>(data ? `/progress/compare${cmpWork ? `?work=${encodeURIComponent(cmpWork)}` : ''}` : null);
-  const loading = !data || (parallel && String(data.parallel) !== parallel) || (work && data.work !== work) || (group && String(data.group) !== group);
+  const loading = !data || (parallel && String(data.parallel) !== parallel) || (work && data.tab !== work) || (group && String(data.screen?.group) !== group);
   const sections = data ? data.sections : [TOTAL];
-  const section = sections.find(s => s.code === code) || sections[0];
-  const works = data ? data.points.filter(p => p.key !== 'placement') : [];
-  const workTitle = works.find(p => p.key === data?.work)?.title || '';
-  const lineSeries = data ? data.rows.map((r, i) => ({
-    label: r.kind === 'parallel' ? 'параллель' : r.row, dashed: r.kind === 'parallel', color: r.kind === 'parallel' ? '#1a1512' : seriesColor(i),
-    values: data.points.map(p => r.lines[p.key][section.code]?.avg ?? null),
-  })) : [];
-  const egePoints = data ? data.points.filter(p => p.type_code === 'ege_mock') : [];
-  const groupRow = data?.rows.find(r => r.group_id === data.group);
-  const picked = data?.students.find(s => s.id === student) || null;
-  const list = data && !loading ? tables(data, cmp, section, sections) : [];
 
   async function save() {
     if (!data) return;
     setBusy(true); setSaveError('');
-    try { await download(data, list); } catch (e) { setSaveError((e as Error).message); } finally { setBusy(false); }
+    try { await download(data, tables(data, cmp, TOTAL, sections)); } catch (e) { setSaveError((e as Error).message); } finally { setBusy(false); }
   }
 
   return (
     <div className="mon-an mon-viz">
-      <p className="mon-note mon-hint">
-        От входного тестирования через модули к пробному ЕГЭ: каждый ученик сравнивается сам с собой. Ученики в нынешних группах (текущий состав с поправками модуля).
-        {data && !data.risk ? ' Видны только твои группы и средние по их параллели.' : ''}
-      </p>
-      <div className="mon-toolbar">
-        <label className="mon-field">
-          <span className="mon-label">Параллель</span>
-          <select className="mon-input mon-select" value={data?.parallel ?? ''} disabled={!data} onChange={e => { setParallel(e.target.value); setWork(''); setGroup(''); setStudent(null); }}>
-            {(data?.parallels || []).map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </label>
-        <label className="mon-field">
-          <span className="mon-label">Работа для прогресса</span>
-          <select className="mon-input mon-select" value={data?.work || ''} disabled={!data || !works.length} onChange={e => setWork(e.target.value)}>
-            {works.map(w => <option key={w.key} value={w.key}>{w.title}</option>)}
-          </select>
-        </label>
-        <div className="mon-segmented" role="group" aria-label="Раздел">
-          {sections.map(s => <button key={s.code} type="button" className={s.code === section.code ? 'is-current' : undefined} onClick={() => setCode(s.code)}>{s.name}</button>)}
+      <div className="mon-dyn__head">
+        <h2 className="mon-dyn__h">Динамика{data?.parallel ? `: ${data.parallel} параллель` : ''}</h2>
+        <div className="mon-toolbar">
+          <label className="mon-field">
+            <span className="mon-label">Параллель</span>
+            <select className="mon-input mon-select" value={data?.parallel ?? ''} disabled={!data} onChange={e => { setParallel(e.target.value); setWork(''); setGroup(''); }}>
+              {(data?.parallels || []).map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <button type="button" className="mon-btn mon-btn--primary" disabled={!data || Boolean(loading) || busy} onClick={save}>{busy ? 'Готовим файл…' : 'Скачать Excel'}</button>
         </div>
-        <button type="button" className="mon-btn mon-btn--primary" disabled={!data || Boolean(loading) || busy} onClick={save}>{busy ? 'Готовим файл…' : 'Скачать Excel'}</button>
       </div>
+      {data && data.points.length ? (
+        <div className="mon-dyn__tabs" role="tablist" aria-label="Работа">
+          {data.points.map(p => (
+            <button key={p.key} type="button" role="tab" aria-selected={p.key === data.tab} className={p.key === data.tab ? 'is-current' : undefined} onClick={() => { setWork(p.key); setGroup(''); }}>{p.title}</button>
+          ))}
+        </div>
+      ) : null}
       {error ? <p className="mon-err" role="alert">{error}</p> : null}
       {saveError ? <p className="mon-err" role="alert">{saveError}</p> : null}
       {loading && !error ? <p className="mon-note">Считаем…</p> : null}
       {data && !loading && !data.parallel ? <p className="mon-note">Групп пока нет</p> : null}
-      {data && !loading && data.parallel ? (
-        <>
-          <div className="mon-viz__grid mon-viz__grid--one">
-            <Card title={`Динамика: ${section.name.toLowerCase()}, ${data.parallel} параллель`} note="Средний процент выполнения по работам у учеников группы с результатом. Пунктир: вся параллель. Наведи на точку, чтобы увидеть число." caption={data.caption}>
-              {works.length ? <LineChart points={data.points} series={lineSeries} /> : <p className="mon-note">Работ этой параллели пока нет</p>}
-            </Card>
-            {data.work ? (
-              <Card title={`Прогресс от входного: ${section.name.toLowerCase()}, «${workTitle}»`} note="Разница каждого ученика с его входным. Доли среди учеников, у которых есть и входное, и полная работа." legend={<ProgressLegend threshold={data.threshold} />} caption={data.caption}>
-                <ProgressBars rows={data.rows} section={section.code} threshold={data.threshold} />
-              </Card>
-            ) : null}
-          </div>
-
-          {data.work ? (
-            <section className="mon-an__block">
-              <h3 className="mon-an__title">Стартовые группы: {section.name.toLowerCase()}, «{workTitle}»</h3>
-              <p className="mon-note">Ученики по проценту входного. В клетке: учеников, средний прирост в пунктах и доли рост / без изменений / снижение, %.</p>
-              <div className="mon-an__scroll">
-                <table className="mon-table mon-an__table mon-prog__table">
-                  <thead><tr><th>Группа</th>{data.bands.map(b => <th key={b.code} className="mon-num">Входное {b.name}</th>)}</tr></thead>
-                  <tbody>
-                    {data.rows.map(r => (
-                      <tr key={r.row} className={`is-${r.kind}`}>
-                        <td>{r.row}</td>
-                        {r.bands[section.code].map(b => (
-                          <td key={b.code} className="mon-num">
-                            {b.n ? <>{b.n} уч. · <span className={`mon-prog__diff ${diffClass(b.avg_gain ?? 0)}`}>{signed(b.avg_gain ?? 0)}</span> · {bandShares(b)}</> : <span className="mon-note">нет</span>}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          ) : null}
-
-          {data.ege ? (
-            <>
-              <h3 className="mon-viz__section">{workTitle}: первичный балл и блоки</h3>
-              {egePoints.length > 1 ? (
-                <div className="mon-viz__grid mon-viz__grid--one">
-                  <Card title="Пробники: средний процент" note="Только пробные ЕГЭ этой параллели. Пунктир: вся параллель.">
-                    <LineChart points={egePoints} series={data.rows.map((r, i) => ({ label: r.kind === 'parallel' ? 'параллель' : r.row, dashed: r.kind === 'parallel', color: r.kind === 'parallel' ? '#1a1512' : seriesColor(i), values: egePoints.map(p => r.lines[p.key].total?.avg ?? null) }))} height={240} />
-                  </Card>
-                </div>
-              ) : null}
-              <section className="mon-an__block">
-                <p className="mon-note">Только полные работы. Отметок нет. Уровни по ФИПИ: базовый и высокий.</p>
-                <div className="mon-an__scroll">
-                  <table className="mon-table mon-an__table mon-prog__table">
-                    <thead>
-                      <tr>
-                        <th>Группа</th><th className="mon-num">Полных</th><th className="mon-num">Балл из {data.ege.max_points}</th><th className="mon-num">%</th><th className="mon-num">Базовый</th><th className="mon-num">Высокий</th>
-                        {data.ege.blocks.map(b => <th key={b.title} className="mon-num" title={`${b.section}, ${b.level_name.toLowerCase()}, максимум ${b.max}`}>{b.title.replace('Задания ', '').replace('Задание ', '')}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.ege.rows.map(r => (
-                        <tr key={r.row} className={`is-${r.kind}`}>
-                          <td>{r.row}</td><td className="mon-num">{r.complete}</td>
-                          <td className="mon-num">{r.avg_total === null ? '' : fmt(r.avg_total)}</td>
-                          <td className="mon-num">{r.avg_percent === null ? '' : fmt(r.avg_percent)}</td>
-                          <td className="mon-num">{r.basic === null ? '' : fmt(r.basic)}</td>
-                          <td className="mon-num">{r.high === null ? '' : fmt(r.high)}</td>
-                          {r.blocks.map((v, i) => <td key={i} className={`mon-num ${heat(v) || ''}`}>{v === null ? '' : fmt(v)}</td>)}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mon-note">Столбцы блоков: номера заданий, процент выполнения блока. Наведи на заголовок, чтобы увидеть раздел, уровень и максимум.</p>
-              </section>
-            </>
-          ) : null}
-
-          <div className="mon-viz__head">
-            <h3 className="mon-viz__section">Группа</h3>
-            <div className="mon-segmented" role="group" aria-label="Группа">
-              {data.groups.map(g => <button key={g.id} type="button" className={g.id === data.group ? 'is-current' : undefined} onClick={() => { setGroup(String(g.id)); setStudent(null); }}>{g.title}</button>)}
-            </div>
-          </div>
-          {groupRow ? (
-            <section className="mon-an__block">
-              <h3 className="mon-an__title">Разделы и работы: {groupRow.row}</h3>
-              <p className="mon-note">Средний процент выполнения. Стрелка к предыдущей работе с результатом: ▲ рост на {data.threshold} пунктов и больше, ▼ снижение, ● без изменений.</p>
-              <div className="mon-an__scroll">
-                <table className="mon-table mon-an__table mon-prog__table">
-                  <thead><tr><th>Раздел</th>{data.points.map(p => <th key={p.key} className="mon-num">{p.title}</th>)}</tr></thead>
-                  <tbody>
-                    {sections.map(s => (
-                      <tr key={s.code} className={s.code === 'total' ? 'is-parallel' : 'is-group'}>
-                        <td>{s.name}</td>
-                        {withPrev(data.points.map(p => groupRow.lines[p.key][s.code]?.avg ?? null)).map((c, i) => (
-                          <td key={i} className={`mon-num ${heat(c.v) || ''}`}>{c.v === null ? '' : <>{fmt(c.v)} <Arrow diff={c.diff} threshold={data.threshold} /></>}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          ) : null}
-
-          <section className="mon-an__block">
-            <h3 className="mon-an__title">Ученики: {groupRow?.row}, {section.name.toLowerCase()}</h3>
-            <p className="mon-note">Нажми на ученика, чтобы открыть карточку. «К старту»: итог последней работы с результатом минус итог входного.</p>
-            <div className="mon-prog__students">
-              <div className="mon-an__scroll">
-                <table className="mon-table mon-an__table mon-prog__table">
-                  <thead><tr><th>Ученик</th>{data.points.map(p => <th key={p.key} className="mon-num">{p.title}</th>)}<th className="mon-num">К старту</th></tr></thead>
-                  <tbody>
-                    {data.students.map(s => (
-                      <tr key={s.id} className={`is-group mon-prog__pick${s.id === student ? ' is-picked' : ''}`} onClick={() => setStudent(s.id)}>
-                        <td>{s.full_name}</td>
-                        {data.points.map(p => { const v = s.values[p.key][section.code]; return <td key={p.key} className={`mon-num ${heat(v) || ''}`}>{v === null ? '' : fmt(v)}</td>; })}
-                        <td className="mon-num">{s.to_start === null ? '' : <span className={`mon-prog__diff ${diffClass(s.to_start)}`}>{signed(s.to_start)}</span>}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {picked ? (
-                <Card title={picked.full_name} note={picked.to_start === null ? 'К старту: нет входного или работы с результатом' : `К старту: ${signed(picked.to_start)} пунктов`}>
-                  <LineChart points={data.points} height={300} width={560} series={[
-                    { label: section.name, color: '#50708f', values: data.points.map(p => picked.values[p.key][section.code]) },
-                    ...(section.code === 'total' ? [] : [{ label: 'итог', color: '#1a1512', dashed: true, values: data.points.map(p => picked.values[p.key].total) }]),
-                  ]} />
-                </Card>
-              ) : null}
-            </div>
-          </section>
-
-          {data.risk ? (
-            <section className="mon-an__block">
-              <h3 className="mon-an__title">Зона риска по динамике: {data.parallel} параллель</h3>
-              <p className="mon-note">Итог ниже входного на {data.drop_to_start} пунктов и больше или два снижения подряд (каждое на {data.threshold} пунктов и больше). Видят заведующие кафедрой и администраторы данных.</p>
-              {data.risk.length ? (
-                <div className="mon-an__scroll">
-                  <table className="mon-table mon-an__table mon-prog__table">
-                    <thead><tr><th>Группа</th><th>Ученик</th>{data.points.map(p => <th key={p.key} className="mon-num">{p.title}</th>)}<th>Причина</th></tr></thead>
-                    <tbody>
-                      {data.risk.map(r => (
-                        <tr key={`${r.group}/${r.full_name}`} className="is-group">
-                          <td>{r.group}</td><td>{r.full_name}</td>
-                          {r.values.map((v, i) => <td key={i} className="mon-num">{v === null ? '' : fmt(v)}</td>)}
-                          <td>{r.reasons.map(x => x.text).join('; ')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : <p className="mon-note">Таких учеников нет</p>}
-            </section>
-          ) : null}
-
-          {cmp && cmp.work ? <CompareBlock key={cmp.work} data={{ ...cmp, rows: cmp.rows.filter(r => r.parallel === data.parallel) }} /> : null}
-        </>
+      {data && !loading && data.parallel && data.screen ? (
+        <DynamicsScreen s={data.screen} rows={data.rows} threshold={data.threshold} groups={data.groups} onGroup={id => setGroup(String(id))} />
       ) : null}
       {manage && data ? <Settings key={data.threshold} threshold={data.threshold} onSaved={reload} /> : null}
       {manage ? <MapEditor onSaved={() => { reload(); reloadCmp(); }} /> : null}
