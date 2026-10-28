@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, useApi } from './api';
 import { fmt, shares100, type Band, type DynRow, type Ege, type Point, type RiskStudent, type Student } from './Dynamics';
 import DynamicsScreen, { type Screen } from './DynamicsScreen';
+import WorkTable, { type WorkTableData } from './WorkTable';
 
 // Вкладка «Динамика» по макету 28.10: параллель, вкладки работ (входное первым), экран выбранной работы.
 // Заведующая кафедрой и data_admin видят все группы, учитель свои группы; отбор групп делает сервер.
@@ -26,7 +27,7 @@ type Dyn = {
   parallels: number[]; parallel: number | null; points: Point[]; work: string | null;
   rows: DynRow[]; groups: { id: number; title: string; digital: boolean }[]; group: number | null;
   students: Student[]; risk: RiskStudent[] | null; ege: Ege | null; caption: string;
-  tab?: string; screen?: Screen;
+  tab?: string; screen?: Screen; table?: WorkTableData;
 };
 type Cell = string | number | null;
 type Table = { key: string; sheet: string; title: string; note: string; head: string[]; rows: Cell[][]; bold: boolean[] };
@@ -318,6 +319,9 @@ export default function ProgressPage({ manage }: { manage: boolean }) {
           <button type="button" className="mon-btn mon-btn--primary" disabled={!data || Boolean(loading) || busy} onClick={save}>{busy ? 'Готовим файл…' : 'Скачать Excel'}</button>
         </div>
       </div>
+      {data && data.parallel && data.table && data.points.length ? (
+        <WorkTable table={data.table} points={data.points} sections={data.sections} parallel={data.parallel} threshold={data.threshold} />
+      ) : null}
       {data && data.points.length ? (
         <div className="mon-dyn__tabs" role="tablist" aria-label="Работа">
           {data.points.map(p => (

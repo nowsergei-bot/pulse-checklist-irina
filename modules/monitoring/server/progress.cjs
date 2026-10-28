@@ -362,6 +362,40 @@ function studentValues(data, points, id) {
   return out;
 }
 
+// Таблица «группа × работа» (Ира, 28.10): процент по каждой работе, значок к предыдущей работе с результатом,
+// «К старту» = последняя внесённая работа минус входное. Строка параллели по каждой работе только по ученикам,
+// у которых есть и эта работа, и входное (по тому же разделу). Разница округляется симметрично, до целого.
+const roundSym = (v) => Math.sign(v) * Math.round(Math.abs(v));
+function tableRow(ids, values, points, threshold, paired) {
+  const out = {};
+  for (const code of ALL_SECTIONS) {
+    const cells = points.map(p => {
+      const list = ids.filter(id => {
+        const v = values.get(id);
+        return v[p.key][code] !== null && (!paired || p.key === 'placement' || v.placement[code] !== null);
+      }).map(id => values.get(id)[p.key][code]);
+      if (!list.length) return null;
+      const raw = list.reduce((a, b) => a + b, 0) / list.length;
+      return { raw, percent: Math.round(raw), n: list.length, trend: null };
+    });
+    let prev = null;
+    for (const c of cells) {
+      if (!c) continue;
+      if (prev) { const d = roundSym(c.raw - prev.raw); c.trend = d >= threshold ? 'up' : d <= -threshold ? 'down' : 'same'; }
+      prev = c;
+    }
+    const filled = cells.filter(Boolean);
+    let toStart = null;
+    if (filled.length === 1) toStart = { kind: 'one' };
+    else if (cells[0] && filled.length > 1) {
+      const diff = roundSym(filled[filled.length - 1].raw - cells[0].raw);
+      toStart = { diff, kind: diff >= threshold ? 'up' : diff <= -threshold ? 'down' : 'same' };
+    } else if (filled.length > 1) toStart = { kind: 'no_start' };
+    out[code] = { cells: cells.map(c => (c ? { percent: c.percent, n: c.n, trend: c.trend } : null)), to_start: toStart };
+  }
+  return out;
+}
+
 // Строка группы или параллели: средние по точкам и разделам, прогресс к выбранной работе, стартовые группы.
 function dynamicsRow(kind, title, ids, values, points, workKey, threshold, extra = {}) {
   const lines = {};
@@ -476,11 +510,15 @@ async function dynamics(db, userId, caps, query) {
     };
   }
   const screen = workScreen(data, parallel, tab, groups, wantedG);
+  const table = {
+    groups: groups.map(g => ({ group_id: g.id, title: g.title, ...tableRow(data.members.get(g.id).map(m => m.id), values, points, threshold, false) })),
+    parallel: tableRow(allIds, values, points, threshold, true),
+  };
   return {
     status: 200,
     headers: { 'Cache-Control': 'no-store' },
     body: {
-      tab: tab.key, screen,
+      tab: tab.key, screen, table,
       year: data.year.label, sections, threshold, drop_to_start: DROP_TO_START, bands: BANDS.map(b => ({ code: b.code, name: b.name })),
       parallels, parallel, points: points.map(({ parallel: _p, ...p }) => p), work: work ? work.key : null,
       rows, groups: groups.map(g => ({ id: g.id, title: g.title, digital: g.digital })), group: group ? group.id : null,
@@ -675,4 +713,5 @@ async function setSettings(db, userId, data) {
   return getSettings(db);
 }
 
-module.exports = { places, weakBlocks, lowQuarterCut, positionChange, workScreen, dynamics, getSettings, setSettings, trend, dynamicsRisk,  CAPTION, SECTION_CODES, placementMap, placementResults, workSeries, workResults, visibleGroups, loadAll, compareRows, compare, getMap, setMap, pick, mean, round1 };
+module.exports = {
+  tableRow, places, weakBlocks, lowQuarterCut, positionChange, workScreen, dynamics, getSettings, setSettings, trend, dynamicsRisk,  CAPTION, SECTION_CODES, placementMap, placementResults, workSeries, workResults, visibleGroups, loadAll, compareRows, compare, getMap, setMap, pick, mean, round1 };

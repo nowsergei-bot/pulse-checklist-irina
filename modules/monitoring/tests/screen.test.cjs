@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { places, weakBlocks, positionChange, lowQuarterCut } = require('../server/progress.cjs');
+const { places, weakBlocks, positionChange, lowQuarterCut, tableRow, SECTION_CODES } = require('../server/progress.cjs');
 
 test('место в параллели: при равенстве диапазон', () => {
   const p = places([{ id: 1, percent: 89 }, { id: 2, percent: 89 }, { id: 3, percent: 85 }, { id: 4, percent: 70 }]);
@@ -29,6 +29,27 @@ test('положение к параллели и нижняя четверть'
 });
 
 const url = process.env.MONITORING_TEST_DATABASE_URL;
+
+test('таблица «группа × работа»: значки, «К старту», параллель только с входным', () => {
+  const points = [{ key: 'placement' }, { key: 'm1' }, { key: 'ege1' }];
+  const v = (placement, m1, ege1) => {
+    const one = (x) => Object.fromEntries([...SECTION_CODES, 'total'].map(c => [c, c === 'total' ? x : null]));
+    return { placement: one(placement), m1: one(m1), ege1: one(ege1) };
+  };
+  // Ученик 3 без входного: в группе считается, в параллели по работам нет.
+  const values = new Map([[1, v(96.4, 93, 89.6)], [2, v(90, 87, null)], [3, v(null, 40, 30)]]);
+  const g = tableRow([1], values, points, 5, false).total;
+  assert.deepEqual(g.cells.map(c => c && [c.percent, c.trend]), [[96, null], [93, 'same'], [90, 'same']]);
+  assert.deepEqual(g.to_start, { diff: -7, kind: 'down' });
+  const one = tableRow([2], new Map([[2, v(90, null, null)]]), points, 5, false).total;
+  assert.deepEqual(one.to_start, { kind: 'one' });
+  assert.deepEqual(one.cells.slice(1), [null, null]);
+  const grp = tableRow([1, 2, 3], values, points, 5, false).total;
+  assert.deepEqual(grp.cells.map(c => c.n), [2, 3, 2]);
+  const par = tableRow([1, 2, 3], values, points, 5, true).total;
+  assert.deepEqual(par.cells.map(c => [c.percent, c.n]), [[93, 2], [90, 2], [90, 1]]);
+  assert.deepEqual(par.to_start, { diff: -4, kind: 'same' });
+});
 
 test('экран «Динамика» в базе', { skip: !url && 'нет MONITORING_TEST_DATABASE_URL' }, async (t) => {
   const { Client } = require('pg');
@@ -163,5 +184,7 @@ test('экран «Динамика» в базе', { skip: !url && 'нет MONI
     assert.deepEqual(r.body.screen.groups.map(g => g.title), ['11 G01']);
     assert.equal(r.body.screen.group, 1);
     assert.ok(!JSON.stringify(r.body.screen.students).includes('Ученик 3'));
+    assert.deepEqual(r.body.table.groups.map(g => g.title), ['11 G01']);
+    assert.ok(r.body.table.parallel.total.cells[0].n > r.body.table.groups[0].total.cells[0].n);
   });
 });

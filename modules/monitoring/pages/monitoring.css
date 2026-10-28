@@ -2025,3 +2025,54 @@ a.mon-btn {
   .mon-dyn .mon-prog__row { grid-template-columns: 4.5rem minmax(0, 1fr) 7rem; }
   .mon-dyn .mon-viz__bar-n { white-space: normal; }
 }
+
+/* Таблица «группа × работа» над вкладками работ. */
+.mon-wt { margin-bottom: 1.1rem; }
+.mon-wt__table {
+  width: 100%;
+  min-width: 34rem;
+  border-collapse: separate;
+  border-spacing: 6px 4px;
+  font-variant-numeric: tabular-nums;
+}
+.mon-wt__table th {
+  padding: 0.25rem;
+  color: var(--mon-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+.mon-wt__table .is-l { text-align: left; white-space: nowrap; }
+.mon-wt__table td { padding: 0; text-align: center; }
+.mon-wt__table tr.is-par td { padding-top: 6px; border-top: 1.5px solid var(--mon-ink); font-weight: 700; }
+.mon-wt__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.1rem;
+  padding: 0 0.5rem;
+  border-radius: 5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mon-wt__cell i { font-style: normal; font-size: 0.85em; }
+.mon-wt__cell.is-h85 { background: #1e5631; color: #fff; }
+.mon-wt__cell.is-h75 { background: #a8d08d; color: var(--mon-ink); }
+.mon-wt__cell.is-h60 { background: #ffe599; color: var(--mon-ink); }
+.mon-wt__cell.is-h50 { background: #f4b183; color: var(--mon-ink); }
+.mon-wt__cell.is-hlow { background: #c00000; color: #fff; }
+.mon-wt__cell.is-none,
+.mon-wt__cell.is-nodata {
+  border: 1.5px dashed #cfc8c1;
+  background: #fff;
+  color: #9a918a;
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+.mon-wt__start { font-weight: 700; white-space: nowrap; padding: 0 0.5rem !important; }
+.mon-wt__start.is-up { color: #2f7d55; }
+.mon-wt__start.is-down { color: #c00000; }
+.mon-wt__start.is-same { color: #5c5148; }
+.mon-wt__start.is-note { color: #9a918a; font-weight: 400; font-size: 0.85rem; }
