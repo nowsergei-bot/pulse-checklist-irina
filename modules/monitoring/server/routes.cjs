@@ -13,6 +13,7 @@ const rosterImport = require('./roster-import.cjs');
 const groupTeachers = require('./group-teachers.cjs');
 const { analytics, riskList } = require('./analytics.cjs');
 const progress = require('./progress.cjs');
+const dashboard = require('./dashboard.cjs');
 
 function parseBody(body) {
   if (body === null || body === undefined || body === '') return {};
@@ -131,6 +132,15 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (!caps.seeAnalytics) return forbidden;
     if (method !== 'GET') return { status: 405, body: { error: 'method_not_allowed' } };
     return path === '/analytics' ? analytics(db, query, caps) : riskList(db, query);
+  }
+  // Дашборд заместителей директора: заместитель директора, заведующая кафедрой и data_admin, только чтение.
+  // Учитель не получает его ни по одному адресу; записи здесь нет.
+  if (path === '/dashboard' || path.startsWith('/dashboard/')) {
+    if (!caps.seeAnalytics) return forbidden;
+    if (method !== 'GET') return { status: 405, body: { error: 'method_not_allowed' } };
+    if (path === '/dashboard') return dashboard.dashboard(db, query);
+    if (path === '/dashboard/group') return dashboard.groupTable(db, query);
+    return { status: 404, body: { error: 'not_found' } };
   }
   // /progress/compare: сравнение с входным. Заведующая кафедрой и data_admin видят все группы, учитель только свои
   // (отбор групп в progress.cjs). /progress/placement-map: сопоставление полей входного, только data_admin.

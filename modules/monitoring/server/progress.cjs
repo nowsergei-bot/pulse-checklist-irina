@@ -320,9 +320,14 @@ const BANDS = Object.freeze([
 ]);
 const ALL_SECTIONS = [...SECTION_CODES, 'total'];
 
-async function getThreshold(db) {
-  const r = await db.query('SELECT threshold FROM monitoring.progress_settings WHERE id');
-  return r.rows[0] ? Number(r.rows[0].threshold) : 5;
+// Порог изменения и пороги группы риска (миграции 014 и 015); без строки значения по умолчанию.
+const SETTING_DEFAULTS = Object.freeze({ threshold: 5, drop_to_start: DROP_TO_START, group_avg_below: 70, group_twos_from: 25 });
+const SETTING_LIMITS = Object.freeze({ threshold: [1, 30], drop_to_start: [1, 50], group_avg_below: [1, 100], group_twos_from: [1, 100] });
+async function readSettings(db) {
+  const r = (await db.query('SELECT * FROM monitoring.progress_settings WHERE id')).rows[0] || {};
+  const out = {};
+  for (const k of Object.keys(SETTING_DEFAULTS)) out[k] = r[k] === undefined || r[k] === null ? SETTING_DEFAULTS[k] : Number(r[k]);
+  return out;
 }
 
 // Изменение к старту: рост, без изменений, снижение по порогу (в процентных пунктах, включительно).
@@ -333,12 +338,12 @@ function trend(diff, threshold) {
   return 'same';
 }
 
-// Риск по динамике (итог): падение к старту на DROP_TO_START пунктов и больше; два снижения подряд
+// Риск по динамике (итог): падение к старту на dropToStart пунктов и больше (настройка, по умолчанию 10); два снижения подряд
 // (каждое не меньше порога) между соседними работами с результатом, считая входное.
-function dynamicsRisk(values, threshold) {
+function dynamicsRisk(values, threshold, dropToStart = DROP_TO_START) {
   const list = values.filter(v => v !== null);
   const reasons = [];
-  if (list.length >= 2 && list[list.length - 1] - list[0] <= -DROP_TO_START && values[0] !== null) {
+  if (list.length >= 2 && list[list.length - 1] - list[0] <= -dropToStart && values[0] !== null) {
     reasons.push({ code: 'drop_to_start', text: `ниже входного на ${list[0] - list[list.length - 1]} пунктов` });
   }
   let run = 0;
@@ -450,7 +455,8 @@ function egeRow(kind, title, ids, series, parallel) {
 // Учитель получает только свои группы (и средние по параллели), группа из запроса проверяется по видимым.
 async function dynamics(db, userId, caps, query) {
   const data = await loadAll(db, userId, caps);
-  const threshold = await getThreshold(db);
+  const settings = await readSettings(db);
+  const threshold = settings.threshold;
   const sections = [{ code: 'total', name: 'Итог' }, ...COMMON_SECTIONS];
   const empty = { year: data ? data.year.label : null, sections, threshold, parallels: [], parallel: null, points: [], work: null, rows: [], groups: [], group: null, students: [], risk: null, ege: null, caption: CAPTION };
   if (!data) return { status: 200, headers: { 'Cache-Control': 'no-store' }, body: empty };
@@ -494,7 +500,7 @@ async function dynamics(db, userId, caps, query) {
     for (const g of groups) {
       for (const m of data.members.get(g.id)) {
         const v = values.get(m.id);
-        const reasons = dynamicsRisk(points.map(p => v[p.key].total), threshold);
+        const reasons = dynamicsRisk(points.map(p => v[p.key].total), threshold, settings.drop_to_start);
         if (reasons.length) risk.push({ group: g.title, full_name: m.full_name, values: points.map(p => v[p.key].total), reasons });
       }
     }
@@ -519,7 +525,7 @@ async function dynamics(db, userId, caps, query) {
     headers: { 'Cache-Control': 'no-store' },
     body: {
       tab: tab.key, screen, table,
-      year: data.year.label, sections, threshold, drop_to_start: DROP_TO_START, bands: BANDS.map(b => ({ code: b.code, name: b.name })),
+      year: data.year.label, sections, threshold, drop_to_start: settings.drop_to_start, bands: BANDS.map(b => ({ code: b.code, name: b.name })),
       parallels, parallel, points: points.map(({ parallel: _p, ...p }) => p), work: work ? work.key : null,
       rows, groups: groups.map(g => ({ id: g.id, title: g.title, digital: g.digital })), group: group ? group.id : null,
       students, risk, ege, caption: CAPTION,
@@ -696,22 +702,34 @@ const commonName = (section) => {
   return found ? found.name : section;
 };
 
-// GET/POST /progress/settings (data_admin): порог роста и снижения.
+// GET/POST /progress/settings (data_admin): порог роста и снижения, пороги группы риска.
+// В POST можно передать только часть полей; остальные не меняются.
 async function getSettings(db) {
-  const r = await db.query('SELECT threshold, updated_by_name, updated_at FROM monitoring.progress_settings WHERE id');
-  return { status: 200, headers: { 'Cache-Control': 'no-store' }, body: r.rows[0] || { threshold: 5 } };
+  const r = (await db.query('SELECT updated_by_name, updated_at FROM monitoring.progress_settings WHERE id')).rows[0] || {};
+  return { status: 200, headers: { 'Cache-Control': 'no-store' }, body: { ...(await readSettings(db)), updated_by_name: r.updated_by_name ?? null, updated_at: r.updated_at ?? null } };
 }
+const SETTING_NAMES = { threshold: 'Порог', drop_to_start: 'Снижение к входному', group_avg_below: 'Средний процент группы', group_twos_from: 'Доля «2» в группе' };
 async function setSettings(db, userId, data) {
-  const t = data && data.threshold;
-  if (!Number.isInteger(t) || t < 1 || t > 30) return { status: 400, body: { error: 'bad_request', message: 'Порог: целое число от 1 до 30' } };
+  const next = await readSettings(db);
+  let given = 0;
+  for (const [k, [lo, hi]] of Object.entries(SETTING_LIMITS)) {
+    if (!data || data[k] === undefined) continue;
+    const v = data[k];
+    if (!Number.isInteger(v) || v < lo || v > hi) return { status: 400, body: { error: 'bad_request', message: `${SETTING_NAMES[k]}: целое число от ${lo} до ${hi}` } };
+    next[k] = v;
+    given += 1;
+  }
+  if (!given) return { status: 400, body: { error: 'bad_request', message: 'Порог: целое число от 1 до 30' } };
   const named = await db.query('SELECT full_name FROM pulse_read.users WHERE id = $1 AND full_name IS NOT NULL LIMIT 1', [userId]);
   await db.query(
-    `INSERT INTO monitoring.progress_settings (id, threshold, updated_by, updated_by_name, updated_at) VALUES (true, $1, $2, $3, now())
-     ON CONFLICT (id) DO UPDATE SET threshold = EXCLUDED.threshold, updated_by = EXCLUDED.updated_by, updated_by_name = EXCLUDED.updated_by_name, updated_at = now()`,
-    [t, userId, named.rows[0] ? named.rows[0].full_name : ''],
+    `INSERT INTO monitoring.progress_settings (id, threshold, drop_to_start, group_avg_below, group_twos_from, updated_by, updated_by_name, updated_at)
+     VALUES (true, $1, $2, $3, $4, $5, $6, now())
+     ON CONFLICT (id) DO UPDATE SET threshold = EXCLUDED.threshold, drop_to_start = EXCLUDED.drop_to_start, group_avg_below = EXCLUDED.group_avg_below,
+       group_twos_from = EXCLUDED.group_twos_from, updated_by = EXCLUDED.updated_by, updated_by_name = EXCLUDED.updated_by_name, updated_at = now()`,
+    [next.threshold, next.drop_to_start, next.group_avg_below, next.group_twos_from, userId, named.rows[0] ? named.rows[0].full_name : ''],
   );
   return getSettings(db);
 }
 
 module.exports = {
-  tableRow, places, weakBlocks, lowQuarterCut, positionChange, workScreen, dynamics, getSettings, setSettings, trend, dynamicsRisk,  CAPTION, SECTION_CODES, placementMap, placementResults, workSeries, workResults, visibleGroups, loadAll, compareRows, compare, getMap, setMap, pick, mean, round1 };
+  tableRow, places, weakBlocks, lowQuarterCut, positionChange, workScreen, dynamics, getSettings, setSettings, readSettings, trend, dynamicsRisk,  CAPTION, SECTION_CODES, placementMap, placementResults, workSeries, workResults, visibleGroups, loadAll, compareRows, compare, getMap, setMap, pick, mean, round1 };

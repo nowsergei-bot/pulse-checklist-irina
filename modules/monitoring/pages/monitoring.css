@@ -2065,6 +2065,152 @@ a.mon-btn {
 .mon-wt__start.is-same { color: var(--mon-p-same-ink); }
 .mon-wt__start.is-note { color: var(--mon-p-empty-ink); font-weight: 400; font-size: 0.85rem; }
 
+/* Дашборд заместителей директора (29.10): плитки, таблицы параллелей и групп, полоса отметок, группа риска, рейтинги.
+   Цвета данных из palette.ts через --mon-p-*. */
+.mon-dash__tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mon-dash__none { color: var(--mon-p-empty-ink); font-weight: 400; }
+.mon-dyn__big.mon-dash__none { font-size: 1.15rem; line-height: 2.1rem; }
+.mon-dash__table td { font-weight: 500; }
+.mon-dash__table td.mon-band--p90,
+.mon-dash__table td.mon-band--p85,
+.mon-dash__table td.mon-band--p70,
+.mon-dash__table td.mon-band--low { font-weight: 700; min-width: 4.2rem; }
+.mon-dash__click { cursor: pointer; }
+.mon-dash__click:hover td.is-l,
+.mon-dash__click:focus-visible td.is-l { background: var(--mon-p-pick); }
+.mon-dash__click:focus-visible { outline: none; }
+tr.is-picked td.is-l { background: var(--mon-p-pick); box-shadow: inset 3px 0 0 var(--mon-p-p90-bg); }
+.mon-dash__par td { border-top: 2px solid var(--dyn-line); border-radius: 0; padding-top: 0.7rem; }
+.mon-dash__bad { color: var(--mon-p-low-bg); font-weight: 700 !important; }
+.mon-dash__teacher { color: var(--dyn-muted); font-size: 0.82rem; font-weight: 400; }
+td.mon-dash__teacher { white-space: normal !important; min-width: 9rem; }
+.mon-dash__bar-h { min-width: 14rem; }
+.mon-dash__bar-c { padding: 0.3rem 0.4rem !important; }
+.mon-dash__bar {
+  display: flex;
+  width: 100%;
+  min-width: 13rem;
+  height: 1.55rem;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--mon-p-empty-bg);
+}
+.mon-dash__seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mon-dash__seg--5 { background: var(--mon-p-m5-bg); color: var(--mon-p-m5-ink); }
+.mon-dash__seg--4 { background: var(--mon-p-m4-bg); color: var(--mon-p-m4-ink); }
+.mon-dash__seg--3 { background: var(--mon-p-same-bg); color: var(--mon-p-same-ink); }
+.mon-dash__seg--2 { background: var(--mon-p-m2-bg); color: var(--mon-p-m2-ink); }
+.mon-dash__mark { font-weight: 700 !important; }
+.mon-dash__mark--5 { background: var(--mon-p-m5-bg); color: var(--mon-p-m5-ink); }
+.mon-dash__mark--4 { background: var(--mon-p-m4-bg); color: var(--mon-p-m4-ink); }
+.mon-dash__mark--3 { background: var(--mon-p-m3-bg); color: var(--mon-p-m3-ink); }
+.mon-dash__mark--2 { background: var(--mon-p-m2-bg); color: var(--mon-p-m2-ink); }
+.mon-dash__sub {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--mon-ink);
+}
+.mon-dash__sub:first-child { margin-top: 0; }
+.mon-dash__heat td.is-l { min-width: 5.5rem; }
+.mon-dash__weak {
+  margin: 0.7rem 0 0;
+  padding: 0.55rem 0.8rem;
+  border-left: 3px solid var(--mon-p-low-bg);
+  border-radius: 0 8px 8px 0;
+  background: var(--mon-p-sand);
+  color: var(--mon-ink);
+  font-weight: 600;
+}
+.mon-dash__two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem 1.5rem;
+}
+.mon-dash__three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem 1.5rem;
+}
+.mon-dash__counters { display: grid; gap: 0.5rem; }
+.mon-dash__counter {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--dyn-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--mon-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mon-dash__counter b {
+  min-width: 2.2rem;
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--mon-p-low-bg);
+}
+.mon-dash__three .mon-dash__counter b { color: var(--mon-p-p90-bg); }
+.mon-dash__counter span { font-size: 0.88rem; }
+.mon-dash__counter.is-current { border-color: var(--mon-p-p90-bg); box-shadow: inset 0 0 0 1px var(--mon-p-p90-bg); }
+.mon-dash__counter:disabled { cursor: default; opacity: 0.6; }
+.mon-dash__list { margin-top: 0.9rem; }
+.mon-dash__list td { font-weight: 400; }
+.mon-dash__rank {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mon-dash__rank li {
+  display: grid;
+  grid-template-columns: 1.7rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mon-dash__place {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--mon-p-sand);
+  color: var(--mon-ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.mon-dash__place--p { border-radius: 6px; width: auto; min-width: 1.6rem; padding: 0 0.25rem; }
+.mon-dash__who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.mon-dash__val {
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .mon-dash__tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mon-dash__three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .mon-dash__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mon-dash__two,
+  .mon-dash__three { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Одна шкала процента для всех таблиц, полос и столбиков (palette.ts): 90 и выше, 85-89, 70-84, ниже 70.
    Последними в файле, чтобы перекрывать базовые цвета блоков. */
 .mon-band--p90 { background: var(--mon-p-p90-bg); color: var(--mon-p-p90-ink); }

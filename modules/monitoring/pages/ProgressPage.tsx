@@ -88,28 +88,48 @@ function MapEditor({ onSaved }: { onSaved: () => void }) {
   );
 }
 
+type SettingsData = { threshold: number; drop_to_start: number; group_avg_below: number; group_twos_from: number };
+const SETTING_FIELDS: { key: keyof SettingsData; label: string; min: number; max: number }[] = [
+  { key: 'threshold', label: 'Порог роста и снижения, пунктов', min: 1, max: 30 },
+  { key: 'drop_to_start', label: 'Риск: ниже входного на, пунктов', min: 1, max: 50 },
+  { key: 'group_avg_below', label: 'Риск группы: средний % ниже', min: 1, max: 100 },
+  { key: 'group_twos_from', label: 'Риск группы: «2» у, % и больше', min: 1, max: 100 },
+];
+
+// Пороги «Динамики» и группы риска на дашборде (только data_admin).
 function Settings({ threshold, onSaved }: { threshold: number; onSaved: () => void }) {
-  const [value, setValue] = useState(String(threshold));
+  const { data, reload } = useApi<SettingsData>('/progress/settings');
+  const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const value = (k: keyof SettingsData) => values[k] ?? (data ? String(data[k]) : k === 'threshold' ? String(threshold) : '');
+  const changed = data ? SETTING_FIELDS.filter(f => values[f.key] !== undefined && Number(values[f.key]) !== data[f.key]) : [];
   async function save() {
     setBusy(true); setMsg('');
     try {
-      await api('/progress/settings', { method: 'POST', body: { threshold: Number(value) } });
+      await api('/progress/settings', { method: 'POST', body: Object.fromEntries(changed.map(f => [f.key, Number(values[f.key])])) });
       setMsg('Сохранено');
+      setValues({});
+      reload();
       onSaved();
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   }
   return (
     <section className="mon-an__block">
-      <h3 className="mon-an__title">Порог роста и снижения</h3>
-      <p className="mon-note">Рост: разница с входным не меньше порога, снижение: не больше минус порога, остальное без изменений. Те же стрелки в таблице разделов. Сейчас {threshold} пунктов.</p>
+      <h3 className="mon-an__title">Пороги</h3>
+      <p className="mon-note">
+        Рост: разница с входным не меньше порога, снижение: не больше минус порога, остальное без изменений. Те же стрелки в таблице разделов.
+        Сейчас {threshold} пунктов. Группа риска на дашборде: ученик ниже входного на заданное число пунктов или два снижения подряд по порогу;
+        группа со средним процентом ниже заданного или с долей «2» от заданной.
+      </p>
       <div className="mon-toolbar">
-        <label className="mon-field">
-          <span className="mon-label">Порог, пунктов</span>
-          <input className="mon-input mon-prog__num" type="number" min={1} max={30} value={value} onChange={e => setValue(e.target.value)} />
-        </label>
-        <button type="button" className="mon-btn mon-btn--primary" disabled={busy || Number(value) === threshold} onClick={save}>Сохранить</button>
+        {SETTING_FIELDS.map(f => (
+          <label key={f.key} className="mon-field">
+            <span className="mon-label">{f.label}</span>
+            <input className="mon-input mon-prog__num" type="number" min={f.min} max={f.max} value={value(f.key)} disabled={!data} onChange={e => setValues({ ...values, [f.key]: e.target.value })} />
+          </label>
+        ))}
+        <button type="button" className="mon-btn mon-btn--primary" disabled={busy || !changed.length} onClick={save}>Сохранить</button>
         {msg ? <span className="mon-note">{msg}</span> : null}
       </div>
     </section>
