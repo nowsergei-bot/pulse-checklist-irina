@@ -72,7 +72,10 @@ async function listWorks(db, userId, caps) {
             s.title AS spec_title, v.version, v.max_points, w.spec_version_id,
             (SELECT json_agg(json_build_object('name', p.name, 'held_on', wp.held_on) ORDER BY p.sort)
                FROM monitoring.work_parts wp JOIN monitoring.spec_parts p ON p.id = wp.part_id WHERE wp.work_id = w.id) AS parts,
-            (SELECT array_agg(group_id) FROM monitoring.work_groups g WHERE g.work_id = w.id) AS group_ids
+            (SELECT array_agg(group_id) FROM monitoring.work_groups g WHERE g.work_id = w.id) AS group_ids,
+            (SELECT json_object_agg(gs.group_id, json_build_object('title', s2.title, 'version', v2.version, 'max_points', v2.max_points))
+               FROM monitoring.work_group_specs gs JOIN monitoring.spec_versions v2 ON v2.id = gs.spec_version_id
+               JOIN monitoring.specs s2 ON s2.id = v2.spec_id WHERE gs.work_id = w.id) AS own_specs
      FROM monitoring.works w
      JOIN monitoring.assessment_types t ON t.id = w.type_id
      JOIN monitoring.spec_versions v ON v.id = w.spec_version_id
@@ -90,13 +93,15 @@ async function listWorks(db, userId, caps) {
     id: w.id, title: w.title, parallel: w.parallel, status: w.status, is_test: w.is_test, type_name: w.type_name,
     spec: w.spec_title, version: w.version, max_points: w.max_points, parts: w.parts || [],
     spec_version_id: w.spec_version_id,
+    // own_spec: своя спецификация группы (миграция 016), у такой группы свой максимум.
     groups: (w.group_ids || []).filter(id => !own || own.includes(id)).map(id => groups.get(id)).filter(Boolean)
+      .map(g => (w.own_specs && w.own_specs[g.id] ? { ...g, own_spec: w.own_specs[g.id] } : g))
       .sort((a, b) => Number(a.digital) - Number(b.digital) || String(a.title).localeCompare(String(b.title), 'ru')),
   }));
   // Учителю (без права видеть все группы): карточки своих групп с прогрессом внесения.
   if (own) {
     for (const w of works) {
-      for (const g of w.groups) g.progress = await groupProgress(db, w.id, w.spec_version_id, g.id);
+      for (const g of w.groups) g.progress = await groupProgress(db, w.id, g.id);
     }
   }
   for (const w of works) delete w.spec_version_id;
@@ -105,13 +110,14 @@ async function listWorks(db, userId, caps) {
 
 // Сколько учеников текущего состава группы внесены полностью: по каждому заданию есть балл
 // (в любой группе) или часть отмечена «отсутствовал». Состав тот же, что в таблице ввода.
-async function groupProgress(db, workId, versionId, groupId) {
+// Задания по спецификации группы: своя спецификация группы или спецификация работы.
+async function groupProgress(db, workId, groupId) {
   const members = (await groupStudents(db, groupId, workId)).map(s => Number(s.id));
   const r = await db.query(
     `WITH m AS (
        SELECT unnest($3::int[]) AS student_id
      ), t AS (
-       SELECT id, part_id FROM monitoring.spec_tasks WHERE version_id = $2
+       SELECT id, part_id FROM monitoring.spec_tasks WHERE version_id = monitoring.group_spec_version($1, $2)
      )
      SELECT count(*)::int AS total,
             count(*) FILTER (WHERE NOT EXISTS (
@@ -122,7 +128,7 @@ async function groupProgress(db, workId, versionId, groupId) {
                                 WHERE sc.work_id = $1 AND sc.task_id = t.id AND sc.student_id = m.student_id AND sc.score IS NOT NULL)
             ))::int AS done
      FROM m`,
-    [workId, versionId, members],
+    [workId, groupId, members],
   );
   return r.rows[0];
 }
@@ -131,12 +137,17 @@ async function getWork(db, workId) {
   const r = await db.query(
     `SELECT w.id, w.type_id, w.title, w.academic_year_id, w.parallel, w.spec_version_id, w.scale_id, w.status, w.is_test,
             (SELECT json_object_agg(p.code, wp.held_on) FROM monitoring.work_parts wp JOIN monitoring.spec_parts p ON p.id = wp.part_id WHERE wp.work_id = w.id) AS dates,
-            (SELECT coalesce(array_agg(group_id), '{}') FROM monitoring.work_groups WHERE work_id = w.id) AS groups
+            (SELECT coalesce(array_agg(group_id), '{}') FROM monitoring.work_groups WHERE work_id = w.id) AS groups,
+            (SELECT coalesce(json_object_agg(group_id, spec_version_id), '{}') FROM monitoring.work_group_specs WHERE work_id = w.id) AS group_specs
      FROM monitoring.works w WHERE w.id = $1`,
     [workId],
   );
   if (!r.rows.length) return { status: 404, body: { error: 'not_found' } };
-  return { status: 200, body: { work: { ...r.rows[0], has_results: await hasResults(db, workId) } } };
+  const work = r.rows[0];
+  // Группы, у которых уже есть результаты: им нельзя сменить или снять свою спецификацию.
+  const withResults = [];
+  for (const g of work.groups) if (await hasResults(db, workId, [Number(g)])) withResults.push(Number(g));
+  return { status: 200, body: { work: { ...work, has_results: withResults.length > 0, groups_with_results: withResults } } };
 }
 
 function cleanDates(dates) {
@@ -205,8 +216,8 @@ async function createWorks(db, userId, data) {
 }
 
 // Правка. Версию спецификации нельзя сменить, если по работе есть результаты;
-// группу нельзя убрать, если по ней есть результаты.
-async function updateWork(db, workId, data) {
+// группу нельзя убрать, если по ней есть результаты; своя спецификация группы меняется, только пока у группы нет результатов.
+async function updateWork(db, workId, data, userId = null) {
   const current = (await db.query('SELECT id, parallel, spec_version_id FROM monitoring.works WHERE id = $1', [workId])).rows[0];
   if (!current) return { status: 404, body: { error: 'not_found' } };
   const c = await check(db, data, { parallels: [Number(current.parallel)] });
@@ -221,21 +232,27 @@ async function updateWork(db, workId, data) {
     return bad('Группу нельзя убрать из работы: по ней уже есть результаты', 409);
   }
 
+  // Своя спецификация группы: { group_id: spec_version_id }; не указана или null: спецификация работы.
+  const wanted = new Map();
+  if (data.group_specs && typeof data.group_specs === 'object') {
+    for (const [g, v] of Object.entries(data.group_specs)) {
+      if (v === null || v === undefined || v === '' || Number(v) === c.versionId) continue;
+      if (!c.chosen.some(x => x.id === Number(g))) return bad('Своя спецификация только у групп этой работы');
+      const ok = (await db.query("SELECT 1 FROM monitoring.spec_versions v JOIN monitoring.specs s ON s.id = v.spec_id WHERE v.id = $1 AND v.status = 'approved' AND s.type_id = $2", [Number(v), c.typeId])).rows[0];
+      if (!ok) return bad('Своя спецификация группы: выберите утверждённую версию того же вида работы');
+      wanted.set(Number(g), Number(v));
+    }
+  }
+  const had = new Map((await db.query('SELECT group_id, spec_version_id FROM monitoring.work_group_specs WHERE work_id = $1', [workId])).rows.map(r => [Number(r.group_id), Number(r.spec_version_id)]));
+  const changedSpec = [...new Set([...had.keys(), ...wanted.keys()])].filter(g => had.get(g) !== wanted.get(g) && c.chosen.some(x => x.id === g));
+  if (changedSpec.length && await hasResults(db, workId, changedSpec)) {
+    return bad('Спецификацию группы нельзя сменить: по группе уже есть результаты', 409);
+  }
+
   await db.query(
     `UPDATE monitoring.works SET type_id = $2, title = $3, academic_year_id = $4, spec_version_id = $5, scale_id = $6, status = $7, is_test = $8
      WHERE id = $1`,
     [workId, c.typeId, c.title, c.yearId, c.versionId, c.scaleId, data.status, Boolean(data.is_test)],
-  );
-  // Части по текущей версии и их даты.
-  await db.query(
-    `WITH d AS (
-       DELETE FROM monitoring.work_parts wp WHERE wp.work_id = $1
-         AND NOT EXISTS (SELECT 1 FROM monitoring.spec_parts sp WHERE sp.id = wp.part_id AND sp.version_id = $2)
-     )
-     INSERT INTO monitoring.work_parts (work_id, part_id, held_on)
-     SELECT $1, sp.id, ($3::json ->> sp.code)::date FROM monitoring.spec_parts sp WHERE sp.version_id = $2
-     ON CONFLICT (work_id, part_id) DO UPDATE SET held_on = EXCLUDED.held_on`,
-    [workId, c.versionId, JSON.stringify(c.dates)],
   );
   await db.query(
     `WITH d AS (
@@ -243,6 +260,30 @@ async function updateWork(db, workId, data) {
      )
      INSERT INTO monitoring.work_groups (work_id, group_id) SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING`,
     [workId, c.chosen.map(g => g.id)],
+  );
+  const specRows = [...wanted].map(([group_id, spec_version_id]) => ({ group_id, spec_version_id }));
+  await db.query(
+    `WITH d AS (
+       DELETE FROM monitoring.work_group_specs WHERE work_id = $1
+         AND NOT (group_id = ANY(SELECT (x ->> 'group_id')::int FROM json_array_elements($2::json) x))
+     )
+     INSERT INTO monitoring.work_group_specs (work_id, group_id, spec_version_id, updated_by)
+     SELECT $1, (x ->> 'group_id')::int, (x ->> 'spec_version_id')::int, $3 FROM json_array_elements($2::json) x
+     ON CONFLICT (work_id, group_id) DO UPDATE SET spec_version_id = EXCLUDED.spec_version_id, updated_by = EXCLUDED.updated_by, updated_at = now()
+       WHERE monitoring.work_group_specs.spec_version_id <> EXCLUDED.spec_version_id`,
+    [workId, JSON.stringify(specRows), userId],
+  );
+  // Части по версии работы и по своим спецификациям групп; даты по коду части (письмо, тест).
+  const versionIds = [c.versionId, ...new Set(wanted.values())];
+  await db.query(
+    `WITH d AS (
+       DELETE FROM monitoring.work_parts wp WHERE wp.work_id = $1
+         AND NOT EXISTS (SELECT 1 FROM monitoring.spec_parts sp WHERE sp.id = wp.part_id AND sp.version_id = ANY($2::int[]))
+     )
+     INSERT INTO monitoring.work_parts (work_id, part_id, held_on)
+     SELECT $1, sp.id, ($3::json ->> sp.code)::date FROM monitoring.spec_parts sp WHERE sp.version_id = ANY($2::int[])
+     ON CONFLICT (work_id, part_id) DO UPDATE SET held_on = EXCLUDED.held_on`,
+    [workId, versionIds, JSON.stringify(c.dates)],
   );
   return { status: 200, body: { ok: true } };
 }

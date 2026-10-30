@@ -11,7 +11,7 @@ const { loadSpecs } = require('./placement-fields.cjs');
 const { COMMON_SECTIONS, MODULE_SECTION_MAP, suggestCommonSection } = require('./lib/compare.cjs');
 const { percentOf, studentResult } = require('./lib/calc.cjs');
 const { groupStudents, teacherGroupIds } = require('./lib/groups.cjs');
-const { structure } = require('./sheet.cjs');
+const { structure, groupSpecs } = require('./sheet.cjs');
 
 const SECTION_CODES = COMMON_SECTIONS.map(s => s.code);
 const MAP_VALUES = [...SECTION_CODES, 'none'];
@@ -141,28 +141,37 @@ async function workSeries(db, yearId) {
 }
 
 // Результаты учеников по работе: Map student_id -> { percent, total, sections, scores } только для полных работ.
+// Группа со своей спецификацией (миграция 016): ученик считается по спецификации группы, где внесены его баллы
+// (при баллах в нескольких группах: где их больше). own_spec: результат не по спецификации работы,
+// такие ученики сравниваются по процентам итога и разделов, в блоках работы их нет.
 async function workResults(db, work) {
   const struct = await structure(db, work);
-  const scores = (await db.query('SELECT student_id, task_id, score FROM monitoring.task_scores WHERE work_id = $1', [work.id])).rows;
-  const absent = (await db.query("SELECT student_id, part_id FROM monitoring.part_status WHERE work_id = $1 AND status = 'absent'", [work.id])).rows;
+  const specs = await groupSpecs(db, work.id);
+  const byGroup = new Map();
+  for (const g of specs.keys()) byGroup.set(g, await structure(db, work, g));
+  const scores = (await db.query('SELECT student_id, task_id, group_id, score FROM monitoring.task_scores WHERE work_id = $1', [work.id])).rows;
+  const absent = (await db.query("SELECT student_id, part_id, group_id FROM monitoring.part_status WHERE work_id = $1 AND status = 'absent'", [work.id])).rows;
   const byStudent = new Map();
   const get = (id) => {
-    if (!byStudent.has(id)) byStudent.set(id, { scores: new Map(), absent: new Set() });
+    if (!byStudent.has(id)) byStudent.set(id, { scores: new Map(), absent: new Set(), groups: new Map() });
     return byStudent.get(id);
   };
-  for (const r of scores) get(Number(r.student_id)).scores.set(r.task_id, r.score);
-  for (const r of absent) get(Number(r.student_id)).absent.add(r.part_id);
+  const count = (x, g) => x.groups.set(Number(g), (x.groups.get(Number(g)) || 0) + 1);
+  for (const r of scores) { const x = get(Number(r.student_id)); x.scores.set(r.task_id, r.score); if (r.score !== null) count(x, r.group_id); }
+  for (const r of absent) { const x = get(Number(r.student_id)); x.absent.add(r.part_id); count(x, r.group_id); }
   const out = new Map();
   for (const [id, x] of byStudent) {
-    const res = studentResult({ parts: struct.parts, tasks: struct.tasks, maxPoints: work.max_points, scale: [], absentPartIds: x.absent, scores: x.scores, graded: false });
+    const g = [...x.groups.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
+    const st = (g && byGroup.get(g[0])) || struct;
+    const res = studentResult({ parts: st.parts, tasks: st.tasks, maxPoints: st.max_points ?? work.max_points, scale: [], absentPartIds: x.absent, scores: x.scores, graded: false });
     if (!res.complete) continue;
     const sections = {};
     for (const code of SECTION_CODES) {
-      const own = struct.tasks.filter(t => MODULE_SECTION_MAP[t.section] === code);
+      const own = st.tasks.filter(t => MODULE_SECTION_MAP[t.section] === code);
       if (!own.length) continue;
       sections[code] = percentOf(own.reduce((a, t) => a + Number(x.scores.get(t.id) || 0), 0), own.reduce((a, t) => a + t.max_points, 0));
     }
-    out.set(id, { percent: res.percent, total: res.total, sections, scores: x.scores });
+    out.set(id, { percent: res.percent, total: res.total, sections, scores: x.scores, own_spec: st !== struct, max_points: Number(st.max_points ?? work.max_points) });
   }
   return { results: out, tasks: struct.tasks };
 }
@@ -437,14 +446,16 @@ function dynamicsRow(kind, title, ids, values, points, workKey, threshold, extra
 function egeRow(kind, title, ids, series, parallel) {
   const tasks = series.tasks.get(parallel) || [];
   const done = ids.map(id => series.results.get(id)).filter(r => r && r.parallel === parallel);
+  // Блоки и уровни только у учеников, писавших по спецификации работы (без своей спецификации группы).
+  const same = done.filter(r => !r.own_spec);
   const sumPct = (list) => {
     const max = list.reduce((a, t) => a + t.max_points, 0);
-    if (!done.length || !max) return null;
-    return mean(done.map(r => percentOf(list.reduce((a, t) => a + Number(r.scores.get(t.id) || 0), 0), max)));
+    if (!same.length || !max) return null;
+    return mean(same.map(r => percentOf(list.reduce((a, t) => a + Number(r.scores.get(t.id) || 0), 0), max)));
   };
   return {
     kind, row: title, students: ids.length, complete: done.length,
-    avg_total: mean(done.map(r => r.total)), avg_percent: mean(done.map(r => r.percent)),
+    avg_total: done.some(r => r.own_spec) ? null : mean(done.map(r => r.total)), avg_percent: mean(done.map(r => r.percent)),
     blocks: tasks.map(t => sumPct([t])),
     basic: sumPct(tasks.filter(t => t.level === 'basic')),
     high: sumPct(tasks.filter(t => t.level !== 'basic')),
@@ -624,7 +635,8 @@ function workScreen(data, parallel, point, visible, groupId) {
       n: rs.length,
       percent: mean(rs.map(r => r.percent)),
       percent_int: rs.length ? roundInt(rs.reduce((a, r) => a + r.percent, 0) / rs.length) : null,
-      avg_total: isPlacement ? null : mean(rs.map(r => r.total)),
+      // Средний балл только по одной спецификации; при своей спецификации группы сравнение по процентам.
+      avg_total: isPlacement || rs.some(r => r.own_spec) ? null : mean(rs.map(r => r.total)),
       sections: sec,
     };
   };
@@ -692,6 +704,8 @@ function workScreen(data, parallel, point, visible, groupId) {
     blocks: blockMeta, blocks_parallel: blocksPar.map(b => b.percent), blocks_by_group: blocksByGroup, weak,
     position,
     group: group ? group.id : null,
+    // Максимум выбранной группы: у группы со своей спецификацией свой (столбец «балл из ...» в таблице учеников).
+    group_max_points: isPlacement || !group ? null : (data.members.get(group.id).map(m => resOf(m.id)).find(r => r && r.max_points) || {}).max_points ?? maxPoints,
     students,
   };
 }

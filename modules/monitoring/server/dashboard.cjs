@@ -11,7 +11,7 @@
 const { markFor, percentOf } = require('./lib/calc.cjs');
 const { COMMON_SECTIONS, MODULE_SECTION_MAP } = require('./lib/compare.cjs');
 const { groupStudents, TEACHER_GROUPS_SQL } = require('./lib/groups.cjs');
-const { structure, buildStudents, loadWork } = require('./sheet.cjs');
+const { structure, groupSpecs, buildStudents, loadWork } = require('./sheet.cjs');
 const { loadAll, readSettings, placementMap, placementResults } = require('./progress.cjs');
 const { currentYear } = require('./schema.cjs');
 
@@ -176,16 +176,28 @@ async function workData(db, data, option) {
        WHERE wg.work_id = $1 AND g.archived_at IS NULL ORDER BY g.campus = 'digital', coalesce(g.title, g.code)`,
       [work.id],
     )).rows;
+    // Группы со своей спецификацией (миграция 016): разделы и уровни по их заданиям, сравнение по процентам;
+    // столбцов заданий (блоков) у них нет: блоки работы другие.
+    const ownCols = new Map();
+    for (const gid of (await groupSpecs(db, work.id)).keys()) {
+      const gs = await structure(db, work, gid);
+      maxes.add(Number(gs.max_points));
+      const gc = taskColumns(gs.tasks, ege).map(({ tasks, ...c }) => c);
+      for (const c of gc) for (const m of ['sections', 'levels']) addColumn(columns[m], c[m].key, c[m].label, m === 'levels' ? { level: c.levels.level, section: c.levels.section } : {});
+      ownCols.set(gid, gc);
+    }
     for (const g of wg) {
       const ids = (await groupStudents(db, Number(g.id), work.id)).map(s => Number(s.id));
       groups.push({ id: Number(g.id), title: g.title, digital: g.campus === 'digital', parallel: Number(work.parallel), ids });
       for (const id of ids) {
         const r = series.results.get(id);
         if (!r || r.work_id !== work.id || records.has(id)) continue;
+        // Ученик по своей спецификации группы: столбцы той спецификации, по заданиям которой внесены баллы.
+        const own = r.own_spec ? [...ownCols.values()].find(gc => gc.some(c => r.scores.has(c.task.id))) : null;
         records.set(id, {
           id, percent: r.percent, total: r.total, parallel: Number(work.parallel),
           mark: workGraded ? markFor(r.percent, struct.scale) : null,
-          parts: partsOf(r.scores, cols),
+          parts: partsOf(r.scores, own || cols),
         });
       }
       for (const id of ids) if (absent.has(id) && !series.results.has(id)) absentIds.add(id);
@@ -377,7 +389,7 @@ async function groupTable(db, query) {
   )).rows[0];
   if (!w) return { status: 404, body: { error: 'not_found' } };
   const work = await loadWork(db, Number(w.id));
-  const struct = await structure(db, work);
+  const struct = await structure(db, work, groupId);
   const members = await groupStudents(db, groupId, work.id);
   const graded = work.graded !== false && struct.scale.length > 0;
   const students = (await buildStudents(db, work, groupId, members, struct)).map(s => {
@@ -391,7 +403,7 @@ async function groupTable(db, query) {
   }).sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1) || a.full_name.localeCompare(b.full_name, 'ru'));
   return {
     status: 200, headers: NO_STORE,
-    body: { group: { id: groupId, title }, work: { key, title: work.title, graded, max_points: Number(work.max_points) }, students },
+    body: { group: { id: groupId, title }, work: { key, title: work.title, graded, max_points: Number(struct.max_points) }, students },
   };
 }
 

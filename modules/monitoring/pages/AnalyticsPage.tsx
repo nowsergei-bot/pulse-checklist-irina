@@ -26,6 +26,17 @@ const MOVES = ['2→3', '3→4', '4→5'];
 const DOWN = ['3→2', '4→3', '5→4'];
 const LEVEL = { basic: 'баз.', advanced: 'пов.' } as Record<string, string>;
 
+// Группа со своей спецификацией: в названии строки её максимум.
+const rowName = (r: Row) => (r.own_spec ? `${r.row} (своя спецификация, из ${r.own_spec.max_points})` : r.row);
+
+// Пояснение к таблицам, если в работе есть группы со своей спецификацией.
+export function ownSpecNote(rows: Row[]) {
+  const own = rows.filter(r => r.kind === 'group' && r.own_spec);
+  if (!own.length) return '';
+  const list = own.map(r => `${r.row} писала по спецификации «${r.own_spec!.title}» (из ${r.own_spec!.max_points})`).join('; ');
+  return ` ${list}: её ученики считаются по своей спецификации, в параллели группы сравниваются по проценту выполнения, средний итог параллели не считается (максимумы разные).`;
+}
+
 function tables(d: Data, manage: boolean): Table[] {
   const rows = d.module?.rows || [];
   const keys = d.module?.section_keys || [];
@@ -34,20 +45,21 @@ function tables(d: Data, manage: boolean): Table[] {
   const bySection = rows.filter(r => r.kind !== 'total' && r.kind !== 'total_left');
   const gentle = rows.filter(r => r.gentle && r.gentle.students > 0);
   const ruled = rows.filter(r => r.rule && r.rule.compared > 0);
+  const own = ownSpecNote(rows);
   const out: Table[] = [
     {
       key: 'groups', title: `${title}: группы и параллели`,
-      note: 'Учеников по текущему составу. Средний итог, средний % и отметки по полным работам; отметки по обычной шкале «5» от 90 %, «4» от 74 %, «3» от 50 % (щадящий режим на отметку не влияет). Отсутствовали: хотя бы на одной части. Не внесено: работа заполнена не полностью.',
+      note: 'Учеников по текущему составу. Средний итог, средний % и отметки по полным работам; отметки по обычной шкале «5» от 90 %, «4» от 74 %, «3» от 50 % (щадящий режим на отметку не влияет). Отсутствовали: хотя бы на одной части. Не внесено: работа заполнена не полностью.' + own,
       head: ['Параллель', 'Группа', 'Учеников', 'Полных работ', 'Отсутствовали', 'Не внесено', 'Средний итог', 'Средний %', '«5»', '«4»', '«3»', '«2»'],
-      rows: rows.map(r => [r.parallel, r.row, r.students, r.complete, r.absent, r.not_entered, r.avg_total, r.avg_percent, r.marks[5], r.marks[4], r.marks[3], r.marks[2]]),
+      rows: rows.map(r => [r.parallel, rowName(r), r.students, r.complete, r.absent, r.not_entered, r.avg_total, r.avg_percent, r.marks[5], r.marks[4], r.marks[3], r.marks[2]]),
       kinds,
       heat: [7],
     },
     {
       key: 'sections', title: `${title}: разделы и уровни, средний %`,
-      note: 'Баз.: базовый уровень, пов.: повышенный. Процент раздела: сумма баллов за задания раздела этого уровня, делённая на сумму максимумов, по полным работам. Для строки «Все параллели» не считается: у параллелей разные спецификации.',
+      note: 'Баз.: базовый уровень, пов.: повышенный. Процент раздела: сумма баллов за задания раздела этого уровня, делённая на сумму максимумов, по полным работам. Для строки «Все параллели» не считается: у параллелей разные спецификации.' + own,
       head: ['Параллель', 'Группа', ...keys.map(k => `${k.section} ${LEVEL[k.level] || k.level_name}`)],
-      rows: bySection.map(r => [r.parallel, r.row, ...keys.map(k => r.sections[k.key] ?? null)]),
+      rows: bySection.map(r => [r.parallel, rowName(r), ...keys.map(k => r.sections[k.key] ?? null)]),
       kinds: bySection.map(r => r.kind),
       heat: keys.map((_, i) => i + 2),
     },

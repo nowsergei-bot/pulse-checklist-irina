@@ -8,6 +8,8 @@ export type Risk = { at_risk: boolean; students: number; twos_share: number | nu
 export type Row = {
   parallel: number | null; row: string; kind: 'group' | 'left' | 'parallel' | 'parallel_left' | 'total' | 'total_left';
   group_id?: number; gentle_on?: boolean;
+  // Своя спецификация группы (другой максимум): сравнивается по проценту. mixed_max: максимумы в параллели, средний итог не считается.
+  own_spec?: { title: string; max_points: number }; mixed_max?: number[];
   students: number; complete: number; absent: number; not_entered: number;
   avg_total: number | null; avg_percent: number | null; marks: Record<string, number>;
   sections: Record<string, number | null>;
@@ -247,6 +249,11 @@ export default function AnalyticsCharts({ rows, keys }: { rows: Row[]; keys: Sec
           <PercentColumns title={`Средний % по группам, ${parallel} параллель`} items={groups.map(g => ({ label: g.row, value: g.avg_percent, note: `полных работ: ${g.complete}` }))} />
           <MarkBars title={`Отметки по группам, ${parallel} параллель`} items={groups.map(g => ({ label: g.row, row: g }))} />
           <div className="mon-viz__wide"><SectionHeatmap title={`Разделы и уровни по группам, ${parallel} параллель`} groups={groups} keys={keys} /></div>
+          {groups.some(g => g.own_spec) ? (
+            <p className="mon-note mon-viz__wide">
+              {groups.filter(g => g.own_spec).map(g => `${g.row} писала по своей спецификации «${g.own_spec!.title}» (из ${g.own_spec!.max_points})`).join('; ')}: группы сравниваются по проценту выполнения.
+            </p>
+          ) : null}
         </div>
       ) : <p className="mon-note">Работ пока нет</p>}
       <h3 className="mon-viz__section">Заполненность</h3>

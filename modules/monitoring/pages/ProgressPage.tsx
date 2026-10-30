@@ -186,7 +186,7 @@ function screenTables(d: Dyn, s: Screen): Table[] {
     key: 'students', sheet: 'Ученики', title: `Ученики: ${d.groups.find(g => g.id === s.group)?.title || ''}, «${s.title}»`,
     note: 'Место в параллели по этой работе. Положение: как изменилось отклонение от среднего по параллели по сравнению с входным. Риск: ниже 50 % или нижняя четверть параллели.',
     head: placement ? ['Ученик', 'Входное, %', 'Место в параллели', 'Риск']
-      : ['Ученик', 'Входное, %', `${s.title}, балл из ${s.max_points ?? ''}`, '%', 'Место в параллели', 'Положение к параллели', 'Риск'],
+      : ['Ученик', 'Входное, %', `${s.title}, балл из ${s.group_max_points ?? s.max_points ?? ''}`, '%', 'Место в параллели', 'Положение к параллели', 'Риск'],
     rows: s.students.map(x => (placement
       ? [x.full_name, x.wrote ? x.percent : 'не писал(а)', x.place, x.risk ? 'да' : '']
       : [x.full_name, x.start, x.wrote ? x.total : 'не писал(а)', x.wrote ? x.percent : null, x.place, posText(x), x.risk ? 'да' : ''])),

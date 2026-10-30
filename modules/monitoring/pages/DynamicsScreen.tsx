@@ -6,7 +6,7 @@ import { BAND_LEGEND, percentBand } from './palette';
 // Графики на HTML и CSS (полосы, клетки, точки), без библиотек. Все числа видны сразу, не только при наведении.
 
 export type Screen = {
-  key: string; title: string; type_code: string; max_points: number | null;
+  key: string; title: string; type_code: string; max_points: number | null; group_max_points?: number | null;
   coverage: { groups_total: number; groups_with: number; students_total: number; students_with: number; with: string[]; without: string[] };
   cards: { avg_total: number | null; avg_percent: number | null; complete: number; groups_with: number; groups_total: number };
   sections: { code: string; name: string }[];
@@ -301,7 +301,7 @@ function Students({ s, onGroup, groups }: { s: Screen; onGroup: (id: number) => 
             <tr>
               <th className="is-l">Ученик</th>
               {placement ? null : <th>Входное, %</th>}
-              {placement ? <th>Входное, %</th> : <th>{s.title}, балл из {s.max_points}</th>}
+              {placement ? <th>Входное, %</th> : <th>{s.title}, балл из {s.group_max_points ?? s.max_points}</th>}
               {placement ? null : <th>%</th>}
               <th>Место в параллели</th>
               {placement ? null : <th>Положение к параллели</th>}

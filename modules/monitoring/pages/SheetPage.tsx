@@ -12,7 +12,7 @@ type Student = {
   scores: Record<string, number | null>; absent: Record<string, boolean>; foreign: Record<string, string>;
 };
 type Sheet = {
-  work: { id: number; title: string; parallel: number; status: 'draft' | 'open' | 'closed'; spec_title: string; version: number; max_points: number; graded?: boolean };
+  work: { id: number; title: string; parallel: number; status: 'draft' | 'open' | 'closed'; spec_title: string; version: number; max_points: number; own_spec?: boolean; graded?: boolean };
   group: { id: number; title: string; digital: boolean };
   can_edit: boolean; reason: string; parts: Part[]; tasks: Task[];
   // У работы без отметки (пробный ЕГЭ) шкалы и щадящего режима нет.
@@ -387,6 +387,7 @@ export default function SheetPage({ base, workId, groupId }: { base: string; wor
               <span className="mon-group-name">{sheet.group.title}{sheet.group.digital ? <span className="mon-gtype mon-gtype--digital">ЦГ</span> : null}</span>
             )}
             <span className="mon-muted">{admin ? versionLabel({ title: work.spec_title, version: work.version, max_points: work.max_points }) : `${work.spec_title} · итого ${work.max_points}`}</span>
+            {work.own_spec ? <span className="mon-flag" title="У этой группы своя спецификация: задания, максимум и процент по ней. В аналитике параллели группа сравнивается по проценту.">своя спецификация группы</span> : null}
             <span className={`mon-status mon-status--${work.status}`}>{STATUS_NAMES[work.status]}</span>
           </div>
         </div>

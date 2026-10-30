@@ -20,6 +20,8 @@ function groupTitle(g) {
 }
 
 // Сводка по набору строк учеников. Средние только по полным работам.
+// Разделы по заданиям спецификации, по которой считается ученик (spec_tasks: своя спецификация группы),
+// иначе по tasks; tasks = null: без разделов (все параллели). Группы с разными спецификациями сравниваются по процентам.
 // Отметки фактически поставленные (по обычной шкале: щадящий режим на отметку сейчас не влияет).
 // normal_mark: отметка по обычным порогам, нужна для щадящего режима (из какой отметки в какую).
 function summarize(rows, tasks) {
@@ -52,7 +54,7 @@ function summarize(rows, tasks) {
         out.gentle.moves[key] = (out.gentle.moves[key] || 0) + 1;
       }
     }
-    for (const t of tasks) {
+    for (const t of tasks === null ? [] : (r.spec_tasks || tasks)) {
       const key = `${t.section}|${t.level}`;
       if (!sec.has(key)) sec.set(key, { got: 0, max: 0 });
       const s = sec.get(key);
@@ -99,12 +101,15 @@ async function moduleAnalytics(db, yearId, title) {
   const allLeft = [];
   // Зона риска: ученики текущих составов с полной работой и хотя бы одной причиной (с ФИО, только для /analytics/risk).
   const riskStudents = [];
-  for (const work of works) {
-    const struct = await structure(db, work);
-    for (const t of struct.tasks) {
+  const addSections = (tasks) => {
+    for (const t of tasks) {
       const key = `${t.section}|${t.level}`;
       if (!sectionKeys.has(key)) sectionKeys.set(key, { key, section: t.section, level: t.level, level_name: t.level_name || t.level, sort: sectionKeys.size });
     }
+  };
+  for (const work of works) {
+    const struct = await structure(db, work);
+    addSections(struct.tasks);
     const gentleIds = await gentleGroupIds(db, work.id);
     const groups = (await db.query(
       `SELECT g.id, coalesce(g.title, g.code) AS title, g.parallel, g.campus
@@ -115,29 +120,36 @@ async function moduleAnalytics(db, yearId, title) {
     )).rows.map(g => ({ ...g, id: Number(g.id) }));
     const current = [];
     const left = [];
+    const maxes = new Set([Number(work.max_points)]);
     for (const g of groups) {
+      // Группа со своей спецификацией: свои задания и максимум; в параллели сравнивается по процентам.
+      const gs = await structure(db, work, g.id);
+      if (gs.own_spec) addSections(gs.tasks);
       const members = await groupStudents(db, g.id, work.id);
       const withNormal = (list) => list.map(r => ({
         ...r,
-        normal_mark: r.result.complete ? markFor(r.result.percent, struct.scale) : null,
-        ...ruleMarks(r, struct.tasks, work.max_points, struct.scale),
+        spec_tasks: gs.tasks,
+        normal_mark: r.result.complete ? markFor(r.result.percent, gs.scale) : null,
+        ...ruleMarks(r, gs.tasks, gs.max_points, gs.scale),
       }));
-      const students = withNormal(await buildStudents(db, work, g.id, members, struct, gentleIds));
+      const students = withNormal(await buildStudents(db, work, g.id, members, gs, gentleIds));
       const gone = await leftStudents(db, work.id, g.id, new Set(members.map(m => Number(m.id))));
-      const goneRows = withNormal(await buildStudents(db, work, g.id, gone, struct, gentleIds));
+      const goneRows = withNormal(await buildStudents(db, work, g.id, gone, gs, gentleIds));
       const risky = [];
       for (const r of students) {
-        const reasons = studentReasons(r, struct.tasks);
+        const reasons = studentReasons(r, gs.tasks);
         if (!reasons.length) continue;
         risky.push(r.id);
         riskStudents.push({
           group_id: g.id, group: groupTitle(g), parallel: work.parallel, student_id: r.id, full_name: r.full_name,
-          total: r.result.total, max_points: work.max_points, percent: r.result.percent, mark: r.result.mark, reasons,
+          total: r.result.total, max_points: gs.max_points, percent: r.result.percent, mark: r.result.mark, reasons,
         });
       }
-      const sum = summarize(students, struct.tasks);
-      rows.push({ parallel: work.parallel, row: groupTitle(g), kind: 'group', group_id: g.id, gentle_on: gentleIds.has(g.id), ...sum, rule: compareRules(students), risk: groupRisk(sum, risky.length) });
-      if (goneRows.length) rows.push({ parallel: work.parallel, row: `${groupTitle(g)} · выбыли`, kind: 'left', gentle_on: gentleIds.has(g.id), ...summarize(goneRows, struct.tasks), rule: compareRules(goneRows) });
+      const sum = summarize(students, gs.tasks);
+      if (gs.own_spec) maxes.add(gs.max_points);
+      rows.push({ parallel: work.parallel, row: groupTitle(g), kind: 'group', group_id: g.id, gentle_on: gentleIds.has(g.id), ...sum,
+        ...(gs.own_spec ? { own_spec: { title: gs.spec_title, max_points: gs.max_points } } : {}), rule: compareRules(students), risk: groupRisk(sum, risky.length) });
+      if (goneRows.length) rows.push({ parallel: work.parallel, row: `${groupTitle(g)} · выбыли`, kind: 'left', gentle_on: gentleIds.has(g.id), ...summarize(goneRows, gs.tasks), rule: compareRules(goneRows) });
       current.push(...students);
       left.push(...goneRows);
     }
@@ -145,15 +157,17 @@ async function moduleAnalytics(db, yearId, title) {
     // Выбывший из одной группы, но оставшийся в другой группе параллели, в параллели не выбыл.
     const inParallel = new Set(cur.map(r => r.id));
     const goneFromParallel = unique(left).filter(r => !inParallel.has(r.id));
+    // В параллели есть группа со своей спецификацией: максимумы разные, средний балл не считается, только проценты.
+    const mixed = (sum) => (maxes.size > 1 ? { ...sum, avg_total: null, mixed_max: [...maxes].sort((a, b) => a - b) } : sum);
     const groupRows = rows.filter(r => r.kind === 'group' && r.parallel === work.parallel);
     const riskIds = new Set(riskStudents.filter(s => s.parallel === work.parallel).map(s => s.student_id));
     rows.push({
-      parallel: work.parallel, row: `${work.parallel} параллель`, kind: 'parallel', ...summarize(cur, struct.tasks), rule: compareRules(cur),
+      parallel: work.parallel, row: `${work.parallel} параллель`, kind: 'parallel', ...mixed(summarize(cur, struct.tasks)), rule: compareRules(cur),
       risk: { students: riskIds.size, groups: groupRows.length, groups_at_risk: groupRows.filter(r => r.risk.at_risk).length },
     });
-    if (goneFromParallel.length) rows.push({ parallel: work.parallel, row: `${work.parallel} параллель · выбыли`, kind: 'parallel_left', ...summarize(goneFromParallel, struct.tasks), rule: compareRules(goneFromParallel) });
+    if (goneFromParallel.length) rows.push({ parallel: work.parallel, row: `${work.parallel} параллель · выбыли`, kind: 'parallel_left', ...mixed(summarize(goneFromParallel, struct.tasks)), rule: compareRules(goneFromParallel) });
     studentsByParallel.set(work.parallel, {
-      any: new Set(cur.filter(r => r.result.complete || r.result.missing < struct.tasks.length || r.result.state.startsWith('отсутствовал')).map(r => r.id)),
+      any: new Set(cur.filter(r => r.result.complete || r.result.missing < (r.spec_tasks || struct.tasks).length || r.result.state.startsWith('отсутствовал')).map(r => r.id)),
       complete: new Set(cur.filter(r => r.result.complete).map(r => r.id)),
     });
     all.push(...cur);
@@ -161,8 +175,8 @@ async function moduleAnalytics(db, yearId, title) {
   }
   if (works.length > 1) {
     // Все параллели: у параллелей разные спецификации, поэтому средние по разделам здесь не считаются.
-    rows.push({ parallel: null, row: 'Все параллели', kind: 'total', ...summarize(unique(all), []), rule: compareRules(unique(all)) });
-    if (allLeft.length) rows.push({ parallel: null, row: 'Все параллели · выбыли', kind: 'total_left', ...summarize(unique(allLeft), []), rule: compareRules(unique(allLeft)) });
+    rows.push({ parallel: null, row: 'Все параллели', kind: 'total', ...summarize(unique(all), null), rule: compareRules(unique(all)) });
+    if (allLeft.length) rows.push({ parallel: null, row: 'Все параллели · выбыли', kind: 'total_left', ...summarize(unique(allLeft), null), rule: compareRules(unique(allLeft)) });
   }
   return {
     works: works.map(w => ({ id: w.id, parallel: w.parallel, status: w.status, max_points: w.max_points })),

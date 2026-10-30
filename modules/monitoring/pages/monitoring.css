@@ -2224,3 +2224,14 @@ td.mon-dash__teacher { white-space: normal !important; min-width: 9rem; }
   color: var(--mon-p-empty-ink);
   font-weight: 400 !important;
 }
+
+/* Своя спецификация группы в форме работы. */
+.mon-gspecs__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.45rem;
+}
+.mon-gspecs__row .mon-select { max-width: 30rem; }
+.mon-gspecs__group { max-width: 14rem; }

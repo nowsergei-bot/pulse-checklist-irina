@@ -46,19 +46,35 @@ async function access(db, userId, caps, workId, groupId) {
   return { work, canEdit, reason };
 }
 
-async function structure(db, work) {
+// Своя спецификация групп работы (миграция 016): Map group_id -> spec_version_id.
+async function groupSpecs(db, workId) {
+  const r = await db.query('SELECT group_id, spec_version_id FROM monitoring.work_group_specs WHERE work_id = $1', [workId]);
+  return new Map(r.rows.map(row => [Number(row.group_id), Number(row.spec_version_id)]));
+}
+
+// Задания, части и шкала, по которым вносит и считается группа groupId: своя спецификация группы
+// или спецификация работы (groupId не указан: спецификация работы). Максимум и название версии тоже здесь.
+async function structure(db, work, groupId) {
+  const own = Number.isInteger(groupId)
+    ? (await db.query('SELECT spec_version_id FROM monitoring.work_group_specs WHERE work_id = $1 AND group_id = $2', [work.id, groupId])).rows[0]
+    : null;
+  const versionId = own ? Number(own.spec_version_id) : work.spec_version_id;
+  const info = own ? (await db.query(
+    `SELECT s.title AS spec_title, v.version, v.max_points FROM monitoring.spec_versions v JOIN monitoring.specs s ON s.id = v.spec_id WHERE v.id = $1`,
+    [versionId],
+  )).rows[0] : { spec_title: work.spec_title, version: work.version, max_points: work.max_points };
   const parts = (await db.query(
     `SELECT p.id, p.code, p.name, wp.held_on::text AS held_on
      FROM monitoring.spec_parts p LEFT JOIN monitoring.work_parts wp ON wp.part_id = p.id AND wp.work_id = $2
      WHERE p.version_id = $1 ORDER BY p.sort`,
-    [work.spec_version_id, work.id],
+    [versionId, work.id],
   )).rows;
   const tasks = (await db.query(
     `SELECT t.id, t.part_id, t.sort, t.section, t.level, l.name AS level_name, t.title, t.max_points, t.focus,
             EXISTS (SELECT 1 FROM monitoring.half_point_tasks h WHERE h.task_id = t.id) AS half
      FROM monitoring.spec_tasks t LEFT JOIN monitoring.levels l ON l.code = t.level
      WHERE t.version_id = $1 ORDER BY t.sort`,
-    [work.spec_version_id],
+    [versionId],
   )).rows;
   // У работы без отметки шкалы нет.
   const scale = work.scale_id === null || work.scale_id === undefined ? []
@@ -67,7 +83,11 @@ async function structure(db, work) {
   if (RUSSIAN_SECTION_TYPES.includes(work.type_code)) {
     for (const t of tasks) t.section_label = commonSectionName(t.section) || t.section;
   }
-  return { parts, tasks, scale };
+  return {
+    parts, tasks, scale,
+    version_id: versionId, own_spec: Boolean(own),
+    spec_title: info.spec_title, version: info.version, max_points: info.max_points === undefined ? undefined : Number(info.max_points),
+  };
 }
 
 async function groupTitles(db, ids) {
@@ -125,7 +145,7 @@ async function buildStudents(db, work, groupId, students, struct, gentleIds = ne
     }
     const gentle = gentleIds.has(scoreGroup(scores.filter(row => Number(row.student_id) === id), groupId));
     const graded = isGraded(work);
-    const result = studentResult({ parts: struct.parts, tasks: struct.tasks, maxPoints: work.max_points, scale: struct.scale, absentPartIds: absentIds, scores: scoreMap, gentle, graded });
+    const result = studentResult({ parts: struct.parts, tasks: struct.tasks, maxPoints: struct.max_points ?? work.max_points, scale: struct.scale, absentPartIds: absentIds, scores: scoreMap, gentle, graded });
     return graded ? { id, full_name: s.full_name, ...own, gentle, result } : { id, full_name: s.full_name, ...own, result };
   });
 }
@@ -152,7 +172,7 @@ async function getSheet(db, userId, caps, workId, groupId) {
   if (!Number.isInteger(groupId)) return bad('Не указана группа');
   const a = await access(db, userId, caps, workId, groupId);
   if (a.error) return a.error;
-  const struct = await structure(db, a.work);
+  const struct = await structure(db, a.work, groupId);
   const group = (await groupTitles(db, [groupId])).get(groupId) || { id: groupId, title: '', digital: false };
   const gentleIds = await gentleGroupIds(db, a.work.id);
   const gentle = gentleIds.has(groupId);
@@ -168,7 +188,8 @@ async function getSheet(db, userId, caps, workId, groupId) {
   )).rows : [];
   const w = a.work;
   const body = {
-    work: { id: w.id, title: w.title, parallel: w.parallel, status: w.status, spec_title: w.spec_title, version: w.version, max_points: w.max_points, graded: isGraded(w) },
+    // Спецификация и максимум группы: своя спецификация группы, если она назначена (own_spec).
+    work: { id: w.id, title: w.title, parallel: w.parallel, status: w.status, spec_title: struct.spec_title, version: struct.version, max_points: struct.max_points, own_spec: struct.own_spec, graded: isGraded(w) },
     group, can_edit: a.canEdit, reason: a.reason, parts: struct.parts, tasks: struct.tasks,
     students, left_students: leftRows,
   };
@@ -235,7 +256,7 @@ async function saveSheet(db, userId, caps, workId, data) {
   if (a.error) return a.error;
   if (!a.canEdit) return { status: 403, body: { error: 'forbidden', message: a.reason || 'Нет права вносить результаты' } };
   const changes = Array.isArray(data.changes) ? data.changes.slice(0, MAX_CHANGES) : [];
-  const struct = await structure(db, a.work);
+  const struct = await structure(db, a.work, groupId);
   const tasks = new Map(struct.tasks.map(t => [t.id, t]));
   const parts = new Set(struct.parts.map(p => p.id));
   const members = await groupStudents(db, groupId, a.work.id);
@@ -307,13 +328,14 @@ function canChangeGentle(caps, work) {
 
 // Сколько отметок изменится, если в группах groupIds режим станет enabled; on: где включён сейчас.
 // Ученик считается один раз; его режим берётся по группе, где внесены баллы.
-async function markChanges(db, work, struct, groupIds, on, enabled) {
+async function markChanges(db, work, groupIds, on, enabled) {
   const next = new Set(on);
   for (const g of groupIds) if (enabled) next.add(g); else next.delete(g);
   const seen = new Set();
   let higher = 0;
   let lower = 0;
   for (const groupId of groupIds) {
+    const struct = await structure(db, work, groupId);
     const members = await groupStudents(db, groupId, work.id);
     const left = await leftStudents(db, work.id, groupId, new Set(members.map(m => Number(m.id))));
     const before = await buildStudents(db, work, groupId, [...members, ...left], struct, on);
@@ -345,8 +367,7 @@ async function setGentle(db, user, userId, caps, workId, data) {
     : [groupId];
   const on = await gentleGroupIds(db, workId);
   const targets = all.filter(id => on.has(id) !== data.enabled);
-  const struct = await structure(db, a.work);
-  const counts = await markChanges(db, a.work, struct, targets, on, data.enabled);
+  const counts = await markChanges(db, a.work, targets, on, data.enabled);
   if (!data.confirm) return { status: 200, body: { groups: targets.length, ...counts } };
   if (targets.length) {
     const named = await db.query('SELECT full_name FROM pulse_read.users WHERE id = $1 AND full_name IS NOT NULL LIMIT 1', [userId]);
@@ -366,4 +387,4 @@ async function setGentle(db, user, userId, caps, workId, data) {
   return { status: 200, body: { groups: targets.length, ...counts, done: true } };
 }
 
-module.exports = { getSheet, saveSheet, setGentle, access, loadWork, structure, buildStudents, leftStudents, gentleGroupIds };
+module.exports = { getSheet, saveSheet, setGentle, access, loadWork, structure, groupSpecs, buildStudents, leftStudents, gentleGroupIds };

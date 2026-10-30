@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApi } from './api';
 import { GroupName, STATUS_NAMES, versionLabel } from './labels';
 
-type Group = { id: number; title: string; digital: boolean; progress?: { done: number; total: number } };
+type Group = { id: number; title: string; digital: boolean; progress?: { done: number; total: number }; own_spec?: { title: string; version: number; max_points: number } };
 type Work = {
   id: number; title: string; parallel: number; status: 'draft' | 'open' | 'closed'; is_test: boolean; type_name: string;
   spec: string; version: number; max_points: number; parts: { name: string; held_on: string | null }[]; groups: Group[];
@@ -22,12 +22,12 @@ function workLine(w: Work) {
 
 // Учитель видит свои группы карточками по параллелям; заведующая и data_admin видят таблицу.
 function TeacherWorks({ works, base }: { works: Work[]; base: string }) {
-  const cards = new Map<string, { parallel: number; group: Group; rows: { work: Work; progress: { done: number; total: number } }[] }>();
+  const cards = new Map<string, { parallel: number; group: Group; rows: { work: Work; progress: { done: number; total: number }; own?: Group['own_spec'] }[] }>();
   for (const w of works) {
     for (const g of w.groups) {
       const key = `${w.parallel}:${g.id}`;
       if (!cards.has(key)) cards.set(key, { parallel: w.parallel, group: g, rows: [] });
-      cards.get(key)!.rows.push({ work: w, progress: g.progress || { done: 0, total: 0 } });
+      cards.get(key)!.rows.push({ work: w, progress: g.progress || { done: 0, total: 0 }, own: g.own_spec });
     }
   }
   const list = [...cards.values()];
@@ -47,13 +47,13 @@ function TeacherWorks({ works, base }: { works: Work[]; base: string }) {
               .map(c => (
                 <article key={`${c.parallel}:${c.group.id}`} className="mon-tcard">
                   <div className="mon-tcard__head"><GroupName group={c.group} /></div>
-                  {c.rows.map(({ work: w, progress: p }) => {
+                  {c.rows.map(({ work: w, progress: p, own }) => {
                     const done = p.total > 0 && p.done === p.total;
                     const editable = w.status === 'open';
                     return (
                       <div key={w.id} className="mon-tcard__work">
                         <div className="mon-tcard__line">
-                          <span>{workLine(w)}</span>
+                          <span>{workLine(w)}{own ? <span className="mon-flag" title={`${own.title}, итого ${own.max_points}`}>своя спецификация</span> : null}</span>
                           <span className={`mon-status mon-status--${w.status}`}>{STATUS_NAMES[w.status]}</span>
                         </div>
                         <div className="mon-tcard__progress">
@@ -106,7 +106,12 @@ export default function WorksPage({ manage, base, message }: { manage: boolean; 
                   <div className="mon-muted">{w.type_name}</div>
                 </td>
                 <td className="mon-num">{w.parallel}</td>
-                <td>{versionLabel({ title: w.spec, version: w.version, max_points: w.max_points })}</td>
+                <td>
+                  {versionLabel({ title: w.spec, version: w.version, max_points: w.max_points })}
+                  {w.groups.filter(g => g.own_spec).map(g => (
+                    <div key={g.id} className="mon-muted">{g.title}: своя, {versionLabel(g.own_spec!)}</div>
+                  ))}
+                </td>
                 <td>{w.parts.map(p => <div key={p.name}>{p.name}: <span className="mon-muted">{date(p.held_on)}</span></div>)}</td>
                 <td>
                   <span className="mon-group-list">

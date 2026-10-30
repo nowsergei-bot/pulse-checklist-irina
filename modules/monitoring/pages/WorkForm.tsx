@@ -19,6 +19,8 @@ type Options = {
 type Work = {
   id: number; type_id: number; title: string; academic_year_id: number; parallel: number; spec_version_id: number;
   scale_id: number | null; status: string; is_test: boolean; dates: Record<string, string> | null; groups: number[]; has_results: boolean;
+  // Своя спецификация группы: group_id -> версия; группы с результатами (им спецификацию не сменить).
+  group_specs?: Record<string, number>; groups_with_results?: number[];
 };
 
 // Даты в форме в виде ДД.ММ.ГГГГ, на сервер уходят как ГГГГ-ММ-ДД.
@@ -64,6 +66,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
   const [scaleId, setScaleId] = useState<number>();
   const [dates, setDates] = useState<Record<string, string>>({});
   const [groups, setGroups] = useState<number[]>([]);
+  const [groupSpecs, setGroupSpecs] = useState<Record<number, number>>({});
   const [status, setStatus] = useState('draft');
   const [isTest, setIsTest] = useState(false);
   const [ready, setReady] = useState(false);
@@ -80,6 +83,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
       setTypeId(work.type_id); setTitle(work.title); setTitleTouched(true); setParallels([work.parallel]);
       setVersionId(work.spec_version_id); setScaleId(work.scale_id ?? o.scales.find(s => s.is_default)?.id); setDates(Object.fromEntries(Object.entries(work.dates || {}).map(([k, v]) => [k, toDisplay(v)])));
       setGroups(work.groups.map(Number)); setStatus(work.status); setIsTest(work.is_test);
+      setGroupSpecs(Object.fromEntries(Object.entries(work.group_specs || {}).map(([g, v]) => [Number(g), Number(v)])));
     } else {
       setTypeId(o.types.find(t => t.code === 'module')?.id || o.types[0]?.id);
       setScaleId(o.scales.find(s => s.is_default)?.id || o.scales[0]?.id);
@@ -158,6 +162,7 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
     const body = {
       type_id: typeId, title, academic_year_id: yearId ?? o?.year_id, parallels, spec_version_id: versionId, scale_id: graded ? scaleId : null,
       status, is_test: isTest, groups, dates: iso,
+      ...(workId ? { group_specs: Object.fromEntries(Object.entries(groupSpecs).filter(([g]) => groups.includes(Number(g)))) } : {}),
     };
     try {
       if (workId) {
@@ -269,6 +274,14 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
         );
       })}
 
+      {workId ? <GroupSpecs
+        groups={(o.groups || []).filter(g => groups.includes(g.id))}
+        versions={versions.filter(v => v.id !== versionId)}
+        value={groupSpecs}
+        locked={work?.groups_with_results || []}
+        onChange={setGroupSpecs}
+      /> : null}
+
       <div className="mon-field">
         <span className="mon-label">Статус</span>
         <span className="mon-segmented" role="group">
@@ -291,6 +304,52 @@ export default function WorkForm({ base, workId }: { base: string; workId?: numb
         <button type="button" className="mon-btn" onClick={() => navigate(base)}>Отмена</button>
       </div>
       {mismatch ? <Dialog title={mismatch} confirmLabel="Продолжить" busy={busy} onConfirm={save} onCancel={() => setMismatch('')} /> : null}
+    </div>
+  );
+}
+
+// Своя спецификация группы (группа писала другую работу, например 11 AH в «Модуле 1»): ввод, итог, процент и отметка
+// у группы по своей спецификации, в аналитике параллели группы сравниваются по проценту.
+// Сменить или убрать нельзя, пока у группы есть результаты по работе (проверяет и сервер).
+function GroupSpecs({ groups, versions, value, locked, onChange }: {
+  groups: Group[]; versions: Version[]; value: Record<number, number>; locked: number[]; onChange: (v: Record<number, number>) => void;
+}) {
+  const [adding, setAdding] = useState<number | ''>('');
+  const own = groups.filter(g => value[g.id] !== undefined);
+  const free = groups.filter(g => value[g.id] === undefined);
+  const set = (id: number, v: number | null) => {
+    const next = { ...value };
+    if (v === null) delete next[id]; else next[id] = v;
+    onChange(next);
+  };
+  return (
+    <div className="mon-field mon-gspecs">
+      <span className="mon-label">Своя спецификация у группы</span>
+      <span className="mon-muted">Если группа писала другую работу. Ввод баллов, итог, процент и отметка у неё по своей спецификации; в аналитике параллели группы сравниваются по проценту.</span>
+      {own.map(g => {
+        const fixed = locked.includes(g.id);
+        return (
+          <div key={g.id} className="mon-gspecs__row">
+            <GroupName group={g} />
+            <select className="mon-input mon-select" value={value[g.id]} disabled={fixed} onChange={e => set(g.id, Number(e.target.value))}>
+              {versions.some(v => v.id === value[g.id]) ? null : <option value={value[g.id]}>Версия {value[g.id]}</option>}
+              {versions.map(v => <option key={v.id} value={v.id}>{versionLabel(v)}</option>)}
+            </select>
+            {fixed ? <span className="mon-muted">у группы уже есть результаты, сменить нельзя</span>
+              : <button type="button" className="mon-link" onClick={() => set(g.id, null)}>убрать</button>}
+          </div>
+        );
+      })}
+      {free.length && versions.length ? (
+        <div className="mon-gspecs__row">
+          <select className="mon-input mon-select mon-gspecs__group" value={adding} onChange={e => setAdding(e.target.value ? Number(e.target.value) : '')} aria-label="Группа">
+            <option value="">Выберите группу</option>
+            {free.map(g => <option key={g.id} value={g.id} disabled={locked.includes(g.id)}>{g.title}{g.digital ? ' (ЦГ)' : ''}{locked.includes(g.id) ? ': уже есть результаты' : ''}</option>)}
+          </select>
+          <button type="button" className="mon-btn" disabled={adding === ''} onClick={() => { if (adding !== '') { set(adding, versions[0].id); setAdding(''); } }}>+ своя спецификация</button>
+        </div>
+      ) : null}
+      {!versions.length ? <span className="mon-muted">Других утверждённых спецификаций этого вида нет. Загрузите и утвердите её на вкладке «Спецификации».</span> : null}
     </div>
   );
 }

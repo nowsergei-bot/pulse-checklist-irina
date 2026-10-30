@@ -90,7 +90,7 @@ module.exports = async function route({ path, method, query, body, user, db, fil
     if (path === '/works' && method === 'POST') return works.createWorks(db, userId, data);
     m = path.match(/^\/works\/(\d+)$/);
     if (m && method === 'GET') return works.getWork(db, Number(m[1]));
-    if (m && method === 'POST') return works.updateWork(db, Number(m[1]), data);
+    if (m && method === 'POST') return works.updateWork(db, Number(m[1]), data, userId);
     return { status: 405, body: { error: 'method_not_allowed' } };
   }
   // Поправки к составам групп и учителя групп: только data_admin, и чтение, и запись.
