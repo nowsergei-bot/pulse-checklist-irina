@@ -38,7 +38,12 @@ import {
   normalizeSavedChecklist,
   VISIT_CHECKLIST_TITLE,
 } from '../lib/lessonVisitChecklist/normalizeChecklist';
-import { preferredVisitFormatFromQuery, VISIT_FORMAT_QUERY } from '../lib/lessonVisitChecklist/publicForm';
+import {
+  answersForVisibleQuestions,
+  preferredVisitFormatFromQuery,
+  visibleLessonVisitChecklist,
+  VISIT_FORMAT_QUERY,
+} from '../lib/lessonVisitChecklist/publicForm';
 import {
   displayVisitFormatOptionLabel,
   isVisitFormatSelfAnalysisOption,
@@ -209,6 +214,11 @@ export function LessonVisitChecklistForm({
   }, [directory, general.department_id, general.teacher_id]);
 
   const invalidFieldIds = useMemo(() => new Set(missingFields.map((m) => m.id)), [missingFields]);
+  /** Форма с учётом исключений 4.1: для учителя кафедры лидерства пункт 5.4 скрыт. */
+  const visibleChecklist = useMemo(
+    () => (checklist ? visibleLessonVisitChecklist(checklist, general, directory) : null),
+    [checklist, directory, general],
+  );
 
   const clearMissingField = useCallback((fieldId: string) => {
     setMissingFields((prev) => prev.filter((m) => m.id !== fieldId));
@@ -235,7 +245,8 @@ export function LessonVisitChecklistForm({
       setErr('Нет формы');
       return;
     }
-    const missing = collectMissingLessonVisitFields(checklist, general, answers, otherTexts);
+    const formChecklist = visibleLessonVisitChecklist(checklist, general, directory);
+    const missing = collectMissingLessonVisitFields(formChecklist, general, answers, otherTexts);
     if (missing.length) {
       setMissingFields(missing);
       setErr(null);
@@ -246,7 +257,11 @@ export function LessonVisitChecklistForm({
     setSubmitting(true);
     setErr(null);
     try {
-      const payloadAnswers = prepareLessonVisitAnswersForSubmit(checklist, answers, otherTexts);
+      const payloadAnswers = prepareLessonVisitAnswersForSubmit(
+        formChecklist,
+        answersForVisibleQuestions(formChecklist, answers),
+        otherTexts,
+      );
       await postPublicLessonVisitResponse(token, { general: pulseContext ? { ...general, pulse_context: pulseContext } : general, answers: payloadAnswers });
       if (!allowMultipleResponses) {
         markDone(token);
@@ -433,7 +448,7 @@ export function LessonVisitChecklistForm({
           </motion.div>
 
           <AnimatePresence mode="popLayout">
-            {checklist.sections.map((sec, i) => (
+            {(visibleChecklist ?? checklist).sections.map((sec, i) => (
               <SectionBlock
                 key={sec.id}
                 section={sec}

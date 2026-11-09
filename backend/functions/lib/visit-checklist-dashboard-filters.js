@@ -21,7 +21,8 @@ function normalizeFilters(query={},now,calendar) {
  const filters={};for(const key of ['department','teacher_filter','class','subject','format','level','selected_level','selection','calculation','observer','search','sort','policy','maximum','criterion','criterion_mode','teacher','lesson','view'])filters[key]=String(query[key]||'').trim().slice(0,200);
  filters.period=String(query.period||'week');const reference=filters.period==='week'&&query.week_start?new Date(`${isoDate(String(query.week_start))}T09:00:00Z`):now;Object.assign(filters,dateBounds(filters.period,query.from,query.to,reference,calendar));
  filters.page=Math.max(1,Math.min(100000,Number.parseInt(query.page,10)||1));filters.size=Math.max(1,Math.min(100,Number.parseInt(query.size,10)||30));
- if(filters.maximum&&!['100','98','97','95'].includes(filters.maximum))throw bad('Недопустимый доступный максимум');
+ // С версии 4.1 пункты исключаются автоматически, поэтому возможны любые доступные максимумы (94, 92, 91, 89 и др.).
+ if(filters.maximum&&!/^(?:[1-9]\d?|100)$/.test(filters.maximum))throw bad('Недопустимый доступный максимум');
  if(filters.format&&!['offline','online'].includes(filters.format))throw bad('Неизвестный формат посещения');
  return filters;
 }

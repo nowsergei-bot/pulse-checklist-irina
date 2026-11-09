@@ -32,8 +32,9 @@ import {
   teacherMetrics,
   veryHighTeachers,
 } from "./reportPresentation.ts";
+// Форма до 4.1 (действовала до 08.11.2026): старые чек-листы и их баллы.
 const seed = JSON.parse(
-  readFileSync(new URL("./defaultSeed.json", import.meta.url), "utf8"),
+  readFileSync(new URL("./formV4.fixture.json", import.meta.url), "utf8"),
 );
 const make = (
   id: number,

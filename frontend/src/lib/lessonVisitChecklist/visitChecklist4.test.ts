@@ -45,33 +45,41 @@ test('checklist seed has 10 sections, visit format options, subject select, and 
   assert.ok(subject.options!.includes('Алгебра'));
   assert.ok(subject.options!.includes('Английский язык'));
   assert.ok(subject.options!.includes('Информатика'));
-  assert.equal(seed.sections.length, 10);
+  // Форма 4.1 (с 09.11.2026): 12 блоков, 10 Домашнее задание, 11 Дисциплина, 12 Общая оценка.
+  assert.equal(seed.formVersion, '4.1');
+  assert.equal(seed.sections.length, 12);
   assert.equal(LESSON_VISIT_SECTION_DEFS.length, 10);
   assert.deepEqual(
     seed.sections.map((s) => s.code),
-    LESSON_VISIT_SECTION_DEFS.map((d) => d.code),
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
   );
   const q11 = seed.sections[0].questions[0];
   assert.equal(q11.code, '1.1');
   assert.deepEqual(q11.options, ['готов', 'частично', 'не готов']);
-  const q101 = seed.sections[9].questions[0];
-  assert.equal(q101.code, '10.1');
-  assert.equal(q101.options.length, 5);
-  assert.equal(seed.sections[9].questions[1].type, 'text');
-  assert.equal(seed.sections[9].questions[2].type, 'text');
+  const q121 = seed.sections[11].questions[0];
+  assert.equal(q121.code, '12.1');
+  assert.equal(q121.legacyCode, '10.1');
+  assert.equal(q121.options.length, 5);
+  assert.equal(seed.sections[11].questions[1].type, 'text');
+  assert.equal(seed.sections[9].questions[0].legacyCode, '3.8');
+  assert.equal(seed.legacyQuestions?.[0].legacyCode, '10.3');
   const scored = seed.sections.flatMap((s) => s.questions.filter((q) => q.type !== 'text'));
   assert.ok(scored.every((q) => q.options.length >= 2));
   assert.equal(rubric.sections.length, 10);
 });
 
-test('analytics mapping: 10.1 ordinal, 10.2 summary, 10.3 takeaway', () => {
-  const sec10 = seed.sections[9] as LessonVisitSection;
-  assert.equal(resolveVisitQuestionTarget(sec10.questions[0] as LessonVisitQuestion, sec10), 'ordinal');
-  assert.equal(resolveVisitQuestionTarget(sec10.questions[1] as LessonVisitQuestion, sec10), 'text_summary');
+test('analytics mapping: 12.1 ordinal, 12.2 summary, old 10.3 takeaway, homework in block 3', () => {
+  const sec12 = seed.sections[11] as LessonVisitSection;
+  assert.equal(resolveVisitQuestionTarget(sec12.questions[0] as LessonVisitQuestion, sec12), 'ordinal');
+  assert.equal(resolveVisitQuestionTarget(sec12.questions[1] as LessonVisitQuestion, sec12), 'text_summary');
   assert.equal(
-    resolveVisitQuestionTarget(sec10.questions[2] as LessonVisitQuestion, sec10),
+    resolveVisitQuestionTarget(seed.legacyQuestions![0] as LessonVisitQuestion, sec12),
     'text_recommendations',
   );
+  const sec10 = seed.sections[9] as LessonVisitSection;
+  assert.equal(resolveVisitQuestionTarget(sec10.questions[0] as LessonVisitQuestion, sec10), 'lesson_visit_sec_3');
+  const sec11 = seed.sections[10] as LessonVisitSection;
+  assert.equal(resolveVisitQuestionTarget(sec11.questions[0] as LessonVisitQuestion, sec11), 'skip');
   const sec1 = seed.sections[0] as LessonVisitSection;
   assert.equal(resolveVisitQuestionTarget(sec1.questions[0] as LessonVisitQuestion, sec1), 'lesson_visit_sec_1');
 });

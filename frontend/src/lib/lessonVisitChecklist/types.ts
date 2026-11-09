@@ -23,6 +23,8 @@ export interface LessonVisitQuestion {
   options: string[];
   allowMultiple?: boolean;
   hint?: string;
+  /** Код этого вопроса в форме до версии 4.1 (старые чек-листы считаются по нему). */
+  legacyCode?: string;
 }
 
 export interface LessonVisitSection {
@@ -50,8 +52,12 @@ export interface LessonVisitDirectory {
 
 export interface LessonVisitChecklistConfig {
   v: 1;
+  /** Версия содержания формы; '4.1' действует с 09.11.2026. */
+  formVersion?: string;
   generalFields: LessonVisitGeneralField[];
   sections: LessonVisitSection[];
+  /** Вопросы, убранные из формы, но нужные для показа старых чек-листов. В форме не выводятся. */
+  legacyQuestions?: LessonVisitQuestion[];
 }
 
 export interface LessonVisitResponseRow {

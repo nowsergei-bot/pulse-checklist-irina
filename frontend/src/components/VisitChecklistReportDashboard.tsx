@@ -1564,17 +1564,19 @@ export default function VisitChecklistReportDashboard({
   const criteria = checklist.sections
     .flatMap((s) => s.questions)
     .filter((q) =>
-      lessons.some((v) => v.score.items.some((i) => i.code === q.code)),
+      lessons.some((v) => v.score.items.some((i) => i.code === (q.legacyCode ?? q.code))),
     )
     .map((q) => {
+      // Пункты считаются по кодам до 4.1: домашнее задание 10.1 идёт как 3.8.
+      const code = q.legacyCode ?? q.code;
       const values = lessons.flatMap((v) =>
         v.score.items.filter(
-          (i) => i.code === q.code && i.value != null && !i.na,
+          (i) => i.code === code && i.value != null && !i.na,
         ),
       );
       const eligible = signalItems(values);
       return {
-        code: q.code!,
+        code: code!,
         title: q.text,
         max: values[0]?.max || 0,
         value: mean(values.map((i) => i.value)),
@@ -1589,7 +1591,7 @@ export default function VisitChecklistReportDashboard({
   const criterionQuestion = criterionCode
     ? checklist.sections
         .flatMap((s) => s.questions)
-        .find((q) => q.code === criterionCode)
+        .find((q) => (q.legacyCode ?? q.code) === criterionCode)
     : undefined;
   const byLevel = (list: ReportVisit[]) =>
     list.filter(

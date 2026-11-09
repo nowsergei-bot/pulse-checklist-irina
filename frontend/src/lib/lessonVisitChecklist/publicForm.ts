@@ -1,4 +1,5 @@
 import { VISIT_FORMAT_SELF_ANALYSIS } from './normalizeChecklist.ts';
+import type { LessonVisitChecklistConfig, LessonVisitDirectory } from './types.ts';
 
 /** Старый 9-блочный проект 2026 — не использовать в кабинете. */
 const LEGACY_2026_FORM_TOKEN = 'be57bd59186a4b30b467c9d2eb6b4b49';
@@ -88,4 +89,40 @@ export function preferredVisitFormatFromQuery(raw?: string | null, options?: str
     return self || VISIT_FORMAT_SELF_ANALYSIS;
   }
   return null;
+}
+
+const LEADERSHIP_DEPARTMENT_NAME = 'кафедра лидерства';
+/** Пункты формы 4.1, скрытые для учителей кафедры лидерства (лист «Исключения»). */
+export const LEADERSHIP_HIDDEN_QUESTION_CODES = ['5.4'];
+
+/**
+ * Форма, которую видит наблюдатель: для учителя кафедры лидерства пункт 5.4 скрыт.
+ * Кафедра берётся по выбранному учителю из справочника, иначе по полю «Кафедра».
+ */
+export function visibleLessonVisitChecklist(
+  checklist: LessonVisitChecklistConfig,
+  general: Record<string, string>,
+  directory: LessonVisitDirectory | null | undefined,
+): LessonVisitChecklistConfig {
+  if (checklist.formVersion !== '4.1') return checklist;
+  const teacher = directory?.teachers.find((t) => t.id === general.teacher_id);
+  const departmentId = teacher?.departmentId || general.department_id || '';
+  const departmentName = directory?.departments.find((d) => d.id === departmentId)?.name || '';
+  if (departmentName.trim().toLocaleLowerCase('ru') !== LEADERSHIP_DEPARTMENT_NAME) return checklist;
+  const sections = checklist.sections
+    .map((sec) => ({
+      ...sec,
+      questions: sec.questions.filter((q) => !LEADERSHIP_HIDDEN_QUESTION_CODES.includes(q.code)),
+    }))
+    .filter((sec) => sec.questions.length > 0);
+  return { ...checklist, sections };
+}
+
+/** Ответы только на видимые вопросы формы. */
+export function answersForVisibleQuestions(
+  checklist: LessonVisitChecklistConfig,
+  answers: Record<string, string | string[]>,
+): Record<string, string | string[]> {
+  const visible = new Set(checklist.sections.flatMap((sec) => sec.questions.map((q) => q.id)));
+  return Object.fromEntries(Object.entries(answers).filter(([id]) => visible.has(id)));
 }

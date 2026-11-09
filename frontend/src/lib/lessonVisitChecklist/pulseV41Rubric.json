@@ -1,0 +1,1692 @@
+{
+  "rubric_version": "pulse-100-v4.1-2026-11-09",
+  "date": "2026-11-09",
+  "effective_from_visit_date": "2026-11-09",
+  "completeness": "all_20_scored_criteria_defined",
+  "base_maximum": 100,
+  "sources": {
+    "form": "Чек-лист версии 4.1, лист «Чек-лист»",
+    "scores": "лист «Баллы»",
+    "exceptions": "лист «Исключения»"
+  },
+  "precedence": "Действует для чек-листов с датой посещения 09.11.2026 и позже. Более ранние чек-листы считаются по pulse-100-v4-2026-10-05 без изменений.",
+  "previous_rubric_version": "pulse-100-v4-2026-10-05",
+  "criteria": [
+    {
+      "code": "1.1",
+      "label": "Готовность к уроку",
+      "question_original": "Готовность к уроку (классная доска оформлена, раздаточный материал готов, рабочее место учителя подготовлено и т.д.)",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "готов"
+        },
+        {
+          "id": "o2",
+          "label": "частично"
+        },
+        {
+          "id": "o3",
+          "label": "не готов"
+        }
+      ],
+      "max_score": 3,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 3,
+        "o2": 2,
+        "o3": 0
+      },
+      "allowed_scores": [
+        0,
+        2,
+        3
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "1.1/answer/o1",
+        "o2": "1.1/answer/o2",
+        "o3": "1.1/answer/o3"
+      },
+      "status_rule_ids": {
+        "scored": "1.1/status/scored",
+        "descriptive": "1.1/status/descriptive",
+        "not_applicable": "1.1/status/not_applicable",
+        "missing_answer": "1.1/status/missing_answer",
+        "insufficient_evidence": "1.1/status/insufficient_evidence",
+        "contradiction": "1.1/status/contradiction",
+        "scale_not_configured": "1.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "1.2",
+      "label": "Состояние кабинета",
+      "question_original": "Санитарное состояние кабинета",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "удовлетворительное"
+        },
+        {
+          "id": "o2",
+          "label": "неудовлетворительное"
+        }
+      ],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "1.2/status/scored",
+        "descriptive": "1.2/status/descriptive",
+        "not_applicable": "1.2/status/not_applicable",
+        "missing_answer": "1.2/status/missing_answer",
+        "insufficient_evidence": "1.2/status/insufficient_evidence",
+        "contradiction": "1.2/status/contradiction",
+        "scale_not_configured": "1.2/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "2.1",
+      "label": "Кто сформулировал цели",
+      "question_original": "Цели урока сформулированы:",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "учителем"
+        },
+        {
+          "id": "o2",
+          "label": "совместно с обучающимися"
+        },
+        {
+          "id": "o3",
+          "label": "обучающимися"
+        },
+        {
+          "id": "o4",
+          "label": "не сформулированы"
+        }
+      ],
+      "max_score": 5,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 4,
+        "o2": 5,
+        "o3": 5,
+        "o4": 0
+      },
+      "allowed_scores": [
+        0,
+        4,
+        5
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "2.1/answer/o1",
+        "o2": "2.1/answer/o2",
+        "o3": "2.1/answer/o3",
+        "o4": "2.1/answer/o4"
+      },
+      "status_rule_ids": {
+        "scored": "2.1/status/scored",
+        "descriptive": "2.1/status/descriptive",
+        "not_applicable": "2.1/status/not_applicable",
+        "missing_answer": "2.1/status/missing_answer",
+        "insufficient_evidence": "2.1/status/insufficient_evidence",
+        "contradiction": "2.1/status/contradiction",
+        "scale_not_configured": "2.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "2.2",
+      "label": "Соответствие целей теме",
+      "question_original": "Цели урока соответствуют теме урока",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "да"
+        },
+        {
+          "id": "o2",
+          "label": "нет"
+        }
+      ],
+      "max_score": 5,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 5,
+        "o2": 0
+      },
+      "allowed_scores": [
+        0,
+        5
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "2.2/answer/o1",
+        "o2": "2.2/answer/o2"
+      },
+      "status_rule_ids": {
+        "scored": "2.2/status/scored",
+        "descriptive": "2.2/status/descriptive",
+        "not_applicable": "2.2/status/not_applicable",
+        "missing_answer": "2.2/status/missing_answer",
+        "insufficient_evidence": "2.2/status/insufficient_evidence",
+        "contradiction": "2.2/status/contradiction",
+        "scale_not_configured": "2.2/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "2.3",
+      "label": "Понятность целей ученикам",
+      "question_original": "Цели урока понятны обучающимся",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "да"
+        },
+        {
+          "id": "o2",
+          "label": "нет"
+        }
+      ],
+      "max_score": 5,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 5,
+        "o2": 0
+      },
+      "allowed_scores": [
+        0,
+        5
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "2.3/answer/o1",
+        "o2": "2.3/answer/o2"
+      },
+      "status_rule_ids": {
+        "scored": "2.3/status/scored",
+        "descriptive": "2.3/status/descriptive",
+        "not_applicable": "2.3/status/not_applicable",
+        "missing_answer": "2.3/status/missing_answer",
+        "insufficient_evidence": "2.3/status/insufficient_evidence",
+        "contradiction": "2.3/status/contradiction",
+        "scale_not_configured": "2.3/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "3.1",
+      "label": "Соответствие содержания целям и программе",
+      "question_original": "Содержание учебного материала соответствует поставленной теме урока, а также учебной программе",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "да"
+        },
+        {
+          "id": "o2",
+          "label": "нет"
+        }
+      ],
+      "max_score": 5,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 5,
+        "o2": 0
+      },
+      "allowed_scores": [
+        0,
+        5
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "3.1/answer/o1",
+        "o2": "3.1/answer/o2"
+      },
+      "status_rule_ids": {
+        "scored": "3.1/status/scored",
+        "descriptive": "3.1/status/descriptive",
+        "not_applicable": "3.1/status/not_applicable",
+        "missing_answer": "3.1/status/missing_answer",
+        "insufficient_evidence": "3.1/status/insufficient_evidence",
+        "contradiction": "3.1/status/contradiction",
+        "scale_not_configured": "3.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "3.2",
+      "label": "Структура урока",
+      "question_original": "Структура урока данного типа",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "четкая"
+        },
+        {
+          "id": "o2",
+          "label": "структура не прослеживается"
+        }
+      ],
+      "max_score": 3,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 3,
+        "o2": 0
+      },
+      "allowed_scores": [
+        0,
+        3
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "3.2/answer/o1",
+        "o2": "3.2/answer/o2"
+      },
+      "status_rule_ids": {
+        "scored": "3.2/status/scored",
+        "descriptive": "3.2/status/descriptive",
+        "not_applicable": "3.2/status/not_applicable",
+        "missing_answer": "3.2/status/missing_answer",
+        "insufficient_evidence": "3.2/status/insufficient_evidence",
+        "contradiction": "3.2/status/contradiction",
+        "scale_not_configured": "3.2/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "3.3",
+      "label": "Темп урока",
+      "question_original": "Темп урока соответствует возрасту и индивидуально-психологическим особенностям обучающихся",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "да"
+        },
+        {
+          "id": "o2",
+          "label": "частично"
+        },
+        {
+          "id": "o3",
+          "label": "нет"
+        }
+      ],
+      "max_score": 3,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 3,
+        "o2": 2,
+        "o3": 0
+      },
+      "allowed_scores": [
+        0,
+        2,
+        3
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "3.3/answer/o1",
+        "o2": "3.3/answer/o2",
+        "o3": "3.3/answer/o3"
+      },
+      "status_rule_ids": {
+        "scored": "3.3/status/scored",
+        "descriptive": "3.3/status/descriptive",
+        "not_applicable": "3.3/status/not_applicable",
+        "missing_answer": "3.3/status/missing_answer",
+        "insufficient_evidence": "3.3/status/insufficient_evidence",
+        "contradiction": "3.3/status/contradiction",
+        "scale_not_configured": "3.3/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "3.4",
+      "label": "Чередование форм работы",
+      "question_original": "На уроке чередуются формы работы и виды активности (динамика урока)",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "да"
+        },
+        {
+          "id": "o2",
+          "label": "нет"
+        }
+      ],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "3.4/status/scored",
+        "descriptive": "3.4/status/descriptive",
+        "not_applicable": "3.4/status/not_applicable",
+        "missing_answer": "3.4/status/missing_answer",
+        "insufficient_evidence": "3.4/status/insufficient_evidence",
+        "contradiction": "3.4/status/contradiction",
+        "scale_not_configured": "3.4/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "3.5",
+      "label": "Межпредметные связи",
+      "question_original": "Межпредметные связи",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "присутствуют"
+        },
+        {
+          "id": "o2",
+          "label": "отсутствуют"
+        }
+      ],
+      "max_score": 3,
+      "kind": "scored",
+      "origin": "original_five_scales",
+      "scoring_mode": "content_levels",
+      "allowed_scores": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "levels": [
+        {
+          "id": "level_0",
+          "score": 0,
+          "condition": "Зафиксировано отсутствие межпредметных связей",
+          "rule_id": "3.5/level_0"
+        },
+        {
+          "id": "level_1",
+          "score": 1,
+          "condition": "Пример из другого предмета упомянут, связь раскрыта не полностью; базовый балл 1 также назначается по отметке о наличии без подробностей",
+          "rule_id": "3.5/level_1"
+        },
+        {
+          "id": "level_2",
+          "score": 2,
+          "condition": "Связь объяснена и помогает понять содержание; зафиксировано, что ученики не применяли её в задании",
+          "rule_id": "3.5/level_2"
+        },
+        {
+          "id": "level_3",
+          "score": 3,
+          "condition": "Ученики используют знания или способы действий другого предмета в задании",
+          "rule_id": "3.5/level_3"
+        }
+      ],
+      "allow_not_applicable": false,
+      "status_rule_ids": {
+        "scored": "3.5/status/scored",
+        "descriptive": "3.5/status/descriptive",
+        "not_applicable": "3.5/status/not_applicable",
+        "missing_answer": "3.5/status/missing_answer",
+        "insufficient_evidence": "3.5/status/insufficient_evidence",
+        "contradiction": "3.5/status/contradiction",
+        "scale_not_configured": "3.5/status/scale_not_configured"
+      },
+      "assessment_policy": "form_baseline_then_text_evidence",
+      "text_override_requires": "Точная цитата из /answers/*/text того же checklist_id и revision; метка варианта не является текстовым основанием изменения базового балла.",
+      "empty_selection_status": "missing_answer",
+      "baseline_rules": [
+        {
+          "rule_id": "3.5/form/present",
+          "all_options": [
+            "o1"
+          ],
+          "score": 1
+        },
+        {
+          "rule_id": "3.5/form/absent",
+          "all_options": [
+            "o2"
+          ],
+          "score": 0
+        },
+        {
+          "rule_id": "3.5/form/missing",
+          "otherwise": true,
+          "status": "missing_answer"
+        }
+      ]
+    },
+    {
+      "code": "3.6",
+      "label": "Дифференциация заданий",
+      "question_original": "Задания дифференцированы в соответствии с уровнями обучающихся.",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "дифференцированность заданий предусмотрена"
+        },
+        {
+          "id": "o2",
+          "label": "фронтальные задания \"одно для всех\""
+        },
+        {
+          "id": "o3",
+          "label": "дифференциация не предполагается в соответствии с типом урока"
+        }
+      ],
+      "max_score": 6,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 6,
+        "o2": 0,
+        "o3": "not_applicable"
+      },
+      "allowed_scores": [
+        0,
+        6
+      ],
+      "allow_not_applicable": true,
+      "answer_rule_ids": {
+        "o1": "3.6/answer/o1",
+        "o2": "3.6/answer/o2",
+        "o3": "3.6/answer/o3"
+      },
+      "status_rule_ids": {
+        "scored": "3.6/status/scored",
+        "descriptive": "3.6/status/descriptive",
+        "not_applicable": "3.6/status/not_applicable",
+        "missing_answer": "3.6/status/missing_answer",
+        "insufficient_evidence": "3.6/status/insufficient_evidence",
+        "contradiction": "3.6/status/contradiction",
+        "scale_not_configured": "3.6/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "3.7",
+      "label": "Методы объяснения",
+      "question_original": "Содержание объясняется через (какие методы)",
+      "answer_mode": "multiple",
+      "options": [
+        {
+          "id": "o1",
+          "label": "создание проблемной ситуации (противоречия) / проблемные вопросы"
+        },
+        {
+          "id": "o2",
+          "label": "самостоятельную работу обучающихся (в т.ч. в группе)"
+        },
+        {
+          "id": "o3",
+          "label": "домашнее задание (в т.ч. \"перевёрнутый класс\")"
+        },
+        {
+          "id": "o4",
+          "label": "самостоятельная работа с учебником"
+        },
+        {
+          "id": "o5",
+          "label": "учебная лекция"
+        },
+        {
+          "id": "o6",
+          "label": "пример педагога / объяснение через обучающихся, имеющих образцово-показательную технику (на физической культуре)"
+        },
+        {
+          "id": "o7",
+          "label": "другое"
+        }
+      ],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "3.7/status/scored",
+        "descriptive": "3.7/status/descriptive",
+        "not_applicable": "3.7/status/not_applicable",
+        "missing_answer": "3.7/status/missing_answer",
+        "insufficient_evidence": "3.7/status/insufficient_evidence",
+        "contradiction": "3.7/status/contradiction",
+        "scale_not_configured": "3.7/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "4.1",
+      "label": "Доступность материала",
+      "question_original": "Учебный материал",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "доступен и понятен обучающимся, соответствует их индивидуальным и возрастным особенностям"
+        },
+        {
+          "id": "o2",
+          "label": "не соответствует уровню обучающихся, сложно воспринимается"
+        }
+      ],
+      "max_score": 5,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 5,
+        "o2": 0
+      },
+      "allowed_scores": [
+        0,
+        5
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "4.1/answer/o1",
+        "o2": "4.1/answer/o2"
+      },
+      "status_rule_ids": {
+        "scored": "4.1/status/scored",
+        "descriptive": "4.1/status/descriptive",
+        "not_applicable": "4.1/status/not_applicable",
+        "missing_answer": "4.1/status/missing_answer",
+        "insufficient_evidence": "4.1/status/insufficient_evidence",
+        "contradiction": "4.1/status/contradiction",
+        "scale_not_configured": "4.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "4.2",
+      "label": "Владение предметным содержанием",
+      "question_original": "Владение учителем учебным материалом предмета",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "обладает глубокими знаниями по теме урока"
+        },
+        {
+          "id": "o2",
+          "label": "достаточный уровень"
+        },
+        {
+          "id": "o3",
+          "label": "требует улучшения (есть неточности)"
+        },
+        {
+          "id": "o4",
+          "label": "допускает предметные ошибки"
+        },
+        {
+          "id": "o5",
+          "label": "не оцениваю: не специалист в предмете"
+        }
+      ],
+      "max_score": 10,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 10,
+        "o2": 6,
+        "o3": 0,
+        "o4": 0,
+        "o5": "not_applicable"
+      },
+      "allowed_scores": [
+        0,
+        6,
+        10
+      ],
+      "allow_not_applicable": true,
+      "answer_rule_ids": {
+        "o1": "4.2/answer/o1",
+        "o2": "4.2/answer/o2",
+        "o3": "4.2/answer/o3",
+        "o4": "4.2/answer/o4",
+        "o5": "4.2/answer/o5"
+      },
+      "status_rule_ids": {
+        "scored": "4.2/status/scored",
+        "descriptive": "4.2/status/descriptive",
+        "not_applicable": "4.2/status/not_applicable",
+        "missing_answer": "4.2/status/missing_answer",
+        "insufficient_evidence": "4.2/status/insufficient_evidence",
+        "contradiction": "4.2/status/contradiction",
+        "scale_not_configured": "4.2/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "5.1",
+      "label": "Обратная связь",
+      "question_original": "Обратная связь учителя обучающимся",
+      "answer_mode": "multiple",
+      "options": [
+        {
+          "id": "o1",
+          "label": "обратная связь конкретная, развивающая"
+        },
+        {
+          "id": "o2",
+          "label": "обратная связь дается формально"
+        },
+        {
+          "id": "o3",
+          "label": "обратная связь не была организована"
+        }
+      ],
+      "max_score": 6,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "feedback",
+      "allowed_scores": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "features": {
+        "quality": {
+          "type": "enum",
+          "values": [
+            "specific",
+            "formal",
+            "mixed",
+            "absent",
+            "unknown"
+          ],
+          "specific_option": "o1",
+          "formal_option": "o2",
+          "absent_option": "o3",
+          "notes": "Для текстовой корректировки качество определяется по точной цитате; базовые смешанные отметки дают 4 без пояснения. o5 имеет приоритет."
+        },
+        "usage_limited": {
+          "type": "boolean",
+          "default": false,
+          "notes": "true только при прямо описанной невозможности своевременно использовать конкретную обратную связь"
+        }
+      },
+      "decision_rules": [
+        {
+          "score": 0,
+          "when": {
+            "quality": "absent"
+          },
+          "rule_id": "5.1/decision/1"
+        },
+        {
+          "score": 2,
+          "when": {
+            "quality": "formal"
+          },
+          "rule_id": "5.1/decision/2"
+        },
+        {
+          "score": 4,
+          "when": {
+            "any": [
+              {
+                "quality": "mixed"
+              },
+              {
+                "all": [
+                  {
+                    "quality": "specific"
+                  },
+                  {
+                    "usage_limited": true
+                  }
+                ]
+              }
+            ]
+          },
+          "rule_id": "5.1/decision/3"
+        },
+        {
+          "score": 6,
+          "when": {
+            "all": [
+              {
+                "quality": "specific"
+              },
+              {
+                "usage_limited": false
+              }
+            ]
+          },
+          "rule_id": "5.1/decision/4"
+        },
+        {
+          "score": 2,
+          "otherwise": true,
+          "rule_id": "5.1/decision/5"
+        }
+      ],
+      "contradictions": [],
+      "allow_not_applicable": false,
+      "status_rule_ids": {
+        "scored": "5.1/status/scored",
+        "descriptive": "5.1/status/descriptive",
+        "not_applicable": "5.1/status/not_applicable",
+        "missing_answer": "5.1/status/missing_answer",
+        "insufficient_evidence": "5.1/status/insufficient_evidence",
+        "contradiction": "5.1/status/contradiction",
+        "scale_not_configured": "5.1/status/scale_not_configured"
+      },
+      "assessment_policy": "form_baseline_then_text_evidence",
+      "text_override_requires": "Точная цитата из /answers/*/text того же checklist_id и revision; метка варианта не является текстовым основанием изменения базового балла.",
+      "empty_selection_status": "missing_answer",
+      "baseline_rules": [
+        {
+          "rule_id": "5.1/form/absent",
+          "all_options": [
+            "o3"
+          ],
+          "score": 0
+        },
+        {
+          "rule_id": "5.1/form/mixed",
+          "all_options": [
+            "o1",
+            "o2"
+          ],
+          "score": 4
+        },
+        {
+          "rule_id": "5.1/form/specific",
+          "all_options": [
+            "o1"
+          ],
+          "score": 6
+        },
+        {
+          "rule_id": "5.1/form/formal",
+          "all_options": [
+            "o2"
+          ],
+          "score": 2
+        },
+        {
+          "rule_id": "5.1/form/missing",
+          "otherwise": true,
+          "status": "missing_answer"
+        }
+      ],
+      "form_priority": {
+        "o3": "fixed_zero",
+        "o1_and_o2": "maximum_4"
+      }
+    },
+    {
+      "code": "5.2",
+      "label": "Рефлексия",
+      "question_original": "Рефлексия на уроке",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "присутствует"
+        },
+        {
+          "id": "o2",
+          "label": "отсутствует"
+        }
+      ],
+      "max_score": 3,
+      "kind": "scored",
+      "origin": "original_five_scales",
+      "scoring_mode": "content_levels",
+      "allowed_scores": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "levels": [
+        {
+          "id": "level_0",
+          "score": 0,
+          "condition": "Зафиксировано отсутствие рефлексии",
+          "rule_id": "5.2/level_0"
+        },
+        {
+          "id": "level_1",
+          "score": 1,
+          "condition": "Общее впечатление без анализа своей работы; базовый балл 1 также назначается по отметке о наличии без подробностей",
+          "rule_id": "5.2/level_1"
+        },
+        {
+          "id": "level_2",
+          "score": 2,
+          "condition": "Работа сопоставлена с целью или критериями, определены достижения и потребности в доработке",
+          "rule_id": "5.2/level_2"
+        },
+        {
+          "id": "level_3",
+          "score": 3,
+          "condition": "На основе анализа определены дальнейшие действия",
+          "rule_id": "5.2/level_3"
+        }
+      ],
+      "allow_not_applicable": false,
+      "status_rule_ids": {
+        "scored": "5.2/status/scored",
+        "descriptive": "5.2/status/descriptive",
+        "not_applicable": "5.2/status/not_applicable",
+        "missing_answer": "5.2/status/missing_answer",
+        "insufficient_evidence": "5.2/status/insufficient_evidence",
+        "contradiction": "5.2/status/contradiction",
+        "scale_not_configured": "5.2/status/scale_not_configured"
+      },
+      "assessment_policy": "form_baseline_then_text_evidence",
+      "text_override_requires": "Точная цитата из /answers/*/text того же checklist_id и revision; метка варианта не является текстовым основанием изменения базового балла.",
+      "empty_selection_status": "missing_answer",
+      "baseline_rules": [
+        {
+          "rule_id": "5.2/form/present",
+          "all_options": [
+            "o1"
+          ],
+          "score": 1
+        },
+        {
+          "rule_id": "5.2/form/absent",
+          "all_options": [
+            "o2"
+          ],
+          "score": 0
+        },
+        {
+          "rule_id": "5.2/form/missing",
+          "otherwise": true,
+          "status": "missing_answer"
+        }
+      ]
+    },
+    {
+      "code": "5.3",
+      "label": "Контроль усвоения",
+      "question_original": "Формы контроля усвоения содержания",
+      "answer_mode": "multiple",
+      "options": [
+        {
+          "id": "o1",
+          "label": "фронтальный опрос"
+        },
+        {
+          "id": "o2",
+          "label": "индивидуальный опрос / письменный опрос"
+        },
+        {
+          "id": "o3",
+          "label": "дидактическая игра"
+        },
+        {
+          "id": "o4",
+          "label": "тестирование"
+        },
+        {
+          "id": "o5",
+          "label": "решение задач, упражнений"
+        },
+        {
+          "id": "o6",
+          "label": "ДРУГОЕ"
+        }
+      ],
+      "max_score": 9,
+      "kind": "scored",
+      "origin": "original_five_scales",
+      "scoring_mode": "content_levels",
+      "allowed_scores": [
+        0,
+        3,
+        6,
+        9
+      ],
+      "levels": [
+        {
+          "id": "level_0",
+          "score": 0,
+          "condition": "Зафиксировано отсутствие проверки или несоответствие проверяемому результату",
+          "rule_id": "5.3/level_0"
+        },
+        {
+          "id": "level_3",
+          "score": 3,
+          "condition": "Проверены отдельные ответы, понимание материала классом не установлено; базовый балл 3 также назначается по выбранной форме контроля без подробностей",
+          "rule_id": "5.3/level_3"
+        },
+        {
+          "id": "level_6",
+          "score": 6,
+          "condition": "Усвоенное содержание и затруднения установлены; в описанной дальнейшей работе использование сведений не прослеживается",
+          "rule_id": "5.3/level_6"
+        },
+        {
+          "id": "level_9",
+          "score": 9,
+          "condition": "Усвоенное содержание и затруднения установлены, сведения использованы для помощи, пояснения, усложнения или обоснованного продолжения",
+          "rule_id": "5.3/level_9"
+        }
+      ],
+      "allow_not_applicable": false,
+      "status_rule_ids": {
+        "scored": "5.3/status/scored",
+        "descriptive": "5.3/status/descriptive",
+        "not_applicable": "5.3/status/not_applicable",
+        "missing_answer": "5.3/status/missing_answer",
+        "insufficient_evidence": "5.3/status/insufficient_evidence",
+        "contradiction": "5.3/status/contradiction",
+        "scale_not_configured": "5.3/status/scale_not_configured"
+      },
+      "assessment_policy": "form_baseline_then_text_evidence",
+      "text_override_requires": "Точная цитата из /answers/*/text того же checklist_id и revision; метка варианта не является текстовым основанием изменения базового балла.",
+      "empty_selection_status": "missing_answer",
+      "baseline_rules": [
+        {
+          "rule_id": "5.3/form/selected_control",
+          "any_options": [
+            "o1",
+            "o2",
+            "o3",
+            "o4",
+            "o5",
+            "o6"
+          ],
+          "score": 3
+        },
+        {
+          "rule_id": "5.3/form/missing",
+          "otherwise": true,
+          "status": "missing_answer"
+        }
+      ]
+    },
+    {
+      "code": "5.4",
+      "label": "Виды оценивания",
+      "question_original": "Виды оценивания на уроке",
+      "answer_mode": "multiple",
+      "options": [
+        {
+          "id": "o1",
+          "label": "самооценивание"
+        },
+        {
+          "id": "o2",
+          "label": "взаимооценивание"
+        },
+        {
+          "id": "o3",
+          "label": "экспертное оценивание учителем"
+        },
+        {
+          "id": "o4",
+          "label": "отсутствует"
+        }
+      ],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "5.4/status/scored",
+        "descriptive": "5.4/status/descriptive",
+        "not_applicable": "5.4/status/not_applicable",
+        "missing_answer": "5.4/status/missing_answer",
+        "insufficient_evidence": "5.4/status/insufficient_evidence",
+        "contradiction": "5.4/status/contradiction",
+        "scale_not_configured": "5.4/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "6.1",
+      "label": "Способы мотивации",
+      "question_original": "Привлечение внимания и пробуждение интереса к теме через",
+      "answer_mode": "multiple",
+      "options": [
+        {
+          "id": "o1",
+          "label": "Учёт индивидуальных, возрастных и психологических особенностей обучающихся"
+        },
+        {
+          "id": "o2",
+          "label": "эмоциональное вовлечение"
+        },
+        {
+          "id": "o3",
+          "label": "Вовлечение в разные виды практической деятельности (эвристической, исследовательской, творческой и др.)"
+        },
+        {
+          "id": "o4",
+          "label": "Разнообразие приёмов"
+        },
+        {
+          "id": "o5",
+          "label": "Постановку актуальной для обучающихся проблемы для рассмотрения и решения в ходе урока"
+        },
+        {
+          "id": "o6",
+          "label": "Обращение к имеющемуся личностно значимому и социально значимому опыту обучающихся"
+        },
+        {
+          "id": "o7",
+          "label": "Поддержку вопросов обучающихся по теме занятия"
+        },
+        {
+          "id": "o8",
+          "label": "Организацию и сопровождение взаимодействия и учебного сотрудничества обучающихся (работа в парах, группах, организация процесса общего обсуждения)"
+        },
+        {
+          "id": "o9",
+          "label": "Другое (вписать свои варианты)"
+        },
+        {
+          "id": "o10",
+          "label": "Способы мотивации на уроке не применялись"
+        }
+      ],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "6.1/status/scored",
+        "descriptive": "6.1/status/descriptive",
+        "not_applicable": "6.1/status/not_applicable",
+        "missing_answer": "6.1/status/missing_answer",
+        "insufficient_evidence": "6.1/status/insufficient_evidence",
+        "contradiction": "6.1/status/contradiction",
+        "scale_not_configured": "6.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "6.2",
+      "label": "Вовлечённость учеников",
+      "question_original": "Вовлечённость учащихся в процесс урока",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "100% обучающихся активно вовлечены в урок (через парную, групповую/командную формы работы, включённость в общее обсуждение)"
+        },
+        {
+          "id": "o2",
+          "label": "Вовлечены большинство обучающихся (не менее ¾ класса), но некоторые остаются пассивными"
+        },
+        {
+          "id": "o3",
+          "label": "Вовлечена только часть класса (сильные ученики, лидеры), большая часть остаётся пассивной"
+        },
+        {
+          "id": "o4",
+          "label": "Массовое отсутствие вовлечённости, пассивность класса в целом, имеются эпизоды деструктивного поведения"
+        }
+      ],
+      "max_score": 9,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 9,
+        "o2": 6,
+        "o3": 3,
+        "o4": 0
+      },
+      "allowed_scores": [
+        0,
+        3,
+        6,
+        9
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "6.2/answer/o1",
+        "o2": "6.2/answer/o2",
+        "o3": "6.2/answer/o3",
+        "o4": "6.2/answer/o4"
+      },
+      "status_rule_ids": {
+        "scored": "6.2/status/scored",
+        "descriptive": "6.2/status/descriptive",
+        "not_applicable": "6.2/status/not_applicable",
+        "missing_answer": "6.2/status/missing_answer",
+        "insufficient_evidence": "6.2/status/insufficient_evidence",
+        "contradiction": "6.2/status/contradiction",
+        "scale_not_configured": "6.2/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "7.1",
+      "label": "Воспитательный потенциал",
+      "question_original": "На уроке используется содержание, обеспечивающее формирование ценностей Гимназии и традиционных российских духовно-нравственных ценностей с учетом возрастных особенностей обучающихся",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "да"
+        },
+        {
+          "id": "o2",
+          "label": "нет"
+        }
+      ],
+      "max_score": 5,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 5,
+        "o2": 0
+      },
+      "allowed_scores": [
+        0,
+        5
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "7.1/answer/o1",
+        "o2": "7.1/answer/o2"
+      },
+      "status_rule_ids": {
+        "scored": "7.1/status/scored",
+        "descriptive": "7.1/status/descriptive",
+        "not_applicable": "7.1/status/not_applicable",
+        "missing_answer": "7.1/status/missing_answer",
+        "insufficient_evidence": "7.1/status/insufficient_evidence",
+        "contradiction": "7.1/status/contradiction",
+        "scale_not_configured": "7.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "8.1",
+      "label": "Цифровые инструменты",
+      "question_original": "Цифровые инструменты",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "используются сообразно типу урока"
+        },
+        {
+          "id": "o2",
+          "label": "используются нецелесообразно"
+        },
+        {
+          "id": "o3",
+          "label": "не используются"
+        }
+      ],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "8.1/status/scored",
+        "descriptive": "8.1/status/descriptive",
+        "not_applicable": "8.1/status/not_applicable",
+        "missing_answer": "8.1/status/missing_answer",
+        "insufficient_evidence": "8.1/status/insufficient_evidence",
+        "contradiction": "8.1/status/contradiction",
+        "scale_not_configured": "8.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "8.2",
+      "label": "Наглядные материалы",
+      "question_original": "Качество и уместность наглядных материалов (в т.ч. материал отражен на доске, в схемах и т.п.)",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "высокое, уместны"
+        },
+        {
+          "id": "o2",
+          "label": "среднее, не всегда уместны"
+        },
+        {
+          "id": "o3",
+          "label": "низкое, неуместны"
+        },
+        {
+          "id": "o4",
+          "label": "не использовались, что снизило качество урока"
+        },
+        {
+          "id": "o5",
+          "label": "не использовались ввиду специфики урока"
+        }
+      ],
+      "max_score": 3,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 3,
+        "o2": 2,
+        "o3": 1,
+        "o4": 0,
+        "o5": "not_applicable"
+      },
+      "allowed_scores": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "allow_not_applicable": true,
+      "answer_rule_ids": {
+        "o1": "8.2/answer/o1",
+        "o2": "8.2/answer/o2",
+        "o3": "8.2/answer/o3",
+        "o4": "8.2/answer/o4",
+        "o5": "8.2/answer/o5"
+      },
+      "status_rule_ids": {
+        "scored": "8.2/status/scored",
+        "descriptive": "8.2/status/descriptive",
+        "not_applicable": "8.2/status/not_applicable",
+        "missing_answer": "8.2/status/missing_answer",
+        "insufficient_evidence": "8.2/status/insufficient_evidence",
+        "contradiction": "8.2/status/contradiction",
+        "scale_not_configured": "8.2/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "9.1",
+      "label": "Характер педагогического общения",
+      "question_original": "Характер педагогического общения",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "общение уважительное, доброжелательное и деловое; учитель внимательно выслушивает ответы, не перебивает без необходимости, даёт время подумать и закончить высказывание"
+        },
+        {
+          "id": "o2",
+          "label": "общение уважительное, но весь урок почти целиком монолог учителя, ученикам почти не дают высказаться"
+        },
+        {
+          "id": "o3",
+          "label": "учитель некорректно обращается к учащимся (фамильярность, ярлыки, насмешки, публичное обесценивание)"
+        }
+      ],
+      "max_score": 6,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 6,
+        "o2": 1,
+        "o3": 0
+      },
+      "allowed_scores": [
+        0,
+        1,
+        6
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "9.1/answer/o1",
+        "o2": "9.1/answer/o2",
+        "o3": "9.1/answer/o3"
+      },
+      "status_rule_ids": {
+        "scored": "9.1/status/scored",
+        "descriptive": "9.1/status/descriptive",
+        "not_applicable": "9.1/status/not_applicable",
+        "missing_answer": "9.1/status/missing_answer",
+        "insufficient_evidence": "9.1/status/insufficient_evidence",
+        "contradiction": "9.1/status/contradiction",
+        "scale_not_configured": "9.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "9.2",
+      "label": "Стиль общения",
+      "question_original": "Стиль общения",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "авторитарный"
+        },
+        {
+          "id": "o2",
+          "label": "попустительский"
+        },
+        {
+          "id": "o3",
+          "label": "сотрудничество (координация деятельности обучающихся)"
+        }
+      ],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "9.2/status/scored",
+        "descriptive": "9.2/status/descriptive",
+        "not_applicable": "9.2/status/not_applicable",
+        "missing_answer": "9.2/status/missing_answer",
+        "insufficient_evidence": "9.2/status/insufficient_evidence",
+        "contradiction": "9.2/status/contradiction",
+        "scale_not_configured": "9.2/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "9.3",
+      "label": "Психологический климат",
+      "question_original": "Психологический климат урока",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "комфортная атмосфера урока (позитивный настрой на работу у обучающихся)"
+        },
+        {
+          "id": "o2",
+          "label": "атмосфера на уроке не создана (обучающиеся \"занимаются своими делами\")"
+        },
+        {
+          "id": "o3",
+          "label": "психологический комфорт отсутствует (напряжённый климат, \"страх ошибки\" у учащихся)"
+        }
+      ],
+      "max_score": 4,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 4,
+        "o2": 2,
+        "o3": 0
+      },
+      "allowed_scores": [
+        0,
+        2,
+        4
+      ],
+      "allow_not_applicable": false,
+      "answer_rule_ids": {
+        "o1": "9.3/answer/o1",
+        "o2": "9.3/answer/o2",
+        "o3": "9.3/answer/o3"
+      },
+      "status_rule_ids": {
+        "scored": "9.3/status/scored",
+        "descriptive": "9.3/status/descriptive",
+        "not_applicable": "9.3/status/not_applicable",
+        "missing_answer": "9.3/status/missing_answer",
+        "insufficient_evidence": "9.3/status/insufficient_evidence",
+        "contradiction": "9.3/status/contradiction",
+        "scale_not_configured": "9.3/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "10.1",
+      "label": "Домашнее задание",
+      "question_original": "Информация о домашнем задании",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "задание дано в достаточном объёме, дан инструктаж по выполнению"
+        },
+        {
+          "id": "o2",
+          "label": "задание дано в достаточном объёме, но после звонка"
+        },
+        {
+          "id": "o3",
+          "label": "задание не соответствует содержанию и целям / избыточно"
+        },
+        {
+          "id": "o4",
+          "label": "задание на уроке не озвучено (обещано позже в ЭЖ или в группе)"
+        },
+        {
+          "id": "o5",
+          "label": "задание не задано (в соответствии с типом урока)"
+        }
+      ],
+      "max_score": 2,
+      "kind": "scored",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "direct",
+      "answer_map": {
+        "o1": 2,
+        "o2": 1,
+        "o3": 0,
+        "o4": 0,
+        "o5": "not_applicable"
+      },
+      "allowed_scores": [
+        0,
+        1,
+        2
+      ],
+      "allow_not_applicable": true,
+      "answer_rule_ids": {
+        "o1": "10.1/answer/o1",
+        "o2": "10.1/answer/o2",
+        "o3": "10.1/answer/o3",
+        "o4": "10.1/answer/o4",
+        "o5": "10.1/answer/o5"
+      },
+      "status_rule_ids": {
+        "scored": "10.1/status/scored",
+        "descriptive": "10.1/status/descriptive",
+        "not_applicable": "10.1/status/not_applicable",
+        "missing_answer": "10.1/status/missing_answer",
+        "insufficient_evidence": "10.1/status/insufficient_evidence",
+        "contradiction": "10.1/status/contradiction",
+        "scale_not_configured": "10.1/status/scale_not_configured"
+      },
+      "analytics_code": "3.8"
+    },
+    {
+      "code": "11.1",
+      "label": "Дисциплина на уроке",
+      "question_original": "Оценка поведения класса",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "образцовое поведение"
+        },
+        {
+          "id": "o2",
+          "label": "допустимое поведение"
+        },
+        {
+          "id": "o3",
+          "label": "недопустимое поведение"
+        }
+      ],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "11.1/status/scored",
+        "descriptive": "11.1/status/descriptive",
+        "not_applicable": "11.1/status/not_applicable",
+        "missing_answer": "11.1/status/missing_answer",
+        "insufficient_evidence": "11.1/status/insufficient_evidence",
+        "contradiction": "11.1/status/contradiction",
+        "scale_not_configured": "11.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "12.1",
+      "label": "Общая оценка",
+      "question_original": "Оцените уровень представленного урока",
+      "answer_mode": "single",
+      "options": [
+        {
+          "id": "o1",
+          "label": "очень высокий"
+        },
+        {
+          "id": "o2",
+          "label": "высокий"
+        },
+        {
+          "id": "o3",
+          "label": "средний"
+        },
+        {
+          "id": "o4",
+          "label": "ниже среднего"
+        },
+        {
+          "id": "o5",
+          "label": "низкий"
+        }
+      ],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "12.1/status/scored",
+        "descriptive": "12.1/status/descriptive",
+        "not_applicable": "12.1/status/not_applicable",
+        "missing_answer": "12.1/status/missing_answer",
+        "insufficient_evidence": "12.1/status/insufficient_evidence",
+        "contradiction": "12.1/status/contradiction",
+        "scale_not_configured": "12.1/status/scale_not_configured"
+      }
+    },
+    {
+      "code": "12.2",
+      "label": "Общие выводы",
+      "question_original": "Общие выводы: сформулируйте конкретные наблюдения (положительные моменты, зоны роста), что Вы взяли бы для себя с этого урока",
+      "answer_mode": "text",
+      "options": [],
+      "max_score": null,
+      "kind": "descriptive",
+      "origin": "checklist_v4.1_2026-11-09",
+      "scoring_mode": "descriptive",
+      "status_rule_ids": {
+        "scored": "12.2/status/scored",
+        "descriptive": "12.2/status/descriptive",
+        "not_applicable": "12.2/status/not_applicable",
+        "missing_answer": "12.2/status/missing_answer",
+        "insufficient_evidence": "12.2/status/insufficient_evidence",
+        "contradiction": "12.2/status/contradiction",
+        "scale_not_configured": "12.2/status/scale_not_configured"
+      }
+    }
+  ],
+  "auto_exceptions": [
+    {
+      "rule_id": "exception/physical_education",
+      "when": "subject",
+      "subjects": [
+        "Физическая культура"
+      ],
+      "not_applicable": [
+        "3.6"
+      ]
+    },
+    {
+      "rule_id": "exception/grades_1_2",
+      "when": "class_grade",
+      "grades": [
+        1,
+        2
+      ],
+      "not_applicable": [
+        "3.6"
+      ]
+    },
+    {
+      "rule_id": "exception/leadership_department",
+      "when": "teacher_department",
+      "departments": [
+        "Кафедра лидерства"
+      ],
+      "not_applicable": [
+        "3.6",
+        "10.1"
+      ],
+      "hidden": [
+        "5.4"
+      ]
+    },
+    {
+      "rule_id": "exception/observer_other_department",
+      "when": "observer_department_differs",
+      "not_applicable": [
+        "4.2"
+      ]
+    }
+  ],
+  "levels": [
+    {
+      "name": "Очень низкий",
+      "lower_inclusive": 0,
+      "upper_exclusive": 0.4
+    },
+    {
+      "name": "Низкий",
+      "lower_inclusive": 0.4,
+      "upper_exclusive": 0.5
+    },
+    {
+      "name": "Средний",
+      "lower_inclusive": 0.5,
+      "upper_exclusive": 0.7
+    },
+    {
+      "name": "Высокий",
+      "lower_inclusive": 0.7,
+      "upper_exclusive": 0.85
+    },
+    {
+      "name": "Очень высокий",
+      "lower_inclusive": 0.85,
+      "upper_inclusive": 1
+    }
+  ],
+  "criterion_attention_rule": "Строго менее 0.50 допустимого максимума; конкретные оценки form_minimum по 3.5, 5.2, 5.3 не входят в сигнал внимания и приоритеты, но сохраняются в итогах.",
+  "legacy_10_1_mapping": {
+    "низкий": "Очень низкий",
+    "ниже среднего": "Низкий",
+    "средний": "Средний",
+    "высокий": "Высокий",
+    "очень высокий": "Очень высокий"
+  },
+  "assessment_methods": {
+    "form_minimum": "По отметке формы (минимальный уровень)",
+    "form": "По отметке формы",
+    "evidence": "По основанию",
+    "not_evaluated": "Не оценено",
+    "descriptive": "Описательный пункт"
+  }
+}

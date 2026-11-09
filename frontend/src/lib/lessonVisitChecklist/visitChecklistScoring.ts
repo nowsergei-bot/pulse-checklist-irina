@@ -90,7 +90,8 @@ function buildVisitCodeIndicatorMap(): Map<string, string> {
   const checklist = checklistSeed as LessonVisitChecklistConfig;
   for (const sec of checklist.sections) {
     for (const q of sec.questions) {
-      const code = String(q.code ?? '').trim();
+      // Справочник оценок построен по кодам формы до 4.1.
+      const code = String(q.legacyCode ?? q.code ?? '').trim();
       const text = String(q.text ?? '').trim();
       if (code && text) map.set(code, text);
     }

@@ -454,3 +454,67 @@ test('project POST does not let an unlisted author set the list', withDirectorAc
   assert.equal('newTeacherIds' in (await create(analyst)), false);
   assert.deepEqual((await create(director)).newTeacherIds, ['teacher_1']);
 }));
+
+// --- Форма 4.1 (с 09.11.2026) и временное отключение отправки отчётов учителям ---
+const fs = require('fs');
+const path = require('path');
+const { ensureChecklistFormV41 } = require('./lesson-visit-checklist');
+
+const oldForm = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '../../../frontend/src/lib/lessonVisitChecklist/formV4.fixture.json'), 'utf8'),
+);
+
+test('ensureChecklistFormV41 brings a saved v4 form to 4.1 and keeps question ids', () => {
+  const saved = JSON.parse(JSON.stringify(oldForm));
+  saved.generalFields.push({ id: 'custom_note', label: 'Своё поле', type: 'text', required: false });
+  const next = ensureChecklistFormV41(saved);
+  const questions = next.sections.flatMap((s) => s.questions);
+  const oldId = (code) => oldForm.sections.flatMap((s) => s.questions).find((q) => q.code === code).id;
+  assert.equal(next.formVersion, '4.1');
+  assert.equal(next.sections.length, 12);
+  assert.equal(questions.find((q) => q.code === '10.1').id, oldId('3.8'));
+  assert.equal(questions.find((q) => q.code === '12.1').id, oldId('10.1'));
+  assert.equal(questions.find((q) => q.code === '12.2').id, oldId('10.2'));
+  assert.deepEqual(next.legacyQuestions.map((q) => [q.id, q.legacyCode]), [[oldId('10.3'), '10.3']]);
+  assert.equal(new Set(questions.map((q) => q.id)).size, questions.length);
+  assert.ok(next.generalFields.some((f) => f.id === 'custom_note'));
+  assert.equal(next.generalFields.find((f) => f.id === 'lesson_type').type, 'select');
+  assert.ok(next.generalFields.find((f) => f.id === 'visit_format').options.includes('Самоанализ'));
+  assert.equal(ensureChecklistFormV41(next), next);
+  const normalized = normalizeSavedChecklist(JSON.parse(JSON.stringify(oldForm)));
+  assert.equal(normalized.formVersion, '4.1');
+});
+
+test('frontend and backend seed copies are identical', () => {
+  const a = fs.readFileSync(path.join(__dirname, '../data/visit-checklist-default-seed.json'), 'utf8');
+  const b = fs.readFileSync(path.join(__dirname, '../../../frontend/src/lib/lessonVisitChecklist/defaultSeed.json'), 'utf8');
+  assert.equal(a, b);
+});
+
+test('sending a visit report to a teacher is rejected while sending is switched off', async () => {
+  const delivery = require('./visit-report-delivery');
+  assert.equal(delivery.TEACHER_FEEDBACK_SENDING_ENABLED, false);
+  let touched = false;
+  const service = delivery.createDeliveryService({
+    repository: new Proxy({}, { get: () => { touched = true; return async () => null; } }),
+    readLesson: async () => { touched = true; return null; },
+    authorize: async () => {},
+    canonicalHash: () => 'x',
+  });
+  await assert.rejects(service.send({}, { id: 1 }, 'snap', 'key'), (error) => {
+    assert.equal(error.httpStatus, 403);
+    assert.equal(error.publicError, 'Отправка обратной связи учителям временно недоступна');
+    return true;
+  });
+  assert.equal(touched, false);
+});
+
+test('dashboard filter accepts any available maximum from 1 to 100', () => {
+  const { normalizeFilters } = require('./visit-checklist-dashboard-filters');
+  for (const maximum of ['100', '94', '92', '91', '89', '5']) {
+    assert.equal(normalizeFilters({ maximum, period: 'all_time' }, new Date('2026-11-20T12:00:00Z')).maximum, maximum);
+  }
+  for (const maximum of ['0', '101', '9.5', 'abc']) {
+    assert.throws(() => normalizeFilters({ maximum, period: 'all_time' }, new Date('2026-11-20T12:00:00Z')));
+  }
+});

@@ -115,9 +115,57 @@ function ensureSubjectSelectFromSeed(checklist) {
   };
 }
 
+const VISIT_CHECKLIST_FORM_VERSION = '4.1';
+
+/**
+ * Форма 4.1 из seed поверх сохранённой формы проекта (без миграции).
+ * id вопросов сохраняются по старому коду, старые ответы остаются привязаны к своим вопросам.
+ * Убранные вопросы уходят в legacyQuestions, поля регистрации, которых нет в seed, остаются.
+ * Та же логика во frontend: normalizeChecklist.ts.
+ */
+function ensureChecklistFormV41(checklist) {
+  const seed = loadSeedBundle();
+  if (!checklist || !Array.isArray(checklist.sections) || checklist.formVersion === VISIT_CHECKLIST_FORM_VERSION) {
+    return checklist;
+  }
+  if (!seed || seed.formVersion !== VISIT_CHECKLIST_FORM_VERSION || !Array.isArray(seed.sections)) return checklist;
+  const saved = checklist.sections.flatMap((sec) => (sec && Array.isArray(sec.questions) ? sec.questions : []));
+  const savedByCode = new Map(saved.map((q) => [String(q.code || '').trim(), q]));
+  const mapped = new Set();
+  for (const q of seed.sections.flatMap((sec) => sec.questions)) {
+    const prev = q.legacyCode ? savedByCode.get(q.legacyCode) : undefined;
+    if (prev) mapped.add(prev.id);
+  }
+  const previousLegacy = Array.isArray(checklist.legacyQuestions) ? checklist.legacyQuestions : [];
+  const taken = new Set([...saved.map((q) => q.id), ...previousLegacy.map((q) => q.id)]);
+  const freshId = (id) => {
+    let next = id;
+    for (let n = 2; taken.has(next); n += 1) next = `${id}_v41_${n}`;
+    taken.add(next);
+    return next;
+  };
+  const sections = seed.sections.map((sec) => ({
+    ...sec,
+    questions: sec.questions.map((q) => {
+      const prev = q.legacyCode ? savedByCode.get(q.legacyCode) : undefined;
+      return { ...q, options: [...q.options], id: prev ? prev.id : freshId(q.id) };
+    }),
+  }));
+  const legacyQuestions = [...previousLegacy];
+  for (const q of saved) {
+    if (mapped.has(q.id) || legacyQuestions.some((l) => l.id === q.id)) continue;
+    legacyQuestions.push({ ...q, legacyCode: q.legacyCode || q.code });
+  }
+  const generalFields = Array.isArray(checklist.generalFields) ? [...checklist.generalFields] : [];
+  for (const field of seed.generalFields || []) {
+    if (!generalFields.some((f) => f && f.id === field.id)) generalFields.push({ ...field });
+  }
+  return { ...checklist, formVersion: VISIT_CHECKLIST_FORM_VERSION, generalFields, sections, legacyQuestions };
+}
+
 function normalizeSavedChecklist(checklist) {
   if (!checklist) return checklist;
-  return ensureSubjectSelectFromSeed(ensureVisitFormatSelfAnalysis(checklist));
+  return ensureSubjectSelectFromSeed(ensureVisitFormatSelfAnalysis(ensureChecklistFormV41(checklist)));
 }
 
 function visitChecklistDraftFromState(stateJson) {
@@ -223,6 +271,8 @@ module.exports = {
   ensureVisitFormatSelfAnalysis,
   ensureSubjectSelectFromSeed,
   normalizeSavedChecklist,
+  ensureChecklistFormV41,
+  VISIT_CHECKLIST_FORM_VERSION,
   loadSeedDirectory,
   resolvePublicLessonVisitDirectory,
   buildTeacherUnitMap,

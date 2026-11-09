@@ -10,6 +10,7 @@ import {
   matchTeacherFromVisitSchedule,
   type VisitScheduleMatchRow,
 } from './visitChecklistScheduleMatch.ts';
+import { questionByLegacyCode } from './visitChecklistReport.ts';
 
 export const DIRECTOR_TEACHER_DYNAMICS_MIN_VISITS = 3;
 
@@ -49,9 +50,11 @@ function qaByCode(
   answers: LessonVisitResponseRow['answers'],
   code: string,
 ): VisitQaItem | undefined {
+  // Коды формы до 4.1 (10.1 оценка, 10.2 выводы): в форме 4.1 это 12.1 и 12.2.
+  const current = checklist ? questionByLegacyCode(checklist, code)?.code || code : code;
   return buildVisitQaSections(checklist, answers)
     .flatMap((sec) => sec.items)
-    .find((item) => item.code === code);
+    .find((item) => item.code === current);
 }
 
 function toPick(item: VisitQaItem | undefined): DirectorQaPick {

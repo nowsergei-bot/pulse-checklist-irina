@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { previewVisitReport, sendVisitReport, visitReportStatus, type VisitReportSnapshot } from '../../api/visitReportDelivery';
+import {
+  previewVisitReport,
+  sendVisitReport,
+  TEACHER_FEEDBACK_SENDING_DISABLED_MESSAGE,
+  TEACHER_FEEDBACK_SENDING_ENABLED,
+  visitReportStatus,
+  type VisitReportSnapshot,
+} from '../../api/visitReportDelivery';
 import VisitReportView from './VisitReportView';
 
 export default function VisitReportSend({ lessonId, aggregationVersion }: { lessonId: string; aggregationVersion: string }) {
@@ -32,7 +39,7 @@ export default function VisitReportSend({ lessonId, aggregationVersion }: { less
     finally { if (token === generation.current) setBusy(false); }
   }
   async function send() {
-    if (!preview) return;
+    if (!preview || !TEACHER_FEEDBACK_SENDING_ENABLED) return;
     const token = generation.current; setBusy(true); setStatus('Отправляется'); setError('');
     try {
       const report = await sendVisitReport(preview.snapshot_id,requestKey.current);
@@ -47,6 +54,7 @@ export default function VisitReportSend({ lessonId, aggregationVersion }: { less
     {error ? <p role="alert">{error}</p> : null}
     <label>Комментарий руководителя<textarea value={comment} disabled={busy} onChange={event => { setComment(event.target.value); setPreview(null); }} /></label>
     <button type="button" disabled={busy} onClick={() => void buildPreview()}>Предпросмотр отчёта</button>
-    {preview ? <><VisitReportView report={preview} /><button type="button" disabled={busy} onClick={() => void send()}>{isUpdate ? 'Отправить обновление' : 'Отправить'}</button></> : null}
+    {preview ? <><VisitReportView report={preview} /><button type="button" disabled={busy || !TEACHER_FEEDBACK_SENDING_ENABLED} onClick={() => void send()}>{isUpdate ? 'Отправить обновление' : 'Отправить'}</button>
+      {TEACHER_FEEDBACK_SENDING_ENABLED ? null : <p className="muted">{TEACHER_FEEDBACK_SENDING_DISABLED_MESSAGE}</p>}</> : null}
   </section>;
 }

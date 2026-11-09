@@ -55,8 +55,9 @@ import type {
   LessonVisitDirectory,
   LessonVisitResponseRow,
 } from "./types.ts";
+// Форма до 4.1 (действовала до 08.11.2026): старые чек-листы и их баллы.
 const seed = JSON.parse(
-  readFileSync(new URL("./defaultSeed.json", import.meta.url), "utf8"),
+  readFileSync(new URL("./formV4.fixture.json", import.meta.url), "utf8"),
 ) as LessonVisitChecklistConfig;
 const directory: LessonVisitDirectory = {
   departments: [{ id: "d", name: "Математика" }],
@@ -1023,4 +1024,284 @@ test("coverage over the real seed directory counts every listed teacher once", (
   );
   assert.equal(one.visited, 1);
   assert.equal(one.notVisited.length, 176);
+});
+
+// ---- Чек-лист 4.1 (с 09.11.2026): вымышленные учителя и ответы. ----
+import { ensureChecklistFormV41 } from "./normalizeChecklist.ts";
+import {
+  RUBRIC_V41_VERSION,
+  autoExceptionsV41,
+  classGrade,
+} from "./visitChecklistReport.ts";
+import { LEVELS as LEVEL_NAMES, levelIndex as levelOf } from "./reportPresentation.ts";
+
+const formV41 = ensureChecklistFormV41(structuredClone(seed));
+const v41Q = (code: string) =>
+  formV41.sections.flatMap((s) => s.questions).find((q) => q.code === code)!;
+/** Максимальные отметки формы 4.1, ключи по id вопроса. */
+const maxAnswersV41 = (
+  over: Record<string, string | string[]> = {},
+): LessonVisitResponseRow["answers"] => {
+  const byCode: Record<string, string | string[]> = {
+    "1.1": "готов",
+    "2.1": "совместно с обучающимися",
+    "2.2": "да",
+    "2.3": "да",
+    "3.1": "да",
+    "3.2": "четкая",
+    "3.3": "да",
+    "3.5": "присутствуют",
+    "3.6": "дифференциация не предполагается в соответствии с типом урока",
+    "4.1":
+      "доступен и понятен обучающимся, соответствует их индивидуальным и возрастным особенностям",
+    "4.2": "обладает глубокими знаниями по теме урока",
+    "5.1": ["обратная связь конкретная, развивающая"],
+    "5.2": "присутствует",
+    "5.3": ["фронтальный опрос", "ДРУГОЕ: устный зачёт"],
+    "6.2":
+      "100% обучающихся активно вовлечены в урок (через парную, групповую/командную формы работы, включённость в общее обсуждение)",
+    "7.1": "да",
+    "8.2": "высокое, уместны",
+    "9.1":
+      "общение уважительное, доброжелательное и деловое; учитель внимательно выслушивает ответы, не перебивает без необходимости, даёт время подумать и закончить высказывание",
+    "9.3":
+      "комфортная атмосфера урока (позитивный настрой на работу у обучающихся)",
+    "10.1": "задание дано в достаточном объёме, дан инструктаж по выполнению",
+    "11.1": "образцовое поведение",
+    "12.1": "очень высокий",
+    ...over,
+  };
+  return Object.fromEntries(
+    Object.entries(byCode).map(([code, answer]) => [v41Q(code).id, answer]),
+  );
+};
+const v41 = (
+  over: Record<string, string | string[]> = {},
+  context: Parameters<typeof directLessonScore>[2] = {},
+) =>
+  directLessonScore(formV41, maxAnswersV41(over), {
+    date: "2026-11-09",
+    subject: "Математика",
+    className: "5А",
+    ...context,
+  });
+const item = (score: ReturnType<typeof directLessonScore>, code: string) =>
+  score.items.find((i) => i.code === code)!;
+
+test("v4.1 form keeps question ids, moves 3.8/10.x to 10.1/12.x and hides old 10.3", () => {
+  const old = seed.sections.flatMap((s) => s.questions);
+  const id = (code: string) => old.find((q) => q.code === code)!.id;
+  assert.equal(formV41.formVersion, "4.1");
+  assert.equal(formV41.sections.length, 12);
+  assert.equal(v41Q("10.1").id, id("3.8"));
+  assert.equal(v41Q("12.1").id, id("10.1"));
+  assert.equal(v41Q("12.2").id, id("10.2"));
+  assert.deepEqual(formV41.legacyQuestions?.map((q) => q.legacyCode), ["10.3"]);
+  assert.ok(!old.some((q) => q.id === v41Q("11.1").id));
+  const type = formV41.generalFields.find((f) => f.id === "lesson_type")!;
+  assert.equal(type.type, "select");
+  assert.equal(type.required, true);
+  assert.equal(type.options?.length, 4);
+  assert.ok(formV41.generalFields.some((f) => f.id === "lesson_number"));
+  assert.ok(formV41.generalFields.some((f) => f.id === "lesson_topic"));
+  assert.ok(
+    formV41.generalFields
+      .find((f) => f.id === "visit_format")!
+      .options!.includes("Самоанализ"),
+  );
+  assert.equal(ensureChecklistFormV41(formV41), formV41);
+});
+
+test("ТЗ 1: 09.11.2026, all maximum answers and 3.6 not intended: maximum 94, very high", () => {
+  const score = v41();
+  assert.equal(item(score, "3.6").na, true);
+  assert.equal(score.max, 94);
+  assert.deepEqual(score.missing, []);
+  for (const i of score.items) {
+    assert.equal(i.version, RUBRIC_V41_VERSION);
+    if (i.na) continue;
+    // 3.5, 5.2, 5.3 по форме дают минимальный уровень, как и раньше.
+    if (["3.5", "5.2", "5.3"].includes(i.code)) assert.equal(i.method, "form_minimum");
+    else assert.equal(i.value, i.max, i.code);
+  }
+  assert.equal(score.total, 94 - 2 - 2 - 6);
+  const percent = (score.total! / score.max) * 100;
+  assert.equal(LEVEL_NAMES[levelOf(percent)], "Очень высокий");
+});
+
+test("ТЗ 2–3: physical education and grades 1–2 exclude 3.6 automatically", () => {
+  const answered = {
+    "3.6": "дифференцированность заданий предусмотрена",
+  };
+  assert.equal(item(v41(answered), "3.6").value, 6);
+  assert.equal(v41(answered).max, 100);
+  const pe = v41(answered, { subject: "Физическая культура" });
+  assert.equal(item(pe, "3.6").na, true);
+  assert.equal(pe.max, 94);
+  assert.equal(item(v41(answered, { className: "2Б" }), "3.6").na, true);
+  assert.equal(item(v41(answered, { className: "1 А" }), "3.6").na, true);
+  assert.equal(item(v41(answered, { className: "5А" }), "3.6").value, 6);
+  assert.equal(item(v41(answered, { className: "12А" }), "3.6").value, 6);
+  assert.equal(classGrade("Подготовка"), null);
+  assert.equal(item(v41(answered, { className: "" }), "3.6").value, 6);
+});
+
+test("ТЗ 4: 9.1 monologue gives 1, incorrect address gives 0", () => {
+  const options = v41Q("9.1").options;
+  assert.equal(item(v41({ "9.1": options[1] }), "9.1").value, 1);
+  assert.equal(item(v41({ "9.1": options[2] }), "9.1").value, 0);
+});
+
+test("ТЗ 5: homework 10.1 maps to 3.8 in analytics", () => {
+  const options = v41Q("10.1").options;
+  assert.equal(item(v41({ "10.1": options[1] }), "3.8").value, 1);
+  assert.equal(item(v41({ "10.1": options[3] }), "3.8").value, 0);
+  const na = v41({ "10.1": options[4] });
+  assert.equal(item(na, "3.8").na, true);
+  assert.equal(na.max, 92);
+  assert.ok(!na.items.some((i) => i.code === "10.1"));
+});
+
+test("ТЗ 6: 4.2 sufficient 6, needs improvement 0, not assessed excluded", () => {
+  const options = v41Q("4.2").options;
+  assert.equal(item(v41({ "4.2": options[1] }), "4.2").value, 6);
+  assert.equal(item(v41({ "4.2": options[2] }), "4.2").value, 0);
+  assert.equal(item(v41({ "4.2": options[3] }), "4.2").value, 0);
+  const na = v41({ "4.2": options[4] });
+  assert.equal(item(na, "4.2").na, true);
+  assert.equal(na.max, 84);
+});
+
+test("ТЗ 7: 2.1 by the teacher gives 4", () => {
+  assert.equal(item(v41({ "2.1": "учителем" }), "2.1").value, 4);
+  assert.equal(item(v41({ "2.1": "обучающимися" }), "2.1").value, 5);
+});
+
+test("v4.1: 3.3 partly, 5.1 feedback combinations and other control form", () => {
+  assert.equal(item(v41({ "3.3": "частично" }), "3.3").value, 2);
+  const fb = (a: string[]) => item(v41({ "5.1": a }), "5.1").value;
+  assert.equal(fb(["обратная связь конкретная, развивающая", "обратная связь дается формально"]), 4);
+  assert.equal(fb(["обратная связь дается формально"]), 2);
+  assert.equal(fb(["обратная связь конкретная, развивающая", "обратная связь не была организована"]), 0);
+  assert.equal(item(v41({ "5.3": ["ДРУГОЕ: устный зачёт"] }), "5.3").value, 3);
+});
+
+test("v4.1 exceptions: leadership department and observer from another department", () => {
+  const leadership = v41(
+    { "3.6": "дифференцированность заданий предусмотрена" },
+    { teacherDepartment: "Кафедра лидерства" },
+  );
+  assert.equal(item(leadership, "3.6").na, true);
+  assert.equal(item(leadership, "3.8").na, true);
+  assert.equal(leadership.max, 92);
+  const other = v41({}, { teacherDepartment: "Кафедра математики", observerDepartment: "Кафедра словесности" });
+  assert.equal(item(other, "4.2").na, true);
+  const same = v41({}, { teacherDepartment: "Кафедра математики", observerDepartment: "Кафедра математики" });
+  assert.equal(item(same, "4.2").value, 10);
+  assert.equal(item(v41({}, { teacherDepartment: "Кафедра математики", observerDepartment: null }), "4.2").value, 10);
+  assert.equal(item(v41({}, { teacherDepartment: "Кафедра математики", observerDepartment: "Администрация" }), "4.2").value, 10);
+  assert.deepEqual([...autoExceptionsV41({}).keys()], []);
+});
+
+test("v4.1 report: observer department from the directory, practice falls back to conclusions", () => {
+  const dir: LessonVisitDirectory = {
+    departments: [
+      { id: "m", name: "Кафедра математики" },
+      { id: "s", name: "Кафедра словесности" },
+    ],
+    teachers: [
+      { id: "t1", name: "Учитель Первый Тестович", departmentId: "m" },
+      { id: "t2", name: "Наблюдатель Второй Тестович", departmentId: "s" },
+    ],
+  };
+  const answers = maxAnswersV41({ "12.2": "Чёткая структура, есть зоны роста." });
+  const visit = (date: string, visitor: string) => ({
+    id: 1,
+    created_at: date,
+    general: { teacher_id: "t1", visit_date: date, subject: "Алгебра", class_name: "7А", visitor_name: visitor },
+    answers,
+  });
+  const report = buildLessonReport(
+    [visit("2026-11-10", "Наблюдатель Второй Тестович")],
+    formV41,
+    dir,
+    new Date("2026-11-20T12:00:00Z"),
+  );
+  const v = report.visits[0];
+  assert.equal(v.score.items.find((i) => i.code === "4.2")?.na, true);
+  assert.equal(v.rating, 5);
+  assert.equal(v.feedback, "Чёткая структура, есть зоны роста.");
+  assert.equal(v.practice, "Чёткая структура, есть зоны роста.");
+  const unknown = buildLessonReport(
+    [visit("2026-11-10", "Неизвестный Наблюдатель")],
+    formV41,
+    dir,
+    new Date("2026-11-20T12:00:00Z"),
+  ).visits[0];
+  assert.equal(unknown.score.items.find((i) => i.code === "4.2")?.value, 10);
+});
+
+test("ТЗ 8: a 05.11.2026 checklist scores the same before and after the v4.1 form update", () => {
+  const old = seed.sections.flatMap((s) => s.questions);
+  const byCode: Record<string, string | string[]> = {
+    "1.1": "частично",
+    "2.1": "учителем",
+    "2.2": "да",
+    "2.3": "нет",
+    "3.1": "да",
+    "3.2": "четкая",
+    "3.3": "да",
+    "3.5": "присутствуют",
+    "3.6": "фронтальные задания \"одно для всех\"",
+    "3.8": ["задание соответствует содержанию и целям урока", "домашнее задание избыточно"],
+    "4.1":
+      "доступен и понятен обучающимся, соответствует их индивидуальным и возрастным особенностям",
+    "4.2": "достаточный уровень",
+    "5.1": ["в конце урока", "обратная связь дается формально"],
+    "5.2": "отсутствует",
+    "5.3": ["тестирование"],
+    "6.2":
+      "Вовлечена только часть класса (сильные ученики, лидеры), большая часть остаётся пассивной",
+    "7.1": "да",
+    "8.2": "не использовались ввиду специфики урока",
+    "9.1": [
+      "Общение строится в уважительном, доброжелательном и деловом тоне",
+      "\"монолог\" учителя большую часть урока",
+    ],
+    "9.3":
+      "атмосфера на уроке не создана (обучающиеся \"занимаются своими делами\")",
+    "10.1": "средний",
+    "10.2": "Выводы наблюдателя.",
+    "10.3": "Возьму приём с карточками.",
+  };
+  const answers = Object.fromEntries(
+    Object.entries(byCode).map(([code, a]) => [old.find((q) => q.code === code)!.id, a]),
+  );
+  const response: LessonVisitResponseRow = {
+    id: 7,
+    created_at: "2026-11-05",
+    general: { teacher_id: "a", visit_date: "2026-11-05", subject: "Физическая культура", class_name: "2Б" },
+    answers,
+  };
+  const at = new Date("2026-11-20T12:00:00Z");
+  const before = buildLessonReport([response], seed, directory, at).visits[0];
+  const after = buildLessonReport([response], formV41, directory, at).visits[0];
+  assert.equal(before.score.total, after.score.total);
+  assert.equal(before.score.max, after.score.max);
+  assert.equal(after.score.max, 97);
+  assert.deepEqual(
+    after.score.items.map((i) => [i.code, i.value, i.na, i.version]),
+    before.score.items.map((i) => [i.code, i.value, i.na, i.version]),
+  );
+  assert.equal(after.score.items[0].version, "pulse-100-v4-2026-10-05");
+  assert.equal(after.rating, before.rating);
+  assert.equal(after.feedback, "Выводы наблюдателя.");
+  assert.equal(after.practice, "Возьму приём с карточками.");
+});
+
+test("a late v4.1 form for an earlier lesson is scored by v4.1 rules", () => {
+  const score = directLessonScore(formV41, maxAnswersV41(), { date: "2026-11-06" });
+  assert.equal(score.items[0].version, RUBRIC_V41_VERSION);
+  const old = directLessonScore(formV41, { [v41Q("1.1").id]: "готов" }, { date: "2026-11-06" });
+  assert.equal(old.items[0].version, "pulse-100-v4-2026-10-05");
 });

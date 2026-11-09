@@ -1,5 +1,5 @@
 import defaultSeed from './defaultSeed.json' with { type: 'json' };
-import type { LessonVisitChecklistConfig } from './types';
+import type { LessonVisitChecklistConfig, LessonVisitQuestion } from './types';
 
 export const VISIT_CHECKLIST_TITLE = 'Чек-лист посещения урока';
 export const VISIT_FORMAT_SELF_ANALYSIS = 'Самоанализ';
@@ -69,6 +69,52 @@ export function ensureSubjectSelectFromSeed(
   };
 }
 
+export const VISIT_CHECKLIST_FORM_VERSION = '4.1';
+
+/**
+ * Форма 4.1 из seed поверх сохранённой формы проекта (без миграции).
+ * Номера вопросов (id) сохраняются по старому коду, поэтому старые ответы остаются привязаны к своим вопросам.
+ * Убранные вопросы уходят в legacyQuestions, поля регистрации, которых нет в seed, остаются.
+ */
+export function ensureChecklistFormV41(checklist: LessonVisitChecklistConfig): LessonVisitChecklistConfig {
+  const seed = defaultSeed as LessonVisitChecklistConfig;
+  if (!checklist || !Array.isArray(checklist.sections) || checklist.formVersion === VISIT_CHECKLIST_FORM_VERSION) return checklist;
+  if (seed.formVersion !== VISIT_CHECKLIST_FORM_VERSION) return checklist;
+  const saved = checklist.sections.flatMap((sec) => sec.questions || []);
+  const savedByCode = new Map(saved.map((q) => [String(q.code || '').trim(), q]));
+  const savedIds = new Set(saved.map((q) => q.id));
+  const mapped = new Set<string>();
+  const seedQuestions = seed.sections.flatMap((sec) => sec.questions);
+  for (const q of seedQuestions) {
+    const prev = q.legacyCode ? savedByCode.get(q.legacyCode) : undefined;
+    if (prev) mapped.add(prev.id);
+  }
+  const taken = new Set<string>([...savedIds, ...(checklist.legacyQuestions || []).map((q) => q.id)]);
+  const freshId = (id: string) => {
+    let next = id;
+    for (let n = 2; taken.has(next); n += 1) next = `${id}_v41_${n}`;
+    taken.add(next);
+    return next;
+  };
+  const sections = seed.sections.map((sec) => ({
+    ...sec,
+    questions: sec.questions.map((q): LessonVisitQuestion => {
+      const prev = q.legacyCode ? savedByCode.get(q.legacyCode) : undefined;
+      return { ...q, options: [...q.options], id: prev ? prev.id : freshId(q.id) };
+    }),
+  }));
+  const legacyQuestions: LessonVisitQuestion[] = [...(checklist.legacyQuestions || [])];
+  for (const q of saved) {
+    if (mapped.has(q.id) || legacyQuestions.some((l) => l.id === q.id)) continue;
+    legacyQuestions.push({ ...q, legacyCode: q.legacyCode || q.code });
+  }
+  const generalFields = [...checklist.generalFields];
+  for (const field of seed.generalFields) {
+    if (!generalFields.some((f) => f.id === field.id)) generalFields.push({ ...field });
+  }
+  return { ...checklist, formVersion: VISIT_CHECKLIST_FORM_VERSION, generalFields, sections, legacyQuestions };
+}
+
 /** Нормализация сохранённого чек-листа при загрузке (публичная форма, редактор, API). */
 export function normalizeSavedChecklist(checklist: LessonVisitChecklistConfig): LessonVisitChecklistConfig;
 export function normalizeSavedChecklist(
@@ -78,5 +124,5 @@ export function normalizeSavedChecklist(
   checklist: LessonVisitChecklistConfig | null | undefined,
 ): LessonVisitChecklistConfig | null | undefined {
   if (!checklist) return checklist;
-  return ensureSubjectSelectFromSeed(ensureVisitFormatSelfAnalysis(checklist));
+  return ensureSubjectSelectFromSeed(ensureVisitFormatSelfAnalysis(ensureChecklistFormV41(checklist)));
 }

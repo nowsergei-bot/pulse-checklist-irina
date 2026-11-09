@@ -53,7 +53,8 @@ export function scoreVisitFromChecklistAnswers(
   for (const sec of checklist?.sections || []) {
     for (const q of sec.questions || []) {
       const pick = formatAnswerPick(map[q.id] ?? map[q.code]);
-      if (pick) picks.set(q.code, pick);
+      // Справочник карточки построен по кодам формы до 4.1.
+      if (pick) picks.set(q.legacyCode ?? q.code, pick);
     }
   }
   return scoreVisitFromSectionPicks(picks);
@@ -82,8 +83,9 @@ export function buildVisitQaSections(
     const items = (sec.questions || []).map((q) => {
       const pick = formatAnswerPick(map[q.id] ?? map[q.code]);
       const unanswered = !pick;
-      const hit = byCode.get(q.code);
-      const rubric = hit || findRubricItemByCode(q.code);
+      const rubricCode = q.legacyCode ?? q.code;
+      const hit = byCode.get(rubricCode);
+      const rubric = hit || findRubricItemByCode(rubricCode);
       const earnedPoints = unanswered ? 0 : hit?.earned ?? 0;
       const maxPoints = hit?.max ?? (rubric && 'maxPoints' in rubric ? rubric.maxPoints : 0) ?? 0;
       const text = hit?.indicator || q.text;

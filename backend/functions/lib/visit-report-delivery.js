@@ -2,6 +2,14 @@
 
 const { randomUUID } = require('crypto');
 
+/**
+ * Временно: руководители кафедр не отправляют обратную связь учителям (с 09.11.2026).
+ * Чтобы снова включить отправку, поставить true здесь и в frontend/src/api/visitReportDelivery.ts.
+ * Предпросмотр, статус и уже отправленные отчёты работают как раньше.
+ */
+const TEACHER_FEEDBACK_SENDING_ENABLED = false;
+const TEACHER_FEEDBACK_SENDING_DISABLED_MESSAGE = 'Отправка обратной связи учителям временно недоступна';
+
 function problem(status, message) {
   const error = new Error(message);
   error.httpStatus = status;
@@ -51,6 +59,7 @@ function createDeliveryService({ repository, readLesson, authorize, canonicalHas
       return row;
     },
     async send(db, actor, snapshotId, requestKey) {
+      if (!TEACHER_FEEDBACK_SENDING_ENABLED) throw problem(403, TEACHER_FEEDBACK_SENDING_DISABLED_MESSAGE);
       if (typeof requestKey !== 'string' || !requestKey.trim() || requestKey.length > 200) {
         throw problem(400, 'Требуется ключ отправки');
       }
@@ -117,4 +126,9 @@ function createDeliveryService({ repository, readLesson, authorize, canonicalHas
   };
 }
 
-module.exports = { createDeliveryService, problem };
+module.exports = {
+  createDeliveryService,
+  problem,
+  TEACHER_FEEDBACK_SENDING_ENABLED,
+  TEACHER_FEEDBACK_SENDING_DISABLED_MESSAGE,
+};

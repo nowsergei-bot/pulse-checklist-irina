@@ -62,14 +62,16 @@ export function resolveVisitQuestionTarget(
   q: LessonVisitQuestion,
   section: LessonVisitSection,
 ): QuestionTarget {
+  // Код формы до 4.1: в форме 4.1 оценка урока имеет код 12.1, а 10.1 стал домашним заданием.
+  const code = q.legacyCode ?? q.code;
   if (q.type === 'text') {
-    if (/возьму с собой/i.test(q.text) || q.code === '10.3') return 'text_recommendations';
-    if (q.code === '10.2' || /общие выводы/i.test(q.text)) return 'text_summary';
+    if (/возьму с собой/i.test(q.text) || code === '10.3') return 'text_recommendations';
+    if (code === '10.2' || /общие выводы/i.test(q.text)) return 'text_summary';
     return 'text_summary';
   }
 
   if (
-    q.code === '10.1' ||
+    code === '10.1' ||
     q.code === '7.9' ||
     /уровень представленного урока/i.test(q.text) ||
     /мастерств\w*\s*учител\w*\s*в\s*целом/i.test(q.text)
@@ -78,7 +80,9 @@ export function resolveVisitQuestionTarget(
   }
   if (isBranchingQuestion(q)) return 'skip';
 
-  const secRole = section.code ? visitSectionRoleForCode(section.code) : null;
+  // Блок по коду формы до 4.1: домашнее задание (10.1, раньше 3.8) остаётся в блоке 3.
+  const legacySection = q.legacyCode ? q.legacyCode.split('.')[0] : section.code;
+  const secRole = legacySection ? visitSectionRoleForCode(legacySection) : null;
   if (secRole) return secRole;
 
   return 'skip';

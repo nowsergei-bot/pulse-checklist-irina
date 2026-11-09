@@ -33,7 +33,16 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   return payload;
 }
 export const previewVisitReport = (lessonId: string, comment: string) => request<VisitReportSnapshot>(`/lessons/${encodeURIComponent(lessonId)}/preview`, { comment });
-export const sendVisitReport = (snapshotId: string, requestKey: string) => request<VisitReportSnapshot>('/send', { snapshot_id: snapshotId, request_key: requestKey });
+/**
+ * Временно: руководители кафедр не отправляют обратную связь учителям (с 09.11.2026).
+ * Чтобы снова включить отправку, поставить true здесь и в backend/functions/lib/visit-report-delivery.js.
+ */
+export const TEACHER_FEEDBACK_SENDING_ENABLED = false;
+export const TEACHER_FEEDBACK_SENDING_DISABLED_MESSAGE = 'Отправка обратной связи учителям временно недоступна';
+export const sendVisitReport = (snapshotId: string, requestKey: string) =>
+  TEACHER_FEEDBACK_SENDING_ENABLED
+    ? request<VisitReportSnapshot>('/send', { snapshot_id: snapshotId, request_key: requestKey })
+    : Promise.reject(new Error(TEACHER_FEEDBACK_SENDING_DISABLED_MESSAGE));
 export const visitReportStatus = (lessonId: string) => request<{ status: string; sent_at?: string; sender_user_id?: number; sender_name?: string; error?: string }>(`/lessons/${encodeURIComponent(lessonId)}/status`);
 export const listMyVisitReports = () => request<{ reports: VisitReportListItem[] }>('/me');
 export const getMyVisitReport = (snapshotId: string) => request<VisitReportSnapshot>(`/me/${encodeURIComponent(snapshotId)}`);

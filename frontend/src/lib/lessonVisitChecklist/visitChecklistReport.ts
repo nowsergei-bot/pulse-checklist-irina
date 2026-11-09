@@ -7,6 +7,7 @@ import {
   type ExactValue,
 } from "./exactReportMath.ts";
 import rubric from "./pulseV6Rubric.json" with { type: "json" };
+import rubricV41 from "./pulseV41Rubric.json" with { type: "json" };
 import type {
   LessonVisitChecklistConfig,
   LessonVisitDirectory,
@@ -108,6 +109,9 @@ export type DirectScore = {
 };
 
 export const ACTIVE_RUBRIC_VERSION = rubric.rubric_version;
+/** Правила 4.1 действуют для чек-листов с датой посещения с 09.11.2026. */
+export const RUBRIC_V41_VERSION = rubricV41.rubric_version;
+export const RUBRIC_V41_START = rubricV41.effective_from_visit_date;
 type FormRule = {
   rule_id: string;
   score?: number;
@@ -127,25 +131,141 @@ const ruleMatches = (rule: FormRule, ids: string[]) =>
   (!rule.without_options ||
     rule.without_options.every((id) => !ids.includes(id)));
 
-/** v5 form baseline. Higher content levels require a separately accepted assessment with text evidence. */
+type RubricCriterion = {
+  code: string;
+  label: string;
+  kind: string;
+  max_score: number | null;
+  answer_mode?: string;
+  scoring_mode?: string;
+  analytics_code?: string;
+  options?: { id: string; label: string }[];
+};
+type Rubric = { rubric_version: string; criteria: RubricCriterion[] };
+
+/** Сведения об уроке для выбора правил и автоматических исключений версии 4.1. */
+export type LessonScoreContext = {
+  date?: string;
+  subject?: string;
+  className?: string;
+  /** Кафедра учителя. */
+  teacherDepartment?: string;
+  /** Кафедра наблюдателя, только если он однозначно найден в справочнике. */
+  observerDepartment?: string | null;
+};
+
+type ChecklistQuestion = LessonVisitChecklistConfig["sections"][number]["questions"][number];
+const allQuestions = (checklist: LessonVisitChecklistConfig): ChecklistQuestion[] => [
+  ...checklist.sections.flatMap((s) => s.questions || []),
+  ...(checklist.legacyQuestions || []),
+];
+/** Вопрос по коду формы до 4.1: в форме 4.1 у перенесённых вопросов он записан в legacyCode. */
+export function questionByLegacyCode(
+  checklist: LessonVisitChecklistConfig,
+  code: string,
+): ChecklistQuestion | undefined {
+  return allQuestions(checklist).find((q) => (q.legacyCode ?? q.code) === code);
+}
+/** Ответ по коду формы до 4.1 (3.8, 10.1, 10.2, 10.3 и т.д.) для старых и новых чек-листов. */
+export function answerByLegacyCode(
+  checklist: LessonVisitChecklistConfig,
+  answers: LessonVisitResponseRow["answers"],
+  code: string,
+): string | string[] | undefined {
+  const q = questionByLegacyCode(checklist, code);
+  return answers[q?.id || code] ?? answers[code];
+}
+
+const isOtherOption = (label: string) => norm(label).startsWith("другое");
+const optionMatches = (option: string, answer: string) =>
+  norm(option) === norm(answer) ||
+  (isOtherOption(option) && norm(answer).startsWith(`${norm(option)}:`));
+
+/** Ответ на вопрос, который есть только в форме 4.1 (дисциплина 11.1), значит чек-лист заполнен по форме 4.1. */
+function filledWithFormV41(
+  checklist: LessonVisitChecklistConfig,
+  answers: LessonVisitResponseRow["answers"],
+): boolean {
+  if (checklist.formVersion !== "4.1") return false;
+  const q = checklist.sections
+    .flatMap((s) => s.questions || [])
+    .find((x) => x.code === "11.1" && !x.legacyCode);
+  const raw = q ? answers[q.id] : undefined;
+  return Array.isArray(raw) ? raw.length > 0 : Boolean(raw && String(raw).trim());
+}
+
+/** Версия правил: по дате посещения; без даты действуют прежние правила. */
+export function rubricVersionFor(
+  checklist: LessonVisitChecklistConfig,
+  answers: LessonVisitResponseRow["answers"],
+  date?: string,
+): string {
+  if (date && validLessonDate(date) && date >= RUBRIC_V41_START) return RUBRIC_V41_VERSION;
+  return filledWithFormV41(checklist, answers) ? RUBRIC_V41_VERSION : ACTIVE_RUBRIC_VERSION;
+}
+
+const LEADERSHIP_DEPARTMENT = "кафедра лидерства";
+const NOT_A_DEPARTMENT = new Set(["администрация", "учебная часть", "кафедра не указана"]);
+/** Номер класса из начала поля «Класс» («1А», «2 Б»); null, если не распознан. */
+export function classGrade(className?: string): number | null {
+  const m = /^\s*(\d{1,2})(?!\d)/.exec(className || "");
+  return m ? Number(m[1]) : null;
+}
+/** Пункты, которые Пульс в версии 4.1 не учитывает сам, с причиной (лист «Исключения»). */
+export function autoExceptionsV41(context: LessonScoreContext = {}): Map<string, string> {
+  const out = new Map<string, string>();
+  const add = (code: string, reason: string) => {
+    if (!out.has(code)) out.set(code, reason);
+  };
+  if (norm(context.subject || "") === "физическая культура")
+    add("3.6", "Не учитывается: физическая культура");
+  const grade = classGrade(context.className);
+  if (grade === 1 || grade === 2) add("3.6", `Не учитывается: ${grade} класс`);
+  const teacherDept = norm(context.teacherDepartment || "");
+  if (teacherDept === LEADERSHIP_DEPARTMENT) {
+    add("3.6", "Не учитывается: кафедра лидерства");
+    add("10.1", "Не учитывается: кафедра лидерства");
+  }
+  const observerDept = norm(context.observerDepartment || "");
+  if (
+    observerDept &&
+    teacherDept &&
+    !NOT_A_DEPARTMENT.has(observerDept) &&
+    !NOT_A_DEPARTMENT.has(teacherDept) &&
+    observerDept !== teacherDept
+  )
+    add("4.2", "Не учитывается: наблюдатель с другой кафедры");
+  return out;
+}
+
+/** Базовый балл по форме. Более высокие уровни 3.5, 5.2, 5.3 требуют отдельного основания в тексте. */
 export function directLessonScore(
   checklist: LessonVisitChecklistConfig,
   answers: LessonVisitResponseRow["answers"],
+  context: LessonScoreContext = {},
 ): DirectScore {
+  const version = rubricVersionFor(checklist, answers, context.date);
+  const v41 = version === RUBRIC_V41_VERSION;
+  const activeRubric = (v41 ? rubricV41 : rubric) as unknown as Rubric;
   const questions = checklist.sections.flatMap((s) => s.questions || []);
-  const items = rubric.criteria
+  const exceptions = v41 ? autoExceptionsV41(context) : new Map<string, string>();
+  const items = activeRubric.criteria
     .filter((c) => c.kind === "scored")
     .map((criterion): DirectItem => {
-      const code = criterion.code,
-        q = questions.find((q) => q.code === code);
-      const sourceId = q?.id || code,
-        raw = answers[sourceId] ?? answers[code];
+      const formCode = criterion.code;
+      const code = criterion.analytics_code || formCode;
+      // Старые чек-листы ищут вопрос по коду формы до 4.1, новые по коду 4.1.
+      const q = v41
+        ? questions.find((x) => x.code === formCode)
+        : questionByLegacyCode(checklist, formCode);
+      const sourceId = q?.id || formCode,
+        raw = answers[sourceId] ?? answers[formCode];
       const labels = (
         Array.isArray(raw) ? raw : raw == null || raw === "" ? [] : [raw]
       ).map(String);
       const options = criterion.options || [];
       const mapped = labels.map((label) =>
-        options.find((o) => norm(o.label) === norm(label)),
+        options.find((o) => optionMatches(o.label, label)),
       );
       const ids = mapped
         .filter((o): o is { id: string; label: string } => Boolean(o))
@@ -154,7 +274,12 @@ export function directLessonScore(
         value: number | null = null,
         ruleId = `${code}/status/missing_answer`;
       let reason = "Нет ответа";
-      if (mapped.some((o) => !o)) {
+      const exception = exceptions.get(formCode);
+      if (exception) {
+        status = "not_applicable";
+        reason = exception;
+        ruleId = `${formCode}/exception/auto`;
+      } else if (mapped.some((o) => !o)) {
         status = "unmapped_answer";
         reason = "Ответ отсутствует в справочнике v5";
       } else if (
@@ -212,7 +337,7 @@ export function directLessonScore(
         sourceId,
         optionIds: ids,
         ruleId,
-        version: ACTIVE_RUBRIC_VERSION,
+        version,
         status,
         method:
           ["3.5", "5.2", "5.3"].includes(code) && value != null && value > 0
@@ -353,7 +478,19 @@ export function buildLessonReport(
         visits: [],
       });
   }
-  const questions = checklist.sections.flatMap((s) => s.questions);
+  const departmentIdsByPerson = new Map<string, Set<string>>();
+  for (const teacher of directory.teachers) {
+    const key = reportPersonKey(teacher.name);
+    if (!key) continue;
+    if (!departmentIdsByPerson.has(key)) departmentIdsByPerson.set(key, new Set());
+    departmentIdsByPerson.get(key)!.add(teacher.departmentId || "");
+  }
+  /** Кафедра наблюдателя, только если ФИО однозначно найдено в справочнике и кафедра одна. */
+  const observerDepartment = (name: string): string | null => {
+    const ids = departmentIdsByPerson.get(reportPersonKey(name));
+    if (!ids || ids.size !== 1) return null;
+    return departmentName([...ids][0]) || null;
+  };
   const visits: ReportVisit[] = rows.map((row) => {
     const g = row.general;
     const get = (...keys: string[]) =>
@@ -386,11 +523,9 @@ export function buildLessonReport(
       departmentName(get("department_id")) ||
       get("department_name", "department") ||
       "Кафедра не указана";
+    // Коды формы до 4.1: в форме 4.1 вопросы найдутся по legacyCode.
     const value = (code: string) =>
-      pick(
-        row.answers[questions.find((q) => q.code === code)?.id || code] ??
-          row.answers[code],
-      );
+      pick(answerByLegacyCode(checklist, row.answers, code));
     const rawDate = get("visit_date", "date").slice(0, 10);
     const date = validLessonDate(rawDate) ? rawDate : "";
     const subject = get("subject", "lesson_subject", "discipline"),
@@ -403,6 +538,14 @@ export function buildLessonReport(
     );
     const self =
       /само[\s-]?анализ|самооценка|^self(?:$|[ -])|^samoanaliz$/i.test(format);
+    const visitor = get("visitor_name", "visitor", "observer");
+    const score = directLessonScore(checklist, row.answers, {
+      date,
+      subject,
+      className,
+      teacherDepartment: department === "Кафедра не указана" ? "" : department,
+      observerDepartment: visitor ? observerDepartment(visitor) : null,
+    });
     const pairKey =
       teacher !== "Педагог не указан" && date && subject && className
         ? [teacherKey, date, norm(subject), reportClassKey(className)].join("|")
@@ -415,7 +558,7 @@ export function buildLessonReport(
       date,
       subject,
       className,
-      visitor: get("visitor_name", "visitor", "observer"),
+      visitor,
       format,
       self,
       rating: ratingValue(value("10.1")),
@@ -430,9 +573,12 @@ export function buildLessonReport(
             "очень высокий": "Очень высокий",
           } as Record<string, string>
         )[norm(value("10.1"))] || "",
-      score: directLessonScore(checklist, row.answers),
+      score,
       feedback: value("10.2"),
-      practice: value("10.3"),
+      // В форме 4.1 поля «Что я возьму с собой» нет: берём «Общие выводы».
+      practice:
+        value("10.3") ||
+        (score.items[0]?.version === RUBRIC_V41_VERSION ? value("10.2") : ""),
       pairKey,
     };
   });
