@@ -285,3 +285,24 @@ test('дашборд в базе', { skip: !url && 'нет MONITORING_TEST_DATAB
     assert.doesNotMatch(JSON.stringify(await dash({ work: 'Модуль 1' })), /@/);
   });
 });
+
+// Пример Иры 09.11: качество по группам 12 + 9 + 6 + 8 + 5 + 5 = 45 из 62 = 73 %, у параллели должно быть столько же.
+// Параллель считается по всем ученикам с полной работой сразу, а не средним по группам.
+test('качество и успеваемость параллели по всем ученикам с полной работой: 45 из 62 = 73 %', () => {
+  // [учеников с полной работой, «5» и «4», «2»]
+  const spec = [[12, 12, 0], [11, 9, 0], [8, 6, 0], [12, 8, 1], [9, 5, 1], [10, 5, 2]];
+  let next = 1;
+  const groups = spec.map(([n, good, twos]) => Array.from({ length: n }, (_, i) => ({
+    id: next++, percent: 80, mark: i < good ? '5' : i < n - twos ? '3' : '2',
+  })));
+  const sums = groups.map(g => summarize(g, g.length, true));
+  assert.deepEqual(sums.map(s => s.quality), [100, 82, 75, 67, 56, 50]);
+  const all = groups.flat();
+  const p = summarize(all, all.length, true);
+  assert.deepEqual([p.n, p.marked, p.marks[5] + p.marks[4], p.quality, p.marks[2], p.success], [62, 62, 45, 73, 4, 94]);
+  // Среднее качеств групп дало бы 72, это другое число: параллель так не считается.
+  assert.equal(Math.round(sums.reduce((a, s) => a + s.quality, 0) / sums.length), 72);
+  // Ученики без полной работы в records не попадают: m больше n, на качество это не влияет.
+  const withAbsent = summarize(all, all.length + 16, true);
+  assert.deepEqual([withAbsent.n, withAbsent.m, withAbsent.quality, withAbsent.success], [62, 78, 73, 94]);
+});

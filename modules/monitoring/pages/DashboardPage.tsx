@@ -195,7 +195,7 @@ function Groups({ d, parallel, onGroup, open }: { d: Data; parallel: number; onG
       <td className={g.n ? band(g.avg_percent) : 'mon-band--empty'}>{g.avg_percent ?? 'нет данных'}</td>
       {graded ? (
         <>
-          <td className={(g.twos || 0) > 0 ? 'mon-dash__bad' : undefined}>{g.twos}</td>
+          <td className={(g.twos || 0) > 0 ? 'mon-dash__bad' : g.n ? undefined : 'mon-dash__dash'}>{g.n ? g.twos : '–'}</td>
           <td>{pct(g.quality)}</td>
           <td>{pct(g.success)}</td>
         </>
