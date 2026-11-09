@@ -2235,3 +2235,23 @@ td.mon-dash__teacher { white-space: normal !important; min-width: 9rem; }
 }
 .mon-gspecs__row .mon-select { max-width: 30rem; }
 .mon-gspecs__group { max-width: 14rem; }
+
+/* Сортировка таблицы групп дашборда (09.11): заголовки-кнопки без системного вида. */
+.mon-dash__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.35rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mon-dash__sort:hover,
+.mon-dash__sort:focus-visible { background: var(--mon-p-pick); outline: none; }
+.mon-dash__sort.is-active { color: var(--mon-ink); }
+.mon-dash__sort-arrow { font-size: 0.75rem; opacity: 0.35; }
+.mon-dash__sort.is-active .mon-dash__sort-arrow { opacity: 1; }

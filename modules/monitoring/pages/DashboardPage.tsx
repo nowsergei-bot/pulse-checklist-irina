@@ -3,6 +3,7 @@ import { useApi } from './api';
 import { shares100 } from './Dynamics';
 import { band } from './DynamicsScreen';
 import { BAND_LEGEND, PALETTE, xlsxNote, xlsxPercent } from './palette';
+import { DEFAULT_SORT, effectiveSort, GroupSort, nextSort, SORT_LABEL, SortKey, sortGroups, sortNote } from './groupSort';
 
 // Дашборд заместителей директора (задание Иры 29.10): вся школа по одной работе, только просмотр.
 // Видят заместитель директора (первый экран раздела), заведующая кафедрой и data_admin; учителю вкладка не показывается,
@@ -167,10 +168,24 @@ function Parallels({ d, parallel, onPick }: { d: Data; parallel: number | null; 
   );
 }
 
+function SortTh({ k, sort, onSort, left }: { k: SortKey; sort: GroupSort; onSort: (k: SortKey) => void; left?: boolean }) {
+  const active = sort.key === k;
+  const arrow = active ? (sort.dir === 'asc' ? '↑' : '↓') : '↕';
+  return (
+    <th className={left ? 'is-l' : undefined} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className={`mon-dash__sort${active ? ' is-active' : ''}${left ? ' is-l' : ''}`} onClick={() => onSort(k)} title="Нажмите, чтобы отсортировать">
+        {SORT_LABEL[k]}<span className="mon-dash__sort-arrow" aria-hidden="true">{arrow}</span>
+      </button>
+    </th>
+  );
+}
+
 function Groups({ d, parallel, onGroup, open }: { d: Data; parallel: number; onGroup: (id: number) => void; open: number | null }) {
   const graded = Boolean(d.work?.graded);
-  const list = (d.groups || []).filter(g => g.parallel === parallel)
-    .sort((a, b) => (b.avg_percent ?? -1) - (a.avg_percent ?? -1) || a.title.localeCompare(b.title, 'ru', { numeric: true }));
+  const [picked, setSort] = useState<GroupSort>(DEFAULT_SORT);
+  const sort = effectiveSort(picked, graded);
+  const onSort = (k: SortKey) => setSort(nextSort(sort, k));
+  const list = sortGroups((d.groups || []).filter(g => g.parallel === parallel), sort);
   const par = (d.parallels || []).find(p => p.parallel === parallel);
   const row = (g: Sum, title: React.ReactNode, teacher: string, key: string, isPar: boolean, id?: number) => (
     <tr key={key} className={isPar ? 'is-par mon-dash__par' : `mon-dash__click${id === open ? ' is-picked' : ''}`} onClick={id ? () => onGroup(id) : undefined} tabIndex={id ? 0 : undefined} onKeyDown={id ? e => { if (e.key === 'Enter') onGroup(id); } : undefined}>
@@ -188,14 +203,15 @@ function Groups({ d, parallel, onGroup, open }: { d: Data; parallel: number; onG
       <td className={g.n < g.m ? 'mon-dash__bad' : undefined}>{g.n} из {g.m}</td>
     </tr>
   );
+  const th = (k: SortKey, left?: boolean) => <SortTh k={k} sort={sort} onSort={onSort} left={left} />;
   return (
-    <Block title={`Группы ${parallel} параллели`} note="По убыванию среднего процента. Нажмите на группу, чтобы открыть таблицу учеников.">
+    <Block title={`Группы ${parallel} параллели`} note={`${sortNote(sort)} Нажмите на заголовок столбца, чтобы изменить порядок, или на группу, чтобы открыть таблицу учеников.`}>
       <div className="mon-dyn__scroll">
         <table className="mon-dyn__table mon-dash__table">
           <thead>
             <tr>
-              <th className="is-l">Группа</th><th className="is-l">Учитель</th>{graded ? <th>Средняя отметка</th> : null}<th>Средний %</th>
-              {graded ? <><th>«2»</th><th>Качество</th><th>Успеваемость</th></> : null}<th>Внесено</th>
+              {th('title', true)}{th('teacher', true)}{graded ? th('avg_mark') : null}{th('avg_percent')}
+              {graded ? <>{th('twos')}{th('quality')}{th('success')}</> : null}{th('entered')}
             </tr>
           </thead>
           <tbody>
