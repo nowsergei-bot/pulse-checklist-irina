@@ -30,6 +30,39 @@ export const PHENOMENON_MAX_SCORE = 23;
 /** Постоянный адрес формы. По нему сервер находит (и при первом обращении создаёт) отдельный проект. */
 export const PHENOMENON_FORM_TOKEN = 'phenomenon-lesson-2026';
 
+/**
+ * ПЕРЕКЛЮЧАТЕЛЬ. false: форма видна только участникам пробного доступа (список на сервере),
+ * остальным «Раздел пока недоступен». true: форма открыта всем. Значение должно совпадать с
+ * PHENOMENON_OPEN_FOR_ALL в backend/functions/lib/phenomenon-lesson.js (проверяется тестом).
+ */
+export const PHENOMENON_OPEN_FOR_ALL = false;
+
+const ACCESS_KEY = 'pulse_phenomenon_checklist_access';
+
+/** Ответ сервера о пробном доступе, запомненный на время сессии вкладки. */
+export function readCachedPhenomenonAccess(): boolean {
+  try {
+    return typeof sessionStorage !== 'undefined' && sessionStorage.getItem(ACCESS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function cachePhenomenonAccess(allowed: boolean): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    if (allowed) sessionStorage.setItem(ACCESS_KEY, '1');
+    else sessionStorage.removeItem(ACCESS_KEY);
+  } catch {
+    /* без запоминания пункт меню появится после открытия формы по кнопке */
+  }
+}
+
+/** Виден ли пункт меню прямо сейчас (меню строится без запросов к серверу). */
+export function phenomenonMenuVisible(): boolean {
+  return PHENOMENON_OPEN_FOR_ALL || readCachedPhenomenonAccess();
+}
+
 /** Значение параметра ?form= на странице чек-листа в кабинете. */
 export const PHENOMENON_FORM_QUERY_VALUE = 'phenomenon';
 
@@ -401,6 +434,7 @@ export const PHENOMENON_UI: Record<
     missingTitle: string;
     loading: string;
     unavailable: string;
+    closed: string;
     optional: string;
   }
 > = {
@@ -418,6 +452,7 @@ export const PHENOMENON_UI: Record<
     missingTitle: 'Заполните обязательные поля:',
     loading: 'Загрузка чек-листа…',
     unavailable: 'Чек-лист недоступен',
+    closed: 'Раздел пока недоступен',
     optional: 'необязательно',
   },
   en: {
@@ -434,6 +469,7 @@ export const PHENOMENON_UI: Record<
     missingTitle: 'Please complete the required fields:',
     loading: 'Loading checklist…',
     unavailable: 'Checklist unavailable',
+    closed: 'This section is not available yet',
     optional: 'optional',
   },
 };

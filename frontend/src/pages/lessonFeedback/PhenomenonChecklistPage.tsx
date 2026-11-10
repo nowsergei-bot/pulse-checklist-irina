@@ -7,8 +7,8 @@ import {
   getPublicLatestLessonVisitForm,
   getPublicLessonVisitForm,
   listLessonVisitResponses,
-  postPublicLessonVisitResponse,
 } from '../../api/visitChecklist';
+import { checkPhenomenonAccess, postPhenomenonResponse, type PhenomenonAccess } from '../../lib/phenomenonChecklist/access';
 import PersonSelectField from '../../components/corporate/PersonSelectField';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { loadJdMe } from '../../lib/cabinet/sharedResources';
@@ -271,7 +271,7 @@ export function PhenomenonChecklistForm({
     setErr(null);
     try {
       const payload = buildPhenomenonSubmission(general, answers);
-      await postPublicLessonVisitResponse(PHENOMENON_FORM_TOKEN, payload as unknown as { general: Record<string, string>; answers: Record<string, string> });
+      await postPhenomenonResponse(payload);
       setDone(true);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Error');
@@ -595,6 +595,7 @@ export default function PhenomenonChecklistPage({ embedded = true }: { embedded?
   const [staffName, setStaffName] = useState('');
   const [records, setRecords] = useState<PhenomenonRecord[] | null>(null);
   const [tab, setTab] = useState<'form' | 'results'>('form');
+  const [access, setAccess] = useState<PhenomenonAccess | null>(null);
   useDocumentTitle(pick(PHENOMENON_TITLE, locale));
 
   const changeLocale = useCallback((l: PhenomenonLocale) => {
@@ -608,7 +609,8 @@ export default function PhenomenonChecklistPage({ embedded = true }: { embedded?
       setLoading(true);
       setErr(null);
       try {
-        const [phenomenon, mainDirectory] = await Promise.all([
+        const [checked, phenomenon, mainDirectory] = await Promise.all([
+          checkPhenomenonAccess(),
           getPublicLessonVisitForm(PHENOMENON_FORM_TOKEN),
           getPublicLatestLessonVisitForm()
             .then((latest) => getPublicLessonVisitForm(latest.form_token))
@@ -616,6 +618,7 @@ export default function PhenomenonChecklistPage({ embedded = true }: { embedded?
             .catch(() => null),
         ]);
         if (cancelled) return;
+        setAccess(checked.access);
         setProjectId(phenomenon.project.id);
         setDirectory(resolvePublicLessonVisitDirectory(mainDirectory, defaultLessonVisitDirectory()));
       } catch (e) {
@@ -644,7 +647,7 @@ export default function PhenomenonChecklistPage({ embedded = true }: { embedded?
 
   // Таблица видна только тем, кому сервер отдаёт ответы (группа аналитики основного чек-листа).
   useEffect(() => {
-    if (!user || projectId == null) return;
+    if (!user || projectId == null || access == null || access === 'denied') return;
     let cancelled = false;
     void listLessonVisitResponses(projectId)
       .then((rows) => {
@@ -660,7 +663,7 @@ export default function PhenomenonChecklistPage({ embedded = true }: { embedded?
     return () => {
       cancelled = true;
     };
-  }, [user, projectId, tab]);
+  }, [user, projectId, tab, access]);
 
   const observerFromAccount = staffName || String(user?.display_name || '').trim();
   const ui = PHENOMENON_UI[locale];
@@ -687,7 +690,13 @@ export default function PhenomenonChecklistPage({ embedded = true }: { embedded?
             ) : null}
           </div>
         </div>
-        {loading ? (
+        {!loading && access === 'denied' ? (
+          <div className="public-form-stack">
+            <div className="card public-form-glass-card">
+              <h2 style={{ marginTop: 0 }}>{ui.closed}</h2>
+            </div>
+          </div>
+        ) : loading ? (
           <div className="public-form-stack">
             <div className="card public-form-glass-card muted">{ui.loading}</div>
           </div>

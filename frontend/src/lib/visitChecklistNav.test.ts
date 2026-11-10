@@ -22,7 +22,7 @@ describe('visit checklist cabinet menu branch', () => {
     const base = visitChecklistNavItems();
     assert.deepEqual(
       base.map((item) => item.title),
-      ['Чек-лист', 'Чек-лист феноменального урока', 'Моя обратная связь', 'График посещения'],
+      ['Чек-лист', 'Моя обратная связь', 'График посещения'],
     );
     assert.equal(base.find((item) => item.title === 'Чек-лист')?.to, VISIT_CHECKLIST_FORM_PATH);
     assert.equal(base.find((item) => item.title === 'График посещения')?.to, LESSON_VISIT_SCHEDULE_PATH);

@@ -6,6 +6,7 @@ import {
   VISIT_FORMAT_QUERY,
 } from '../../lib/lessonVisitChecklist/publicForm';
 import { PHENOMENON_CHECKLIST_NAV_TITLE, PHENOMENON_CHECKLIST_PATH } from '../../lib/visitChecklistNav';
+import { checkPhenomenonAccess, phenomenonMenuVisible } from '../../lib/phenomenonChecklist/access';
 import { LessonVisitChecklistForm } from '../LessonVisitChecklistPublicPage';
 
 const PhenomenonChecklistPage = lazy(() => import('./PhenomenonChecklistPage'));
@@ -26,6 +27,20 @@ function MainCabinetForm() {
   const [searchParams] = useSearchParams();
   const tokenFromQuery = String(searchParams.get('token') || '').trim();
   const [token, setToken] = useState(tokenFromQuery || LESSON_VISIT_PUBLIC_FORM_TOKEN);
+  // Кнопка феноменального урока: всем после открытия, до этого только участникам пробного доступа.
+  const [showPhenomenon, setShowPhenomenon] = useState(phenomenonMenuVisible);
+
+  useEffect(() => {
+    let cancelled = false;
+    void checkPhenomenonAccess()
+      .then((r) => {
+        if (!cancelled) setShowPhenomenon(r.access !== 'denied');
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (tokenFromQuery) {
@@ -45,11 +60,13 @@ function MainCabinetForm() {
 
   return (
     <>
-      <div className="lf-visit-form ph-entry">
-        <Link className="btn" to={PHENOMENON_CHECKLIST_PATH}>
-          {PHENOMENON_CHECKLIST_NAV_TITLE} →
-        </Link>
-      </div>
+      {showPhenomenon ? (
+        <div className="lf-visit-form ph-entry">
+          <Link className="btn" to={PHENOMENON_CHECKLIST_PATH}>
+            {PHENOMENON_CHECKLIST_NAV_TITLE} →
+          </Link>
+        </div>
+      ) : null}
       <LessonVisitChecklistForm
         token={token}
         formatQuery={searchParams.get(VISIT_FORMAT_QUERY)}

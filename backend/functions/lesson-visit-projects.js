@@ -19,13 +19,16 @@ const {
 } = require('./lib/visit-checklist-analytics-access');
 const { maybeNotifyKhoroshilovVisitChecklist } = require('./lib/khoroshilov-activity-notify');
 const { applyResponseToSnapshot, rebuildProjectSnapshot } = require('./lib/visit-checklist-cloud-snapshot');
+const phenomenonLib = require('./lib/phenomenon-lesson');
 const {
   PHENOMENON_FORM_TOKEN,
   isPhenomenonDraft,
   isPhenomenonToken,
   ensurePhenomenonProject,
   validatePhenomenonSubmission,
-} = require('./lib/phenomenon-lesson');
+} = phenomenonLib;
+
+const PHENOMENON_CLOSED_MESSAGE = 'Раздел пока недоступен';
 
 function emptyDraft(title) {
   return {
@@ -602,6 +605,12 @@ async function handleGetPublicLessonVisitForm(pool, tokenRaw) {
 
 /** Ответ феноменального урока: только сохранение, без связи с аналитикой основного чек-листа. */
 async function postPhenomenonResponse(pool, event) {
+  if (!phenomenonLib.phenomenonAccess.openForAll) {
+    const actor = await phenomenonLib.resolvePhenomenonActor(pool, event);
+    if (!phenomenonLib.canUsePhenomenon(actor)) {
+      return json(403, { error: 'Forbidden', message: PHENOMENON_CLOSED_MESSAGE });
+    }
+  }
   const row = await ensurePhenomenonProject(pool);
   if (!row) return json(404, { error: 'Not found' });
   const body = parseAllowedBody(event, ['general', 'answers']);
@@ -711,6 +720,15 @@ async function handleListLessonVisitResponses(pool, user, viaAdminKey, sessionUs
       readShared: isSharedVisitViewer(user, sessionUser),
     });
     if (!check.ok) return json(check.code, { error: 'Not found' });
+
+    // Пока феноменальный чек-лист не открыт для всех, его результаты видят только участники пробного доступа.
+    if (!phenomenonLib.phenomenonAccess.openForAll) {
+      const tok = await pool.query('SELECT form_token FROM lesson_visit_projects WHERE id = $1', [pid]);
+      const isPhenomenon = isPhenomenonToken(tok.rows[0] && tok.rows[0].form_token);
+      if (isPhenomenon && !phenomenonLib.canUsePhenomenon(visitChecklistAnalyticsActor(user, sessionUser))) {
+        return json(404, { error: 'Not found', message: PHENOMENON_CLOSED_MESSAGE });
+      }
+    }
 
     const rows = await listResponseRows(pool, pid);
     return json(200, { responses: rows });

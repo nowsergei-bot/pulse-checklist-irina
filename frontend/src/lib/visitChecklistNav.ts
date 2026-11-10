@@ -4,6 +4,7 @@
  */
 
 import { VISIT_CHECKLIST_FORM_PATH, isVisitChecklistCabinetFormPath } from './lessonVisitChecklist/publicForm.ts';
+import { phenomenonMenuVisible } from './phenomenonChecklist/form.ts';
 import { LESSON_VISIT_SCHEDULE_LEGACY_PATH, LESSON_VISIT_SCHEDULE_PATH } from './lessonVisitScheduleAccess.ts';
 import { isPulseSpreadsheetsPath } from './pulseSpreadsheetsAccess.ts';
 import {
@@ -50,7 +51,8 @@ export function visitChecklistNavItems(opts?: {
 }): VisitChecklistNavItem[] {
   const items: VisitChecklistNavItem[] = [
     { to: VISIT_CHECKLIST_FORM_PATH, title: 'Чек-лист' },
-    { to: PHENOMENON_CHECKLIST_PATH, title: PHENOMENON_CHECKLIST_NAV_TITLE },
+    // Пока чек-лист феноменального урока не открыт для всех, пункт видят только участники пробного доступа.
+    ...(phenomenonMenuVisible() ? [{ to: PHENOMENON_CHECKLIST_PATH, title: PHENOMENON_CHECKLIST_NAV_TITLE }] : []),
     { to: VISIT_CHECKLIST_ME_PATH, title: 'Моя обратная связь' },
     { to: LESSON_VISIT_SCHEDULE_PATH, title: 'График посещения' },
   ];

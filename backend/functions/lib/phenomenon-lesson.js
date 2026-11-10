@@ -14,6 +14,49 @@ const PHENOMENON_FORM_TOKEN = 'phenomenon-lesson-2026';
 const PHENOMENON_FORM_VERSION = 'phenomenon-2026-11';
 const PHENOMENON_TITLE = 'Чек-лист феноменального урока';
 
+/**
+ * ПЕРЕКЛЮЧАТЕЛЬ. false: форма открыта только участникам пробного доступа (ниже), остальным
+ * «Раздел пока недоступен». true: форма открыта всем. Значение должно совпадать с
+ * PHENOMENON_OPEN_FOR_ALL во frontend/src/lib/phenomenonChecklist/form.ts (проверяется тестом).
+ */
+const PHENOMENON_OPEN_FOR_ALL = false;
+
+/**
+ * Пробный доступ до открытия для всех: ключи записей из списка аналитики чек-листа
+ * (VISIT_CHECKLIST_ANALYTICS_PEOPLE в visit-checklist-analytics-access.js), как в «Сводке директора».
+ * Новых имён, почт и номеров здесь нет: сверка идёт по уже существующим записям на сервере.
+ */
+const PHENOMENON_PILOT_PERSON_KEYS = ['kostyukovich', 'khoroshilov'];
+
+/** Изменяемые настройки (тесты подменяют их, рабочий код читает отсюда). */
+const phenomenonAccess = {
+  openForAll: PHENOMENON_OPEN_FOR_ALL,
+  pilotKeys: PHENOMENON_PILOT_PERSON_KEYS,
+};
+
+function isPhenomenonPilot(user) {
+  if (!user) return false;
+  const { findVisitChecklistAnalyticsPerson } = require('./visit-checklist-analytics-access');
+  const person = findVisitChecklistAnalyticsPerson(user);
+  return Boolean(person && phenomenonAccess.pilotKeys.includes(person.key));
+}
+
+/** Можно ли этому пользователю открыть, заполнить форму и видеть её результаты сейчас. */
+function canUsePhenomenon(user) {
+  return phenomenonAccess.openForAll || isPhenomenonPilot(user);
+}
+
+/** Пользователь сессии на публичном адресе формы (Bearer или cookie). Без сессии: null. */
+async function resolvePhenomenonActor(pool, event) {
+  try {
+    const { resolveSessionUser } = require('./session-auth');
+    return (await resolveSessionUser(pool, event)) || null;
+  } catch (err) {
+    console.warn('phenomenon session check failed', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 /** Допустимые варианты по вопросам. Совпадает с frontend/src/lib/phenomenonChecklist/form.ts (проверяется тестом). */
 const PHENOMENON_CHOICES = {
   ph_org: ['none', 'partly', 'full'],
@@ -126,8 +169,14 @@ function validatePhenomenonSubmission(generalRaw, answersRaw) {
   return { ok: true, general, answers };
 }
 
-module.exports = {
+const lib = {
   PHENOMENON_KIND,
+  PHENOMENON_OPEN_FOR_ALL,
+  PHENOMENON_PILOT_PERSON_KEYS,
+  phenomenonAccess,
+  isPhenomenonPilot,
+  canUsePhenomenon,
+  resolvePhenomenonActor,
   PHENOMENON_FORM_TOKEN,
   PHENOMENON_FORM_VERSION,
   PHENOMENON_TITLE,
@@ -141,3 +190,5 @@ module.exports = {
   ensurePhenomenonProject,
   validatePhenomenonSubmission,
 };
+
+module.exports = lib;

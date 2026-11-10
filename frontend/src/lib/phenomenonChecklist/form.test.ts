@@ -6,8 +6,11 @@ import {
   PHENOMENON_ITEMS,
   PHENOMENON_MASTERY_IDS,
   PHENOMENON_MAX_SCORE,
+  PHENOMENON_OPEN_FOR_ALL,
   PHENOMENON_OVERALL,
   buildPhenomenonSubmission,
+  cachePhenomenonAccess,
+  phenomenonMenuVisible,
   emptyPhenomenonGeneral,
   masteryQuestionText,
   maxScoreFromDefinition,
@@ -175,8 +178,6 @@ describe('phenomenon checklist', () => {
 
   it('6. the phenomenon checklist stays out of the main checklist', () => {
     // Отдельный пункт меню, основной «Чек-лист» не подсвечивается на странице феноменального урока.
-    const items = visitChecklistNavItems();
-    assert.ok(items.some((i) => i.to === PHENOMENON_CHECKLIST_PATH));
     assert.equal(isPhenomenonChecklistLocation(VISIT_CHECKLIST_FORM_PATH, '?form=phenomenon'), true);
     assert.equal(isVisitChecklistNavItemCurrent(VISIT_CHECKLIST_FORM_PATH, PHENOMENON_CHECKLIST_PATH, '?form=phenomenon'), true);
     assert.equal(isVisitChecklistNavItemCurrent(VISIT_CHECKLIST_FORM_PATH, VISIT_CHECKLIST_FORM_PATH, '?form=phenomenon'), false);
@@ -184,11 +185,41 @@ describe('phenomenon checklist', () => {
     assert.equal(isVisitChecklistNavItemCurrent(VISIT_CHECKLIST_FORM_PATH, PHENOMENON_CHECKLIST_PATH, ''), false);
     // Страница отправляет ответы только по своему адресу формы, а не по адресу основного чек-листа.
     const page = readFileSync(fileURLToPath(new URL('../../pages/lessonFeedback/PhenomenonChecklistPage.tsx', import.meta.url)), 'utf8');
-    assert.match(page, /postPublicLessonVisitResponse\(PHENOMENON_FORM_TOKEN,/);
-    assert.equal((page.match(/postPublicLessonVisitResponse\(/g) || []).length, 1);
+    assert.match(page, /await postPhenomenonResponse\(payload\)/);
+    assert.doesNotMatch(page, /postPublicLessonVisitResponse/);
+    const access = readFileSync(fileURLToPath(new URL('./access.ts', import.meta.url)), 'utf8');
+    assert.match(access, /lesson-visit-form\/\$\{encodeURIComponent\(PHENOMENON_FORM_TOKEN\)\}\/responses/);
     // Сервер: ответы феноменального урока сохраняются в отдельный проект без расчётов основного чек-листа
     // (проверяется в backend/functions/lib/phenomenon-lesson.test.js).
     const server = readFileSync(fileURLToPath(new URL('../../../../backend/functions/lesson-visit-projects.js', import.meta.url)), 'utf8');
     assert.match(server, /if \(isPhenomenonToken\(tokenRaw\)\) return await postPhenomenonResponse\(pool, event\);/);
+  });
+
+  it('until opened for everyone, the menu item and button are hidden unless the server confirmed pilot access', () => {
+    // sessionStorage в тестах эмулируется, чтобы проверить запомненный ответ сервера.
+    const store = new Map<string, string>();
+    const g = globalThis as { sessionStorage?: Storage };
+    const prev = g.sessionStorage;
+    g.sessionStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    } as unknown as Storage;
+    try {
+      assert.equal(PHENOMENON_OPEN_FOR_ALL, false, 'форма пока закрыта');
+      assert.equal(phenomenonMenuVisible(), false);
+      assert.ok(!visitChecklistNavItems().some((i) => i.to === PHENOMENON_CHECKLIST_PATH));
+      cachePhenomenonAccess(true);
+      assert.equal(phenomenonMenuVisible(), true);
+      assert.ok(visitChecklistNavItems().some((i) => i.to === PHENOMENON_CHECKLIST_PATH));
+      cachePhenomenonAccess(false);
+      assert.equal(phenomenonMenuVisible(), false);
+    } finally {
+      g.sessionStorage = prev;
+    }
+    const page = readFileSync(fileURLToPath(new URL('../../pages/lessonFeedback/PhenomenonChecklistPage.tsx', import.meta.url)), 'utf8');
+    assert.match(page, /access === 'denied'/);
+    const cabinet = readFileSync(fileURLToPath(new URL('../../pages/lessonFeedback/LessonVisitChecklistCabinetFormPage.tsx', import.meta.url)), 'utf8');
+    assert.match(cabinet, /\{showPhenomenon \? \(/);
   });
 });

@@ -9,6 +9,26 @@ const {
   validatePhenomenonSubmission,
   phenomenonDraft,
 } = require('./phenomenon-lesson');
+const phenomenonLib = require('./phenomenon-lesson');
+const { VISIT_CHECKLIST_ANALYTICS_PEOPLE } = require('./visit-checklist-analytics-access');
+
+/** Временно открывает или закрывает форму для теста и возвращает прежнее значение. */
+async function withOpen(open, fn) {
+  const before = phenomenonLib.phenomenonAccess.openForAll;
+  phenomenonLib.phenomenonAccess.openForAll = open;
+  try {
+    return await fn();
+  } finally {
+    phenomenonLib.phenomenonAccess.openForAll = before;
+  }
+}
+
+/** Сотрудник из существующей записи списка аналитики, по ключу (почта берётся из кода сервера). */
+function personByKey(key, extra = {}) {
+  const person = VISIT_CHECKLIST_ANALYTICS_PEOPLE.find((p) => p.key === key);
+  assert.ok(person, key);
+  return { id: 900, role: 'methodist', permissions: [], email: person.emails[0], ...extra };
+}
 const { pickLatestSharedVisitChecklist, visitChecklistLatestScore } = require('./lesson-visit-checklist');
 
 const MAX_ANSWERS = {
@@ -129,7 +149,7 @@ function fakePool() {
   };
 }
 
-test('phenomenon form: GET creates one shared project, POST stores only there and skips main analytics', async () => {
+test('phenomenon form: GET creates one shared project, POST stores only there and skips main analytics', () => withOpen(true, async () => {
   const handlers = require('../lesson-visit-projects');
   const pool = fakePool();
 
@@ -159,9 +179,26 @@ test('phenomenon form: GET creates one shared project, POST stores only there an
   // Ни одного обращения к таблицам аналитики основного чек-листа (v3, снимок, карточки).
   const touched = pool.queries.join('\n');
   assert.doesNotMatch(touched, /pulse_v3|lesson_visit_teacher_cards|lesson_visit_cloud|lesson_visit_v3/i);
-});
+}));
 
-test('results of the phenomenon checklist: only the main checklist analytics group gets them', async () => {
+function withListQueries(pool) {
+  const base = pool.query.bind(pool);
+  pool.query = async (sql, params = []) => {
+    if (/SELECT id, user_id FROM lesson_visit_projects WHERE id = \$1/.test(sql)) {
+      return { rows: pool.projects.filter((p) => p.id === Number(params[0])).map((p) => ({ id: p.id, user_id: p.user_id })) };
+    }
+    if (/SELECT form_token FROM lesson_visit_projects WHERE id = \$1/.test(sql)) {
+      return { rows: pool.projects.filter((p) => p.id === Number(params[0])).map((p) => ({ form_token: p.form_token })) };
+    }
+    if (/FROM lesson_visit_responses\s+WHERE project_id = \$1/.test(sql)) {
+      return { rows: pool.responses.filter((r) => r.project_id === params[0]) };
+    }
+    return base(sql, params);
+  };
+  return pool;
+}
+
+test('results of the phenomenon checklist: only the main checklist analytics group gets them', () => withOpen(true, async () => {
   const handlers = require('../lesson-visit-projects');
   const pool = fakePool();
   await handlers.handleGetPublicLessonVisitForm(pool, PHENOMENON_FORM_TOKEN);
@@ -169,16 +206,7 @@ test('results of the phenomenon checklist: only the main checklist analytics gro
     body: JSON.stringify({ general: GENERAL, answers: MAX_ANSWERS }),
   });
   const ph = pool.projects.find((p) => p.form_token === PHENOMENON_FORM_TOKEN);
-  const base = pool.query.bind(pool);
-  pool.query = async (sql, params = []) => {
-    if (/SELECT id, user_id FROM lesson_visit_projects WHERE id = \$1/.test(sql)) {
-      return { rows: pool.projects.filter((p) => p.id === Number(params[0])).map((p) => ({ id: p.id, user_id: p.user_id })) };
-    }
-    if (/FROM lesson_visit_responses\s+WHERE project_id = \$1/.test(sql)) {
-      return { rows: pool.responses.filter((r) => r.project_id === params[0]) };
-    }
-    return base(sql, params);
-  };
+  withListQueries(pool);
   const list = (sessionUser) => handlers.handleListLessonVisitResponses(pool, null, false, sessionUser, ph.id);
 
   const teacher = await list({ id: 501, email: 'teacher@example.org', role: 'teacher', permissions: [] });
@@ -193,4 +221,53 @@ test('results of the phenomenon checklist: only the main checklist analytics gro
     assert.equal(ok.statusCode, 200, permissions.join());
     assert.equal(JSON.parse(ok.body).responses.length, 1);
   }
+}));
+
+test('closed form: only the two pilot records may submit and read results, others get «Раздел пока недоступен»', () =>
+  withOpen(false, async () => {
+    const handlers = require('../lesson-visit-projects');
+    const pool = withListQueries(fakePool());
+    const realResolve = phenomenonLib.resolvePhenomenonActor;
+    let actor = null;
+    phenomenonLib.resolvePhenomenonActor = async () => actor;
+    try {
+      const post = () =>
+        handlers.handlePostPublicLessonVisitResponse(pool, PHENOMENON_FORM_TOKEN, {
+          body: JSON.stringify({ general: GENERAL, answers: MAX_ANSWERS }),
+        });
+      // Без входа, обычный учитель, администратор с полным доступом и другой человек из списка аналитики: отказ.
+      for (const who of [null, { id: 1, email: 'teacher@example.org', permissions: [] }, { id: 2, email: 'admin@example.org', permissions: ['*'] }, personByKey('maisuradze')]) {
+        actor = who;
+        const r = await post();
+        assert.equal(r.statusCode, 403, JSON.stringify(who));
+        assert.equal(JSON.parse(r.body).message, 'Раздел пока недоступен');
+      }
+      assert.equal(pool.responses.length, 0);
+      for (const key of phenomenonLib.PHENOMENON_PILOT_PERSON_KEYS) {
+        actor = personByKey(key);
+        assert.equal((await post()).statusCode, 201, key);
+      }
+      assert.equal(pool.responses.length, 2);
+
+      const ph = pool.projects.find((p) => p.form_token === PHENOMENON_FORM_TOKEN);
+      const list = (sessionUser) => handlers.handleListLessonVisitResponses(pool, null, false, sessionUser, ph.id);
+      assert.equal((await list(personByKey('maisuradze'))).statusCode, 404, 'аналитика без пробного доступа не видит');
+      assert.equal((await list({ id: 2, email: 'admin@example.org', permissions: ['*'] })).statusCode, 404);
+      for (const key of phenomenonLib.PHENOMENON_PILOT_PERSON_KEYS) {
+        assert.equal((await list(personByKey(key))).statusCode, 200, key);
+      }
+      // Основной чек-лист ограничение не затрагивает.
+      assert.equal((await handlers.handleListLessonVisitResponses(pool, null, false, personByKey('maisuradze'), 1)).statusCode, 200);
+    } finally {
+      phenomenonLib.resolvePhenomenonActor = realResolve;
+    }
+  }));
+
+test('the switch has the same value on the server and in the interface', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '../../../frontend/src/lib/phenomenonChecklist/form.ts'), 'utf8');
+  const m = /export const PHENOMENON_OPEN_FOR_ALL = (true|false);/.exec(src);
+  assert.ok(m, 'frontend switch');
+  assert.equal(m[1] === 'true', phenomenonLib.PHENOMENON_OPEN_FOR_ALL);
 });
