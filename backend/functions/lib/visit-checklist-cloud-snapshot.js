@@ -1,6 +1,7 @@
 'use strict';
 
 const { pickLatestSharedVisitChecklist } = require('./lesson-visit-checklist');
+const { isPhenomenonRow } = require('./phenomenon-lesson');
 const { notifyRecipient } = require('./protocol-task-notify');
 const { catalogPhotoUrls } = require('./staff-photo-catalog');
 const {
@@ -454,8 +455,9 @@ async function resolveDefaultSharedProject(pool) {
   );
   const latest = pickLatestSharedVisitChecklist(r.rows);
   if (latest) return latest;
+  // Проект феноменального урока не подменяет основной чек-лист.
   const withAnswers = r.rows
-    .slice()
+    .filter((row) => !isPhenomenonRow(row))
     .sort((a, b) => Number(b.response_count || 0) - Number(a.response_count || 0));
   return withAnswers[0] || null;
 }

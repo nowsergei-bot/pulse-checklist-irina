@@ -19,6 +19,24 @@ export const VISIT_CHECKLIST_ME_PATH = '/cabinet/feedback/me';
 export { VISIT_CHECKLIST_FORM_PATH };
 export const VISIT_CHECKLIST_NAV_TITLE = 'Чек-лист посещения урока';
 
+/** Чек-лист феноменального урока: та же страница кабинета с параметром ?form=phenomenon. */
+export const PHENOMENON_CHECKLIST_PATH = `${VISIT_CHECKLIST_FORM_PATH}?form=phenomenon`;
+export const PHENOMENON_CHECKLIST_NAV_TITLE = 'Чек-лист феноменального урока';
+
+function currentSearch(search?: string | null): string {
+  if (typeof search === 'string') return search;
+  try {
+    return typeof window !== 'undefined' ? window.location.search || '' : '';
+  } catch {
+    return '';
+  }
+}
+
+export function isPhenomenonChecklistLocation(pathname: string, search?: string | null): boolean {
+  if (!isVisitChecklistCabinetFormPath(pathname)) return false;
+  return new URLSearchParams(currentSearch(search)).get('form') === 'phenomenon';
+}
+
 export type VisitChecklistNavItem = {
   to: string;
   title: string;
@@ -32,6 +50,7 @@ export function visitChecklistNavItems(opts?: {
 }): VisitChecklistNavItem[] {
   const items: VisitChecklistNavItem[] = [
     { to: VISIT_CHECKLIST_FORM_PATH, title: 'Чек-лист' },
+    { to: PHENOMENON_CHECKLIST_PATH, title: PHENOMENON_CHECKLIST_NAV_TITLE },
     { to: VISIT_CHECKLIST_ME_PATH, title: 'Моя обратная связь' },
     { to: LESSON_VISIT_SCHEDULE_PATH, title: 'График посещения' },
   ];
@@ -69,9 +88,11 @@ export function isVisitChecklistNavPath(pathname: string): boolean {
   return isPulseSpreadsheetsPath(pathname);
 }
 
-export function isVisitChecklistNavItemCurrent(pathname: string, to: string): boolean {
+export function isVisitChecklistNavItemCurrent(pathname: string, to: string, search?: string | null): boolean {
   const norm = normalizeCabinetPath(pathname);
+  if (to === PHENOMENON_CHECKLIST_PATH) return isPhenomenonChecklistLocation(pathname, search);
   if (to === VISIT_CHECKLIST_HUB_PATH || to === VISIT_CHECKLIST_FORM_PATH) {
+    if (isPhenomenonChecklistLocation(pathname, search)) return false;
     return norm === VISIT_CHECKLIST_HUB_PATH || isVisitChecklistCabinetFormPath(pathname);
   }
   if (to === LESSON_VISIT_SCHEDULE_PATH) {

@@ -19,6 +19,13 @@ const {
 } = require('./lib/visit-checklist-analytics-access');
 const { maybeNotifyKhoroshilovVisitChecklist } = require('./lib/khoroshilov-activity-notify');
 const { applyResponseToSnapshot, rebuildProjectSnapshot } = require('./lib/visit-checklist-cloud-snapshot');
+const {
+  PHENOMENON_FORM_TOKEN,
+  isPhenomenonDraft,
+  isPhenomenonToken,
+  ensurePhenomenonProject,
+  validatePhenomenonSubmission,
+} = require('./lib/phenomenon-lesson');
 
 function emptyDraft(title) {
   return {
@@ -155,7 +162,8 @@ function normalizeDraft(row) {
         : { departments: [], teachers: [] },
     ),
   };
-  if (merged.checklist) merged.checklist = normalizeSavedChecklist(merged.checklist);
+  // Форма феноменального урока описана во frontend и не приводится к форме основного чек-листа.
+  if (merged.checklist && !isPhenomenonDraft(base)) merged.checklist = normalizeSavedChecklist(merged.checklist);
   return merged;
 }
 
@@ -198,6 +206,7 @@ async function handleListLessonVisitProjects(pool, user, viaAdminKey, sessionUse
                     COALESCE(p.state_json->'draft'->>'lessonAnalyticsDirectorToken', '') AS la_director_token
              FROM lesson_visit_projects p
              WHERE p.user_id IS NULL
+               AND p.form_token <> '${PHENOMENON_FORM_TOKEN}'
              ORDER BY p.updated_at DESC
              LIMIT 100`,
           )
@@ -207,7 +216,8 @@ async function handleListLessonVisitProjects(pool, user, viaAdminKey, sessionUse
                       COALESCE((SELECT COUNT(*)::int FROM lesson_visit_responses r WHERE r.project_id = p.id), 0) AS response_count,
                       COALESCE(p.state_json->'draft'->>'lessonAnalyticsDirectorToken', '') AS la_director_token
                FROM lesson_visit_projects p
-               WHERE p.user_id = $1 OR p.user_id IS NULL
+               WHERE (p.user_id = $1 OR p.user_id IS NULL)
+                 AND p.form_token <> '${PHENOMENON_FORM_TOKEN}'
                ORDER BY p.updated_at DESC
                LIMIT 100`,
               [scope.userId],
@@ -557,6 +567,17 @@ async function handleGetPublicLatestLessonVisitForm(pool) {
 
 async function handleGetPublicLessonVisitForm(pool, tokenRaw) {
   try {
+    if (isPhenomenonToken(tokenRaw)) {
+      const ph = await ensurePhenomenonProject(pool);
+      if (!ph) return json(404, { error: 'Not found' });
+      const phDraft = normalizeDraft(ph);
+      return json(200, {
+        project: { id: ph.id, title: phDraft.title, updated_at: ph.updated_at },
+        checklist: phDraft.checklist,
+        directory: { departments: [], teachers: [] },
+        allow_multiple_responses: true,
+      });
+    }
     const row = await loadProjectByFormToken(pool, tokenRaw);
     if (!row) return json(404, { error: 'Not found' });
     const draft = normalizeDraft(row);
@@ -579,8 +600,26 @@ async function handleGetPublicLessonVisitForm(pool, tokenRaw) {
   }
 }
 
+/** Ответ феноменального урока: только сохранение, без связи с аналитикой основного чек-листа. */
+async function postPhenomenonResponse(pool, event) {
+  const row = await ensurePhenomenonProject(pool);
+  if (!row) return json(404, { error: 'Not found' });
+  const body = parseAllowedBody(event, ['general', 'answers']);
+  const checked = validatePhenomenonSubmission(body.general, body.answers);
+  if (!checked.ok) return json(400, { error: 'Validation', message: checked.message, missing: checked.missing });
+  const ins = await pool.query(
+    `INSERT INTO lesson_visit_responses (project_id, answers_json)
+     VALUES ($1, $2::jsonb)
+     RETURNING id, created_at`,
+    [row.id, JSON.stringify({ general: checked.general, answers: checked.answers })],
+  );
+  await pool.query(`UPDATE lesson_visit_projects SET updated_at = NOW() WHERE id = $1`, [row.id]);
+  return json(201, { ok: true, response: { id: ins.rows[0].id, created_at: ins.rows[0].created_at } });
+}
+
 async function handlePostPublicLessonVisitResponse(pool, tokenRaw, event) {
   try {
+    if (isPhenomenonToken(tokenRaw)) return await postPhenomenonResponse(pool, event);
     const row = await loadProjectByFormToken(pool, tokenRaw);
     if (!row) return json(404, { error: 'Not found' });
 

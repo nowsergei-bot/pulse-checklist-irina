@@ -284,3 +284,45 @@
     min-height: 44px;
   }
 }
+
+/* Чек-лист феноменального урока: вход с формы чек-листа и таблица результатов. */
+.lf-visit-form.ph-entry {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 0;
+}
+
+.lf-visit-form .ph-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.lf-visit-form .ph-table th,
+.lf-visit-form .ph-table td {
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.22));
+  text-align: left;
+  vertical-align: top;
+}
+
+.lf-visit-form .ph-table th {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lf-visit-form .ph-table td {
+  min-width: 7rem;
+}
+
+.lf-visit-form .ph-inline-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.lf-visit-form .ph-inline-row .public-choice-btn {
+  width: auto;
+  flex: 0 0 auto;
+}
