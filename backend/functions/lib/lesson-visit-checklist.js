@@ -284,7 +284,7 @@ const PHENOMENON_TITLE = 'Чек-лист феноменального урок�
  * «Раздел пока недоступен». true: форма открыта всем. Значение должно совпадать с
  * PHENOMENON_OPEN_FOR_ALL во frontend/src/lib/lessonVisitChecklist/publicForm.ts (проверяется тестом).
  */
-const PHENOMENON_OPEN_FOR_ALL = false;
+const PHENOMENON_OPEN_FOR_ALL = true;
 
 /**
  * Пробный доступ до открытия для всех: ключи записей из списка аналитики чек-листа

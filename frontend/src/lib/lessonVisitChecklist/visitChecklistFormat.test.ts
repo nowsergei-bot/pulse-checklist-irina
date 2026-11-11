@@ -234,14 +234,22 @@ describe('phenomenon checklist', () => {
       removeItem: (k: string) => void store.delete(k),
     } as unknown as Storage;
     try {
-      assert.equal(PHENOMENON_OPEN_FOR_ALL, false, 'форма пока закрыта');
-      assert.equal(phenomenonMenuVisible(), false);
-      assert.ok(!visitChecklistNavItems().some((i) => i.to === PHENOMENON_CHECKLIST_PATH));
-      cachePhenomenonAccess(true);
-      assert.equal(phenomenonMenuVisible(), true);
-      assert.ok(visitChecklistNavItems().some((i) => i.to === PHENOMENON_CHECKLIST_PATH));
-      cachePhenomenonAccess(false);
-      assert.equal(phenomenonMenuVisible(), false);
+      if (PHENOMENON_OPEN_FOR_ALL) {
+        // Форма открыта всем: пункт меню виден без проверки пробного доступа.
+        for (const cached of [null, true, false]) {
+          if (cached != null) cachePhenomenonAccess(cached);
+          assert.equal(phenomenonMenuVisible(), true);
+          assert.ok(visitChecklistNavItems().some((i) => i.to === PHENOMENON_CHECKLIST_PATH));
+        }
+      } else {
+        assert.equal(phenomenonMenuVisible(), false);
+        assert.ok(!visitChecklistNavItems().some((i) => i.to === PHENOMENON_CHECKLIST_PATH));
+        cachePhenomenonAccess(true);
+        assert.equal(phenomenonMenuVisible(), true);
+        assert.ok(visitChecklistNavItems().some((i) => i.to === PHENOMENON_CHECKLIST_PATH));
+        cachePhenomenonAccess(false);
+        assert.equal(phenomenonMenuVisible(), false);
+      }
     } finally {
       g.sessionStorage = prev;
     }

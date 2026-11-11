@@ -165,7 +165,7 @@ export const PHENOMENON_FORM_TOKEN = 'phenomenon-lesson-2026';
  * остальным «Раздел пока недоступен». true: форма открыта всем. Значение должно совпадать с
  * PHENOMENON_OPEN_FOR_ALL в backend/functions/lib/lesson-visit-checklist.js (проверяется тестом).
  */
-export const PHENOMENON_OPEN_FOR_ALL = false;
+export const PHENOMENON_OPEN_FOR_ALL = true;
 
 const ACCESS_KEY = 'pulse_phenomenon_checklist_access';
 
