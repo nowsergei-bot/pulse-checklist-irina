@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ProgressBars, type DynRow } from './Dynamics';
 import { BAND_LEGEND, percentBand } from './palette';
+import ShortList, { type ListCol } from './ListDialog';
 
 // Экран «Динамика» по макету 28.10: одна выбранная работа параллели, блоки сверху вниз.
 // Графики на HTML и CSS (полосы, клетки, точки), без библиотек. Все числа видны сразу, не только при наведении.
@@ -277,6 +278,28 @@ function Progress({ s, rows, threshold }: { s: Screen; rows: DynRow[]; threshold
   );
 }
 
+type Row = Screen['students'][number];
+const POSITION_TEXT = (p: NonNullable<Row['position']>) => (p.kind === 'same' ? 'как было' : p.kind === 'up' ? `выше на ${p.diff}` : `ниже на ${-p.diff}`);
+// Столбцы таблицы учеников группы. Кто не писал: «не писал(а)» в столбце результата, остальное пусто.
+function studentCols(s: Screen): ListCol<Row>[] {
+  const placement = s.key === 'placement';
+  const cols: ListCol<Row>[] = [{ key: 'name', label: 'Ученик', left: true, cell: x => x.full_name, sort: x => x.full_name }];
+  if (!placement) cols.push({ key: 'start', label: 'Входное, %', cell: x => (x.start === null ? '' : num(x.start)), sort: x => x.start, heat: true });
+  cols.push(placement
+    ? { key: 'result', label: 'Входное, %', cell: x => (x.wrote ? num(x.percent as number) : 'не писал(а)'), cls: x => (x.wrote ? undefined : 'mon-dyn__none'), sort: x => x.percent, excel: x => (x.wrote ? x.percent : 'не писал(а)'), heat: true }
+    : { key: 'result', label: `${s.title}, балл из ${s.group_max_points ?? s.max_points}`, cell: x => (x.wrote ? num(x.total as number) : 'не писал(а)'), cls: x => (x.wrote ? undefined : 'mon-dyn__none'), sort: x => x.total, excel: x => (x.wrote ? x.total : 'не писал(а)') });
+  if (!placement) cols.push({ key: 'percent', label: '%', cell: x => (x.wrote ? num(x.percent as number) : ''), sort: x => x.percent, heat: true });
+  cols.push({ key: 'place', label: 'Место в параллели', cell: x => (x.wrote ? x.place : ''), sort: x => (x.place ? parseFloat(x.place) : null), excel: x => x.place });
+  if (!placement) {
+    cols.push({
+      key: 'position', label: 'Положение к параллели',
+      cell: x => (x.wrote && x.position ? <span className={`mon-dyn__tag is-${x.position.kind}`}>{POSITION_TEXT(x.position)}</span> : ''),
+      sort: x => (x.position ? x.position.diff : null), excel: x => (x.position ? POSITION_TEXT(x.position) : null),
+    });
+  }
+  return cols;
+}
+
 function Students({ s, onGroup, groups }: { s: Screen; onGroup: (id: number) => void; groups: { id: number; title: string }[] }) {
   const placement = s.key === 'placement';
   const title = groups.find(g => g.id === s.group)?.title || '';
@@ -295,51 +318,10 @@ function Students({ s, onGroup, groups }: { s: Screen; onGroup: (id: number) => 
         </label>
       )}
     >
-      <div className="mon-dyn__scroll">
-        <table className="mon-dyn__table mon-dyn__students">
-          <thead>
-            <tr>
-              <th className="is-l">Ученик</th>
-              {placement ? null : <th>Входное, %</th>}
-              {placement ? <th>Входное, %</th> : <th>{s.title}, балл из {s.group_max_points ?? s.max_points}</th>}
-              {placement ? null : <th>%</th>}
-              <th>Место в параллели</th>
-              {placement ? null : <th>Положение к параллели</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {s.students.map(x => (
-              <tr key={x.id} className={x.risk ? 'is-risk' : undefined}>
-                <td className="is-l">{x.full_name}</td>
-                {placement ? null : <td>{x.start === null ? '' : num(x.start)}</td>}
-                {x.wrote ? (
-                  <>
-                    <td>{placement ? num(x.percent as number) : num(x.total as number)}</td>
-                    {placement ? null : <td>{num(x.percent as number)}</td>}
-                    <td>{x.place}</td>
-                    {placement ? null : (
-                      <td>
-                        {x.position ? (
-                          <span className={`mon-dyn__tag is-${x.position.kind}`}>
-                            {x.position.kind === 'same' ? 'как было' : x.position.kind === 'up' ? `выше на ${x.position.diff}` : `ниже на ${-x.position.diff}`}
-                          </span>
-                        ) : ''}
-                      </td>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <td className="mon-dyn__none">не писал(а)</td>
-                    {placement ? null : <td />}
-                    <td />
-                    {placement ? null : <td />}
-                  </>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ShortList
+        rows={s.students} cols={studentCols(s)} rowKey={x => x.id} search={x => x.full_name} rowClass={x => (x.risk ? 'is-risk' : undefined)}
+        title={`Ученики ${title}: ${s.title}`} fileName={`ucheniki_${title}_${s.title}`} tableClass="mon-dyn__students"
+      />
     </Block>
   );
 }

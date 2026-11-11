@@ -20,6 +20,8 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 const PLACEMENT = 'placement';
 // Ученики с результатом от этого процента: блок «Самые высокие результаты».
 const TOP_PERCENT = 90;
+// Работы без отметок (входное, пробный ЕГЭ): блок «Ниже 50%» вместо «Получили «2»» (Ира, 11.11).
+const LOW_PERCENT = 50;
 const roundInt = (v) => Math.floor(v + 0.5);
 const round2 = (v) => Math.round(v * 100) / 100;
 const share = (part, whole) => (whole ? roundInt((100 * part) / whole) : null);
@@ -243,6 +245,42 @@ function studentRisk(values, selectedIndex, mark, settings) {
   return reasons;
 }
 
+// Самый слабый раздел ученика: наименьший процент «сумма баллов / сумма максимумов» раздела; при равенстве первый по порядку.
+function weakestSection(parts, sectionCols) {
+  let best = null;
+  for (const col of sectionCols) {
+    const x = parts.sections[col.key];
+    if (!x || !x.max) continue;
+    const p = percentOf(x.got, x.max);
+    if (!best || p < best.percent) best = { name: col.label, percent: p };
+  }
+  return best;
+}
+
+// Блок «Получили «2»» (работа с отметкой) или «Ниже 50%» (без отметки): ученики выбранной работы по всем параллелям.
+// Ученик в двух группах один раз, в первой по порядку. Порядок: параллель, группа, процент от низкого к высокому.
+function lowStudents(wd, nameOf, names) {
+  const out = [];
+  const seen = new Set();
+  for (const g of wd.groups) {
+    for (const id of g.ids) {
+      const r = wd.records.get(id);
+      if (!r || seen.has(id)) continue;
+      const low = wd.graded ? String(r.mark) === '2' : r.percent < LOW_PERCENT;
+      if (!low) continue;
+      seen.add(id);
+      const max = Object.values(r.parts.sections).reduce((a, x) => a + x.max, 0);
+      out.push({
+        id, full_name: nameOf.get(id) || '', parallel: g.parallel, group_id: g.id, group: groupLabel(g), teacher: names.get(g.id) || '',
+        total: r.total, max: r.total === null || r.total === undefined ? null : max, percent: r.percent, mark: r.mark,
+        weak: weakestSection(r.parts, wd.columns.sections),
+      });
+    }
+  }
+  out.sort((a, b) => a.parallel - b.parallel || a.group.localeCompare(b.group, 'en', { numeric: true }) || a.percent - b.percent || a.full_name.localeCompare(b.full_name, 'ru'));
+  return out;
+}
+
 // GET /dashboard?work=: вся школа по одной работе. Параллель для групп выбирает экран (все группы приходят сразу).
 async function dashboard(db, query) {
   const data = await loadAll(db, null, { seeAnalytics: true });
@@ -339,6 +377,7 @@ async function dashboard(db, query) {
       works: works.map(({ has_results, ...w }) => ({ ...w, has_results })),
       work: { key: option.key, title: option.title, type_code: option.type_code, graded: wd.graded, max_points: wd.max_points },
       settings, top_percent: TOP_PERCENT,
+      low: { kind: wd.graded ? 'two' : 'below', below: LOW_PERCENT, students: lowStudents(wd, nameOf, names) },
       school,
       parallels,
       groups,
@@ -350,7 +389,8 @@ async function dashboard(db, query) {
       },
       top: {
         parallels: parallels.filter(p => p.n > 0).sort(byPercent).slice(0, 3).map(p => ({ parallel: p.parallel, avg_percent: p.avg_percent, avg_mark: p.avg_mark, n: p.n })),
-        groups: [...eligible].sort(byPercent).slice(0, 5).map(pick),
+        // Весь рейтинг групп: на странице первые 5, остальные в окне «Показать всех».
+        groups: [...eligible].sort(byPercent).map(pick),
         best_by_parallel: bestByParallel,
         excluded,
         students: topStudents.map(({ student_id, ...s }) => ({ id: student_id, ...s })),
@@ -407,4 +447,4 @@ async function groupTable(db, query) {
   };
 }
 
-module.exports = { dashboard, groupTable, summarize, cells, studentRisk, TOP_PERCENT };
+module.exports = { dashboard, groupTable, summarize, cells, studentRisk, weakestSection, TOP_PERCENT, LOW_PERCENT };

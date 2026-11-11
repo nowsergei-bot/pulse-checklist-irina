@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { summarize, studentRisk } = require('../server/dashboard.cjs');
+const { summarize, studentRisk, weakestSection } = require('../server/dashboard.cjs');
 
 test('сводка: средняя отметка с двумя знаками, процент целый, качество и успеваемость', () => {
   const s = summarize([{ percent: 90, mark: '5' }, { percent: 74, mark: '4' }, { percent: 46, mark: '2' }], 3, true);
@@ -28,6 +28,14 @@ test('причины группы риска у ученика', () => {
   assert.deepEqual(studentRisk([100, 92, 50], 1, null, st), [], 'работы после выбранной не учитываются');
   assert.deepEqual(studentRisk([null, 80, 74, 68], 3, null, st).map(r => r.code), ['two_drops'], 'без входного только два снижения');
   assert.deepEqual(studentRisk([90, 79], 1, null, { threshold: 5, drop_to_start: 12 }), [], 'порог из настроек');
+});
+
+test('самый слабый раздел ученика: наименьший процент, при равенстве первый по порядку', () => {
+  const cols = [{ key: 's:L', label: 'Listening' }, { key: 's:R', label: 'Reading' }, { key: 's:G', label: 'Grammar' }];
+  const parts = { sections: { 's:L': { got: 5, max: 10 }, 's:R': { got: 5, max: 10 }, 's:G': { got: 5, max: 15 } } };
+  assert.deepEqual(weakestSection(parts, cols), { name: 'Grammar', percent: 33 });
+  assert.deepEqual(weakestSection({ sections: { 's:L': { got: 4, max: 10 }, 's:R': { got: 4, max: 10 } } }, cols), { name: 'Listening', percent: 40 });
+  assert.equal(weakestSection({ sections: {} }, cols), null);
 });
 
 const url = process.env.MONITORING_TEST_DATABASE_URL;
@@ -189,6 +197,24 @@ test('дашборд в базе', { skip: !url && 'нет MONITORING_TEST_DATAB
     assert.equal(b.columns.tasks.length, 11);
     assert.ok(b.columns.levels.some(c => / баз\.$/.test(c.label)) && b.columns.levels.some(c => / выс\.$/.test(c.label)));
     assert.equal(b.risk.counts.two, 0, 'без отметок нет причины «2»');
+  });
+
+  await t.test('блок «Получили «2»»: ученик, группа, учитель, балл, процент, слабый раздел', async () => {
+    const b = await dash({ work: 'Модуль 1' });
+    assert.equal(b.low.kind, 'two');
+    // Ученик 3: 5, 5, 5, 8 из 10, 10, 15, 15 = 23 из 50, 46 %; Grammar 5 / 15 = 33 % слабее всего.
+    assert.deepEqual(b.low.students.map(s => [s.full_name, s.parallel, s.group, s.teacher, s.total, s.max, s.percent, s.weak]),
+      [['Ученик 3', 9, '9 А', 'Учитель 1', 23, 50, 46, { name: 'Grammar', percent: 33 }]]);
+  });
+
+  await t.test('блок «Ниже 50%» у работы без отметок; порядок параллель, группа, процент', async () => {
+    const b = await dash({ work: 'Пробный ЕГЭ 1' });
+    assert.equal(b.low.kind, 'below');
+    assert.equal(b.low.below, 50);
+    assert.deepEqual(b.low.students, [], '65 % и 50 % не ниже 50');
+    const p = await dash({ work: 'placement' });
+    assert.equal(p.low.kind, 'below');
+    assert.deepEqual(p.low.students, [], 'входное 60, 90, 50, 80, 100, 100');
   });
 
   await t.test('входное: проценты без отметок', async () => {

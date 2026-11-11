@@ -4,6 +4,7 @@ import { shares100 } from './Dynamics';
 import { band } from './DynamicsScreen';
 import { BAND_LEGEND, PALETTE, xlsxNote, xlsxPercent } from './palette';
 import { DEFAULT_SORT, effectiveSort, GroupSort, nextSort, SORT_LABEL, SortKey, sortGroups, sortNote } from './groupSort';
+import ShortList, { LIST_LIMIT, ListWindow, type ListCol } from './ListDialog';
 
 // Дашборд заместителей директора (задание Иры 29.10): вся школа по одной работе, только просмотр.
 // Видят заместитель директора (первый экран раздела), заведующая кафедрой и data_admin; учителю вкладка не показывается,
@@ -21,6 +22,11 @@ type ParallelRow = Sum & { parallel: number; cells: Cells };
 type GroupRow = Sum & { group_id: number; title: string; parallel: number; teacher: string; cells: Cells };
 type Reason = { code: string; text: string };
 type RiskStudent = { id: number; full_name: string; group_id: number; group: string; parallel: number; teacher: string; values: Record<string, number | null>; percent: number; reasons: Reason[] };
+type LowStudent = {
+  id: number; full_name: string; parallel: number; group_id: number; group: string; teacher: string;
+  total: number | null; max: number | null; percent: number; mark: string | null; weak: { name: string; percent: number } | null;
+};
+type TopStudent = { id: number; full_name: string; group: string; parallel: number; percent: number; mark: string | null };
 type Rated = { group_id: number; title: string; parallel: number; teacher: string; avg_percent: number; avg_mark: number | null; n: number; m: number };
 type Data = {
   year: string | null;
@@ -28,6 +34,7 @@ type Data = {
   work: { key: string; title: string; type_code: string; graded: boolean; max_points: number | null } | null;
   settings: { threshold: number; drop_to_start: number; group_avg_below: number; group_twos_from: number };
   top_percent: number;
+  low?: { kind: 'two' | 'below'; below: number; students: LowStudent[] };
   school?: Sum; parallels?: ParallelRow[]; groups?: GroupRow[];
   columns?: Record<Mode, Column[]>;
   risk?: {
@@ -37,7 +44,7 @@ type Data = {
   top?: {
     parallels: { parallel: number; avg_percent: number; avg_mark: number | null; n: number }[];
     groups: Rated[]; best_by_parallel: Rated[]; excluded: string[];
-    students: { id: number; full_name: string; group: string; parallel: number; percent: number; mark: string | null }[];
+    students: TopStudent[];
   };
 };
 type GroupTable = {
@@ -90,6 +97,52 @@ function Block({ title, note, side, children, foot }: { title: string; note?: st
       {children}
       {foot}
     </section>
+  );
+}
+
+// Блок «Получили «2»» (Ира, 11.11): самый верх дашборда, по работе из общего выбора. У работ без отметок «Ниже 50%».
+function Low({ d }: { d: Data }) {
+  const [parallel, setParallel] = useState<number | null>(null);
+  const low = d.low!;
+  const two = low.kind === 'two';
+  const parallels = (d.parallels || []).map(p => p.parallel);
+  const rows = parallel === null ? low.students : low.students.filter(s => s.parallel === parallel);
+  const withScore = rows.some(s => s.total !== null);
+  const name = two ? 'Получили «2»' : `Ниже ${low.below}%`;
+  const title = `${name}: ${rows.length} ${plural(rows.length, 'ученик', 'ученика', 'учеников')}`;
+  const where = parallel === null ? '' : ` в ${parallel} параллели`;
+  const cols: ListCol<LowStudent>[] = [
+    { key: 'name', label: 'Ученик', left: true, cell: s => s.full_name, sort: s => s.full_name },
+    { key: 'group', label: 'Класс и группа', left: true, cell: s => <span className="mon-low__class">{s.group}<small>{s.parallel} параллель</small></span>, sort: s => `${String(s.parallel).padStart(2, '0')} ${s.group}`, excel: s => s.group },
+    { key: 'teacher', label: 'Учитель', left: true, cell: s => <span className="mon-dash__teacher">{s.teacher}</span>, sort: s => s.teacher },
+    ...(withScore ? [{ key: 'total', label: 'Балл', cell: (s: LowStudent) => (s.total === null ? '' : `${num(s.total)} из ${s.max}`), sort: (s: LowStudent) => s.total, excel: (s: LowStudent) => s.total } as ListCol<LowStudent>] : []),
+    { key: 'percent', label: '%', cell: s => s.percent, cls: s => band(s.percent), sort: s => s.percent, heat: true },
+    { key: 'weak', label: 'Самый слабый раздел', left: true, cell: s => (s.weak ? <span className="mon-low__weak">{s.weak.name}, <b>{s.weak.percent}&nbsp;%</b></span> : ''), sort: s => s.weak?.percent ?? null, excel: s => (s.weak ? `${s.weak.name}, ${s.weak.percent} %` : null) },
+  ];
+  return (
+    <Block
+      title={title}
+      note={two
+        ? `${d.work?.title || ''}: ученики с отметкой «2» по действующей шкале (ниже 50 %). Порядок: параллель, группа, процент от низкого к высокому.`
+        : `${d.work?.title || ''}: у работы нет отметок, поэтому здесь ученики с результатом ниже ${low.below} %. Порядок: параллель, группа, процент от низкого к высокому.`}
+      side={(
+        <label className="mon-field">
+          <span className="mon-label">Параллель</span>
+          <select className="mon-input mon-select" value={parallel ?? ''} onChange={e => setParallel(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">все</option>
+            {parallels.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+      )}
+    >
+      {rows.length ? (
+        <ShortList
+          rows={rows} cols={cols} rowKey={s => s.id} search={s => `${s.full_name} ${s.group}`}
+          title={`${name}${where}: ${d.work?.title || ''}`} fileName={`${two ? 'poluchili-2' : `nizhe-${low.below}`}_${d.work?.title || ''}${parallel === null ? '' : `_${parallel}`}`}
+          tableClass="mon-dash__table mon-dash__list"
+        />
+      ) : <p className="mon-low__empty">{two ? `Нет учеников с «2»${where} по этой работе` : `Нет учеников ниже ${low.below}%${where} по этой работе`}</p>}
+    </Block>
   );
 }
 
@@ -224,10 +277,23 @@ function Groups({ d, parallel, onGroup, open }: { d: Data; parallel: number; onG
   );
 }
 
+type GroupStudent = GroupTable['students'][number];
+// Столбцы таблицы учеников группы. Кто не писал: состояние в столбце балла (или процента), остальное пусто.
+function studentCols(data: GroupTable): ListCol<GroupStudent>[] {
+  const graded = data.work.graded;
+  const placement = data.work.key === 'placement';
+  const withTotal = !placement && Boolean(data.work.max_points);
+  const cols: ListCol<GroupStudent>[] = [{ key: 'name', label: 'Ученик', left: true, cell: s => s.full_name, sort: s => s.full_name }];
+  if (!placement) cols.push({ key: 'start', label: 'Входное, %', cell: s => s.start ?? '', sort: s => s.start, heat: true });
+  if (withTotal) cols.push({ key: 'total', label: `Балл из ${data.work.max_points}`, cell: s => (s.wrote ? num(s.total as number) : s.state), cls: s => (s.wrote ? undefined : 'mon-dyn__none'), sort: s => s.total, excel: s => (s.wrote ? s.total : s.state) });
+  cols.push({ key: 'percent', label: '%', cell: s => (s.wrote ? s.percent : withTotal ? '' : s.state), cls: s => (s.wrote ? band(s.percent) : withTotal ? undefined : 'mon-dyn__none'), sort: s => s.percent, excel: s => (s.wrote ? s.percent : withTotal ? null : s.state), heat: true });
+  if (graded) cols.push({ key: 'mark', label: 'Отметка', cell: s => s.mark ?? '', cls: s => (s.mark ? `mon-dash__mark mon-dash__mark--${s.mark}` : undefined), sort: s => (s.mark ? Number(s.mark) : null) });
+  return cols;
+}
+
 function Students({ work, groupId, onClose }: { work: string; groupId: number; onClose: () => void }) {
   const { data, error } = useApi<GroupTable>(`/dashboard/group?work=${encodeURIComponent(work)}&group=${groupId}`);
   const graded = Boolean(data?.work.graded);
-  const placement = data?.work.key === 'placement';
   return (
     <Block
       title={`Ученики: ${data?.group.title || ''}`}
@@ -237,36 +303,11 @@ function Students({ work, groupId, onClose }: { work: string; groupId: number; o
       {error ? <p className="mon-err" role="alert">{error}</p> : null}
       {!data && !error ? <p className="mon-note">Загружаем…</p> : null}
       {data ? (
-        <div className="mon-dyn__scroll">
-          <table className="mon-dyn__table mon-dyn__students">
-            <thead>
-              <tr>
-                <th className="is-l">Ученик</th>
-                {placement ? null : <th>Входное, %</th>}
-                {placement || !data.work.max_points ? null : <th>Балл из {data.work.max_points}</th>}
-                <th>%</th>
-                {graded ? <th>Отметка</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {data.students.map(s => (
-                <tr key={s.id}>
-                  <td className="is-l">{s.full_name}</td>
-                  {placement ? null : <td>{s.start ?? ''}</td>}
-                  {s.wrote ? (
-                    <>
-                      {placement || !data.work.max_points ? null : <td>{num(s.total as number)}</td>}
-                      <td className={band(s.percent)}>{s.percent}</td>
-                      {graded ? <td className={s.mark ? `mon-dash__mark mon-dash__mark--${s.mark}` : undefined}>{s.mark}</td> : null}
-                    </>
-                  ) : (
-                    <td className="mon-dyn__none" colSpan={(placement || !data.work.max_points ? 1 : 2) + (graded ? 1 : 0)}>{s.state}</td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ShortList
+          rows={data.students} cols={studentCols(data)} rowKey={x => x.id} search={x => x.full_name}
+          title={`Ученики ${data.group.title}: ${data.work.title}`} fileName={`ucheniki_${data.group.title}_${data.work.title}`}
+          tableClass="mon-dyn__students"
+        />
       ) : null}
     </Block>
   );
@@ -347,6 +388,33 @@ const REASONS: { code: 'two' | 'drop' | 'two_drops'; label: (d: Data) => string 
   { code: 'two_drops', label: d => `два снижения подряд по ${d.settings.threshold} пунктов и больше` },
 ];
 
+type RiskGroup = NonNullable<Data['risk']>['groups'][number];
+function riskGroupCols(graded: boolean): ListCol<RiskGroup>[] {
+  const cols: ListCol<RiskGroup>[] = [
+    { key: 'title', label: 'Группа', left: true, cell: g => g.title, sort: g => g.title },
+    { key: 'teacher', label: 'Учитель', left: true, cell: g => g.teacher, sort: g => g.teacher },
+    { key: 'avg', label: 'Средний %', cell: g => g.avg_percent, cls: g => band(g.avg_percent), sort: g => g.avg_percent, heat: true },
+  ];
+  if (graded) cols.push({ key: 'twos', label: '«2»', cell: g => `«2» у ${g.twos} из ${g.marked}`, cls: g => ((g.twos || 0) > 0 ? 'mon-dash__bad' : undefined), sort: g => g.twos });
+  cols.push({ key: 'reason', label: 'Причина', left: true, cell: g => g.reasons.map(x => x.text).join('; '), sort: g => g.reasons.map(x => x.text).join('; ') });
+  return cols;
+}
+// На странице столбцы группы риска как раньше (группа с учителем, %, «2»); в окне и Excel учитель и причина отдельно.
+function riskGroupPageCols(graded: boolean): ListCol<RiskGroup>[] {
+  const keep = riskGroupCols(graded).filter(c => c.key === 'avg' || c.key === 'twos');
+  return [{ key: 'title', label: 'Группа', left: true, cell: g => <>{g.title}<span className="mon-dash__teacher"> · {g.teacher}</span></> }, ...keep];
+}
+
+function riskStudentCols(points: { key: string; title: string }[]): ListCol<RiskStudent>[] {
+  return [
+    { key: 'name', label: 'Ученик', left: true, cell: s => s.full_name, sort: s => s.full_name },
+    { key: 'group', label: 'Группа', left: true, cell: s => s.group, sort: s => s.group },
+    { key: 'teacher', label: 'Учитель', left: true, cell: s => <span className="mon-dash__teacher">{s.teacher}</span>, sort: s => s.teacher },
+    ...points.map((p): ListCol<RiskStudent> => ({ key: `p:${p.key}`, label: `${p.title}, %`, cell: s => s.values[p.key] ?? '', sort: s => s.values[p.key] ?? null, heat: true })),
+    { key: 'reason', label: 'Причина', left: true, cell: s => s.reasons.map(x => x.text).join('; '), sort: s => s.reasons.map(x => x.text).join('; ') },
+  ];
+}
+
 function Risk({ d }: { d: Data }) {
   const [reason, setReason] = useState<string>('');
   const r = d.risk!;
@@ -361,18 +429,10 @@ function Risk({ d }: { d: Data }) {
         <div>
           <h4 className="mon-dash__sub">Группы</h4>
           {r.groups.length ? (
-            <table className="mon-dyn__table mon-dash__table">
-              <thead><tr><th className="is-l">Группа</th><th>Средний %</th>{graded ? <th>«2»</th> : null}</tr></thead>
-              <tbody>
-                {r.groups.map(g => (
-                  <tr key={g.group_id}>
-                    <td className="is-l">{g.title}<span className="mon-dash__teacher"> · {g.teacher}</span></td>
-                    <td className={band(g.avg_percent)}>{g.avg_percent}</td>
-                    {graded ? <td className={(g.twos || 0) > 0 ? 'mon-dash__bad' : undefined}>«2» у {g.twos} из {g.marked}</td> : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ShortList
+              rows={r.groups} cols={riskGroupCols(graded)} pageCols={riskGroupPageCols(graded)} rowKey={g => g.group_id} search={g => `${g.title} ${g.teacher}`}
+              title={`Группы в зоне риска: ${d.work?.title || ''}`} fileName={`risk-gruppy_${d.work?.title || ''}`} tableClass="mon-dash__table"
+            />
           ) : <p className="mon-note">Групп в зоне риска нет</p>}
         </div>
         <div>
@@ -388,40 +448,62 @@ function Risk({ d }: { d: Data }) {
         </div>
       </div>
       {reason ? (
-        <div className="mon-dyn__scroll">
-          <table className="mon-dyn__table mon-dash__table mon-dash__list">
-            <thead>
-              <tr><th className="is-l">Ученик</th><th className="is-l">Группа</th><th className="is-l">Учитель</th>{r.points.map(p => <th key={p.key}>{p.title}, %</th>)}<th className="is-l">Причина</th></tr>
-            </thead>
-            <tbody>
-              {list.map(s => (
-                <tr key={s.id}>
-                  <td className="is-l">{s.full_name}</td>
-                  <td className="is-l">{s.group}</td>
-                  <td className="is-l mon-dash__teacher">{s.teacher}</td>
-                  {r.points.map(p => <td key={p.key}>{s.values[p.key] ?? ''}</td>)}
-                  <td className="is-l">{s.reasons.map(x => x.text).join('; ')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ShortList
+          key={reason} rows={list} cols={riskStudentCols(r.points)} rowKey={x => x.id} search={x => `${x.full_name} ${x.group}`}
+          title={`Ученики в зоне риска: ${REASONS.find(x => x.code === reason)!.label(d)}`} note={d.work?.title || ''}
+          fileName={`risk-ucheniki_${d.work?.title || ''}`} tableClass="mon-dash__table mon-dash__list"
+        />
       ) : null}
     </Block>
   );
 }
 
-function Top({ d }: { d: Data }) {
+type RankedGroup = Rated & { place: number };
+function ratedCols(graded: boolean, withPlace: boolean): ListCol<RankedGroup>[] {
+  const cols: ListCol<RankedGroup>[] = [];
+  if (withPlace) cols.push({ key: 'place', label: 'Место', cell: g => g.place, sort: g => g.place });
+  cols.push(
+    { key: 'parallel', label: 'Параллель', cell: g => g.parallel, sort: g => g.parallel },
+    { key: 'title', label: 'Группа', left: true, cell: g => g.title, sort: g => g.title },
+    { key: 'teacher', label: 'Учитель', left: true, cell: g => <span className="mon-dash__teacher">{g.teacher}</span>, sort: g => g.teacher },
+    { key: 'avg', label: 'Средний %', cell: g => g.avg_percent, cls: g => band(g.avg_percent), sort: g => g.avg_percent, heat: true },
+  );
+  if (graded) cols.push({ key: 'mark', label: 'Средняя отметка', cell: g => mark2(g.avg_mark), cls: g => markBand(g.avg_mark), sort: g => g.avg_mark });
+  cols.push({ key: 'n', label: 'Внесено', cell: g => `${g.n} из ${g.m}`, sort: g => g.n, excel: g => `${g.n} из ${g.m}` });
+  return cols;
+}
+
+// Рейтинг списком на странице: первые 5 строк, остальные в окне.
+function RankList({ list, render, title, fileName, cols, ordered }: { list: RankedGroup[]; render: (g: RankedGroup) => React.ReactNode; title: string; fileName: string; cols: ListCol<RankedGroup>[]; ordered: boolean }) {
   const [open, setOpen] = useState(false);
+  const items = list.slice(0, LIST_LIMIT).map(render);
+  return (
+    <>
+      {ordered ? <ol className="mon-dash__rank">{items}</ol> : <ul className="mon-dash__rank">{items}</ul>}
+      {list.length > LIST_LIMIT ? <button type="button" className="mon-btn mon-list__more" onClick={() => setOpen(true)}>Показать всех ({list.length})</button> : null}
+      {open ? <ListWindow rows={list} cols={cols} rowKey={g => `${g.group_id}-${g.place}`} search={g => `${g.title} ${g.teacher}`} title={title} fileName={fileName} tableClass="mon-dash__table" onClose={() => setOpen(false)} /> : null}
+    </>
+  );
+}
+
+function Top({ d }: { d: Data }) {
   const t = d.top!;
   const graded = Boolean(d.work?.graded);
-  const rated = (g: Rated, i?: number) => (
-    <li key={`${g.group_id}-${i ?? ''}`}>
-      {i !== undefined ? <span className="mon-dash__place">{i + 1}</span> : <span className="mon-dash__place mon-dash__place--p">{g.parallel}</span>}
+  const w = d.work?.title || '';
+  const rated = (g: RankedGroup, numbered: boolean) => (
+    <li key={`${g.group_id}-${g.place}`}>
+      {numbered ? <span className="mon-dash__place">{g.place}</span> : <span className="mon-dash__place mon-dash__place--p">{g.parallel}</span>}
       <span className="mon-dash__who">{g.title}<span className="mon-dash__teacher">{g.teacher ? ` · ${g.teacher}` : ''}</span></span>
       <span className={`mon-dash__val ${band(g.avg_percent)}`}>{g.avg_percent}&nbsp;%</span>
     </li>
   );
+  const ranked = t.groups.map((g, i) => ({ ...g, place: i + 1 }));
+  const best = t.best_by_parallel.map(g => ({ ...g, place: 1 }));
+  const studentCols: ListCol<TopStudent>[] = [
+    { key: 'name', label: 'Ученик', left: true, cell: s => s.full_name, sort: s => s.full_name },
+    { key: 'group', label: 'Группа', left: true, cell: s => s.group, sort: s => s.group },
+    { key: 'percent', label: '%', cell: s => s.percent, cls: s => band(s.percent), sort: s => s.percent, heat: true },
+  ];
   return (
     <Block
       title="Самые высокие результаты"
@@ -442,25 +524,20 @@ function Top({ d }: { d: Data }) {
         </div>
         <div>
           <h4 className="mon-dash__sub">Группы школы</h4>
-          <ol className="mon-dash__rank">{t.groups.map((g, i) => rated(g, i))}</ol>
+          <RankList list={ranked} render={g => rated(g, true)} ordered cols={ratedCols(graded, true)} title={`Рейтинг групп школы: ${w}`} fileName={`reyting-grupp_${w}`} />
           <h4 className="mon-dash__sub">Лучшая в параллели</h4>
-          <ul className="mon-dash__rank">{t.best_by_parallel.map(g => rated(g))}</ul>
+          <RankList list={best} render={g => rated(g, false)} ordered={false} cols={ratedCols(graded, false)} title={`Лучшая группа в каждой параллели: ${w}`} fileName={`luchshie-v-paralleli_${w}`} />
         </div>
         <div>
-          <h4 className="mon-dash__sub">Ученики с результатом {d.top_percent}&nbsp;% и выше</h4>
-          <button type="button" className={`mon-dash__counter${open ? ' is-current' : ''}`} disabled={!t.students.length} onClick={() => setOpen(!open)}>
-            <b>{t.students.length}</b><span>{plural(t.students.length, 'ученик', 'ученика', 'учеников')}{t.students.length ? (open ? ', скрыть список' : ', показать список') : ''}</span>
-          </button>
+          <h4 className="mon-dash__sub">Ученики с результатом {d.top_percent}&nbsp;% и выше: {t.students.length}</h4>
+          {t.students.length ? (
+            <ShortList
+              rows={t.students} cols={studentCols} rowKey={s => s.id} search={s => `${s.full_name} ${s.group}`}
+              title={`Ученики с результатом ${d.top_percent} % и выше: ${w}`} fileName={`ucheniki-${d.top_percent}_${w}`} tableClass="mon-dash__table mon-dash__list"
+            />
+          ) : <p className="mon-note">Таких учеников нет</p>}
         </div>
       </div>
-      {open ? (
-        <div className="mon-dyn__scroll">
-          <table className="mon-dyn__table mon-dash__table mon-dash__list">
-            <thead><tr><th className="is-l">Ученик</th><th className="is-l">Группа</th><th>%</th></tr></thead>
-            <tbody>{t.students.map(s => <tr key={s.id}><td className="is-l">{s.full_name}</td><td className="is-l">{s.group}</td><td className={band(s.percent)}>{s.percent}</td></tr>)}</tbody>
-          </table>
-        </div>
-      ) : null}
     </Block>
   );
 }
@@ -485,6 +562,16 @@ function sheets(d: Data): Sheet[] {
       ['Внесено, учеников', s.n], ['Из них должно быть', s.m], ['Внесено, %', s.entered],
     ],
   });
+  if (d.low) {
+    const two = d.low.kind === 'two';
+    out.push({
+      name: two ? 'Получили 2' : `Ниже ${d.low.below}`, title: `${w.title}: ${two ? 'получили «2»' : `ниже ${d.low.below} %`}`,
+      note: `Всего: ${d.low.students.length}. Порядок: параллель, группа, процент от низкого к высокому.`,
+      head: ['Ученик', 'Параллель', 'Группа', 'Учитель', 'Балл', 'Из', '%', 'Самый слабый раздел', 'Раздел, %'],
+      rows: d.low.students.map(x => [x.full_name, x.parallel, x.group, x.teacher, x.total, x.max, x.percent, x.weak?.name ?? null, x.weak?.percent ?? null]),
+      heat: [6, 8],
+    });
+  }
   const sumHead = ['Средняя отметка', 'Средний %', '«5»', '«4»', '«3»', '«2»', 'Качество, %', 'Успеваемость, %', 'Внесено', 'Из'];
   const sumRow = (x: Sum): Cell[] => [markCell(g, x.avg_mark), x.avg_percent, ...(['5', '4', '3', '2'] as const).map(k => (x.marks ? x.marks[k] : null)), g ? x.quality : null, g ? x.success : null, x.n, x.m];
   out.push({ name: 'Параллели', title: `${w.title}: по параллелям`, note: 'Параллель считается по всем ученикам с полной работой, не как среднее средних групп.', head: ['Параллель', ...sumHead], rows: (d.parallels || []).map(p => [p.parallel, ...sumRow(p)]), heat: [2], marks: [1] });
@@ -636,6 +723,7 @@ export default function DashboardPage() {
       {data && !loading && !data.work ? <p className="mon-note">Работ с результатами пока нет</p> : null}
       {data && !loading && data.work && data.school ? (
         <div className="mon-dyn">
+          {data.low ? <Low key={`low-${data.work.key}`} d={data} /> : null}
           <Tiles d={data} />
           <Parallels d={data} parallel={shown} onPick={p => { setParallel(p); setGroup(null); }} />
           {shown !== null ? <Groups d={data} parallel={shown} onGroup={id => setGroup(id === group ? null : id)} open={groupVisible ? group : null} /> : null}
