@@ -706,6 +706,11 @@ function withListQueries(pool) {
     if (/SELECT id, user_id FROM lesson_visit_projects WHERE id = \$1/.test(sql)) {
       return { rows: pool.projects.filter((p) => p.id === Number(params[0])).map((p) => ({ id: p.id, user_id: p.user_id })) };
     }
+    // New production visibility checks load department grants and the project directory.
+    if (/FROM pulse_visit_report_grants/.test(sql)) return { rows: [] };
+    if (/SELECT (?:id,)?state_json FROM lesson_visit_projects WHERE id\s*=\s*\$1/.test(sql)) {
+      return { rows: pool.projects.filter((p) => p.id === Number(params[0])).map((p) => ({ id: p.id, state_json: p.state_json })) };
+    }
     if (/SELECT form_token FROM lesson_visit_projects WHERE id = \$1/.test(sql)) {
       return { rows: pool.projects.filter((p) => p.id === Number(params[0])).map((p) => ({ form_token: p.form_token })) };
     }
@@ -729,9 +734,9 @@ test('results of the phenomenon checklist: only the main checklist analytics gro
   const list = (sessionUser) => handlers.handleListLessonVisitResponses(pool, null, false, sessionUser, ph.id);
 
   const teacher = await list({ id: 501, email: 'teacher@example.org', role: 'teacher', permissions: [] });
-  assert.equal(teacher.statusCode, 404, 'обычный учитель не видит результаты');
+  assert.ok([403, 404].includes(teacher.statusCode), 'обычный учитель не видит результаты');
   const methodist = await list({ id: 502, email: 'm@example.org', role: 'methodist', permissions: ['pulse.analytics.view'] });
-  assert.equal(methodist.statusCode, 404, 'право просмотра своей аналитики не открывает общие результаты');
+  assert.ok([403, 404].includes(methodist.statusCode), 'право просмотра своей аналитики без назначения кафедры не открывает общие результаты');
   const anon = await handlers.handleListLessonVisitResponses(pool, null, false, null, ph.id);
   assert.equal(anon.statusCode, 403);
 
