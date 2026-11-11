@@ -1019,10 +1019,10 @@ a.mon-btn {
   background: rgba(26, 21, 18, 0.07);
   color: var(--mon-ink);
 }
-.mon-mark--5 { background: var(--mon-p-m5-bg); color: var(--mon-p-m5-ink); }
-.mon-mark--4 { background: var(--mon-p-m4-bg); color: var(--mon-p-m4-ink); }
-.mon-mark--3 { background: var(--mon-p-m3-bg); color: var(--mon-p-m3-ink); }
-.mon-mark--2 { background: var(--mon-p-m2-bg); color: var(--mon-p-m2-ink); }
+.mon-mark--5 { background: var(--mon-p-c-p90-bg); color: var(--mon-p-c-p90-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p90-border); }
+.mon-mark--4 { background: var(--mon-p-c-p85-bg); color: var(--mon-p-c-p85-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p85-border); }
+.mon-mark--3 { background: var(--mon-p-c-p70-bg); color: var(--mon-p-c-p70-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p70-border); }
+.mon-mark--2 { background: var(--mon-p-c-low-bg); color: var(--mon-p-c-low-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-low-border); }
 .mon-sheet__mark {
   width: 4.6rem;
   padding-right: 0.5rem !important;
@@ -1987,9 +1987,9 @@ a.mon-btn {
   font-weight: 700;
   white-space: nowrap;
 }
-.mon-dyn__tag.is-same { background: var(--mon-p-same-bg); color: var(--mon-p-same-ink); }
-.mon-dyn__tag.is-up { background: var(--mon-p-up-bg); color: var(--mon-p-up-ink); }
-.mon-dyn__tag.is-down { background: var(--mon-p-down-bg); color: var(--mon-p-down-ink); }
+.mon-dyn__tag.is-same { background: var(--mon-p-c-same-bg); color: var(--mon-p-c-same-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-same-border); }
+.mon-dyn__tag.is-up { background: var(--mon-p-c-p90-bg); color: var(--mon-p-c-p90-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p90-border); }
+.mon-dyn__tag.is-down { background: var(--mon-p-c-low-bg); color: var(--mon-p-c-low-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-low-border); }
 .mon-dyn .mon-prog__row { grid-template-columns: 6rem minmax(0, 1fr) 11rem; }
 
 @media (max-width: 700px) {
@@ -2108,10 +2108,10 @@ td.mon-dash__teacher { white-space: normal !important; min-width: 9rem; }
 .mon-dash__seg--3 { background: var(--mon-p-same-bg); color: var(--mon-p-same-ink); }
 .mon-dash__seg--2 { background: var(--mon-p-m2-bg); color: var(--mon-p-m2-ink); }
 .mon-dash__mark { font-weight: 700 !important; }
-.mon-dash__mark--5 { background: var(--mon-p-m5-bg); color: var(--mon-p-m5-ink); }
-.mon-dash__mark--4 { background: var(--mon-p-m4-bg); color: var(--mon-p-m4-ink); }
-.mon-dash__mark--3 { background: var(--mon-p-m3-bg); color: var(--mon-p-m3-ink); }
-.mon-dash__mark--2 { background: var(--mon-p-m2-bg); color: var(--mon-p-m2-ink); }
+.mon-dash__mark--5 { background: var(--mon-p-c-p90-bg); color: var(--mon-p-c-p90-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p90-border); }
+.mon-dash__mark--4 { background: var(--mon-p-c-p85-bg); color: var(--mon-p-c-p85-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p85-border); }
+.mon-dash__mark--3 { background: var(--mon-p-c-p70-bg); color: var(--mon-p-c-p70-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p70-border); }
+.mon-dash__mark--2 { background: var(--mon-p-c-low-bg); color: var(--mon-p-c-low-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-low-border); }
 .mon-dash__sub {
   margin: 0.9rem 0 0.4rem;
   font-size: 0.95rem;
@@ -2212,11 +2212,21 @@ td.mon-dash__teacher { white-space: normal !important; min-width: 9rem; }
 }
 
 /* Одна шкала процента для всех таблиц, полос и столбиков (palette.ts): 90 и выше, 85-89, 70-84, ниже 70.
-   Последними в файле, чтобы перекрывать базовые цвета блоков. */
-.mon-band--p90 { background: var(--mon-p-p90-bg); color: var(--mon-p-p90-ink); }
-.mon-band--p85 { background: var(--mon-p-p85-bg); color: var(--mon-p-p85-ink); }
-.mon-band--p70 { background: var(--mon-p-p70-bg); color: var(--mon-p-p70-ink); }
-.mon-band--low { background: var(--mon-p-low-bg); color: var(--mon-p-low-ink); }
+   Последними в файле, чтобы перекрывать базовые цвета блоков.
+   Клетки и легенды (11.11, вариант Б): рамка 2px, светлый фон, цветные цифры. Рамка через inset-тень, чтобы не менять размер клетки. */
+.mon-band--p90 { background: var(--mon-p-c-p90-bg); color: var(--mon-p-c-p90-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p90-border); }
+.mon-band--p85 { background: var(--mon-p-c-p85-bg); color: var(--mon-p-c-p85-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p85-border); }
+.mon-band--p70 { background: var(--mon-p-c-p70-bg); color: var(--mon-p-c-p70-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-p70-border); }
+.mon-band--low { background: var(--mon-p-c-low-bg); color: var(--mon-p-c-low-ink); box-shadow: inset 0 0 0 var(--mon-p-c-width) var(--mon-p-c-low-border); }
+/* Полосы и столбики «Динамики» остаются сплошной заливкой. */
+.mon-dyn__fill.mon-band--p90,
+.mon-dyn__col-fill.mon-band--p90 { background: var(--mon-p-p90-bg); color: var(--mon-p-p90-ink); box-shadow: none; }
+.mon-dyn__fill.mon-band--p85,
+.mon-dyn__col-fill.mon-band--p85 { background: var(--mon-p-p85-bg); color: var(--mon-p-p85-ink); box-shadow: none; }
+.mon-dyn__fill.mon-band--p70,
+.mon-dyn__col-fill.mon-band--p70 { background: var(--mon-p-p70-bg); color: var(--mon-p-p70-ink); box-shadow: none; }
+.mon-dyn__fill.mon-band--low,
+.mon-dyn__col-fill.mon-band--low { background: var(--mon-p-low-bg); color: var(--mon-p-low-ink); box-shadow: none; }
 .mon-band--empty {
   background: var(--mon-p-empty-bg);
   outline: 1px dashed var(--mon-p-empty-border);

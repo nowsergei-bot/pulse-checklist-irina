@@ -27,6 +27,17 @@ export const PALETTE = {
     parallel: '#9A9A9A',
     series: ['#1F4E5F', '#7FA7A6', '#3F7C8C', '#4F6F70', '#9BC1C0', '#2E6576', '#5E8F8E'],
   },
+  // Цветные клетки (Ира, 11.11, вариант Б): рамка, светлый фон того же цвета, цветные цифры.
+  // Клетки с процентом, отметки, «рост/снижение» и легенды под таблицами. Полосы долей и прогресса берут сплошные цвета выше.
+  cell: {
+    p90: { border: '#1F4E5F', bg: '#E4EDF0', ink: '#1F4E5F' },
+    p85: { border: '#7FA7A6', bg: '#ECF3F2', ink: '#3E6E6D' },
+    p70: { border: '#BFAE85', bg: '#F7F2E7', ink: '#6B5A33' },
+    low: { border: '#9E3B3E', bg: '#FFFFFF', ink: '#9E3B3E' },
+    // «без изменений»: нейтральная рамка песочного серого.
+    same: { border: '#CFC7B6', bg: '#FFFFFF', ink: '#3A3428' },
+  },
+  cellBorder: '2px',
   // Светлые подложки: строка зоны риска, выбранная строка, нейтральные плашки.
   soft: { risk: '#F6EDE8', pick: '#E9F0F0', sand: '#F6F2EA', note: '#6B6458' },
 } as const;
@@ -63,6 +74,12 @@ export const paletteCss = (() => {
     vars[`m${m}-bg`] = p.mark[m].bg;
     vars[`m${m}-ink`] = p.mark[m].ink;
   }
+  for (const k of ['p90', 'p85', 'p70', 'low', 'same'] as const) {
+    vars[`c-${k}-border`] = p.cell[k].border;
+    vars[`c-${k}-bg`] = p.cell[k].bg;
+    vars[`c-${k}-ink`] = p.cell[k].ink;
+  }
+  vars['c-width'] = p.cellBorder;
   vars['empty-bg'] = p.empty.bg;
   vars['empty-border'] = p.empty.border;
   vars['empty-ink'] = p.empty.ink;
