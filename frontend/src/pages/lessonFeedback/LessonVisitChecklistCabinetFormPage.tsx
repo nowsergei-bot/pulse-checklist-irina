@@ -10,6 +10,7 @@ import {
 } from '../../api/visitChecklist';
 import { API_BASE, parseJson, sessionHeaders } from '../../api/http';
 import PersonSelectField from '../../components/corporate/PersonSelectField';
+import PublicCampusSlideshow from '../../components/PublicCampusSlideshow';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { loadJdMe } from '../../lib/cabinet/sharedResources';
 import { useCabinetProfile } from '../../lib/cabinet/profile';
@@ -339,10 +340,13 @@ export function PhenomenonChecklistForm({
   locale,
   directory,
   observerFromAccount,
+  photos,
 }: {
   locale: PhenomenonLocale;
   directory: LessonVisitDirectory;
   observerFromAccount: string;
+  /** Фото из обычного чек-листа посещения (тот же блок, что над его формой). */
+  photos?: string[];
 }) {
   const ui = PHENOMENON_UI[locale];
   const [general, setGeneral] = useState<PhenomenonGeneral>(() => emptyPhenomenonGeneral(new Date(), observerFromAccount));
@@ -455,6 +459,8 @@ export function PhenomenonChecklistForm({
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <PublicCampusSlideshow active sources={photos} />
 
       <div className="card public-form-glass-card">
         <strong className="public-question-title">{pick(PHENOMENON_SECTIONS.registration, locale)}</strong>
@@ -716,6 +722,7 @@ function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolean }) {
   const { user } = useCabinetProfile();
   const [locale, setLocale] = useState<PhenomenonLocale>(readLocale);
   const [directory, setDirectory] = useState<LessonVisitDirectory | null>(null);
+  const [photos, setPhotos] = useState<string[] | undefined>();
   const [projectId, setProjectId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -736,18 +743,19 @@ function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolean }) {
       setLoading(true);
       setErr(null);
       try {
-        const [checked, phenomenon, mainDirectory] = await Promise.all([
+        const [checked, phenomenon, main] = await Promise.all([
           checkPhenomenonAccess(),
           getPublicLessonVisitForm(PHENOMENON_FORM_TOKEN),
           getPublicLatestLessonVisitForm()
             .then((latest) => getPublicLessonVisitForm(latest.form_token))
-            .then((main) => main.directory)
             .catch(() => null),
         ]);
         if (cancelled) return;
         setAccess(checked.access);
         setProjectId(phenomenon.project.id);
-        setDirectory(resolvePublicLessonVisitDirectory(mainDirectory, defaultLessonVisitDirectory()));
+        setDirectory(resolvePublicLessonVisitDirectory(main?.directory ?? null, defaultLessonVisitDirectory()));
+        // Те же фото, что в обычном чек-листе; без них блок показывает стандартные фото гимназии.
+        setPhotos(main?.media?.photos?.map((ph) => ph.src));
       } catch (e) {
         if (!cancelled) setErr(e instanceof Error ? e.message : 'Error');
       } finally {
@@ -837,7 +845,7 @@ function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolean }) {
         ) : tab === 'results' && records ? (
           <PhenomenonResultsTable records={records} />
         ) : (
-          <PhenomenonChecklistForm locale={locale} directory={directory} observerFromAccount={observerFromAccount} />
+          <PhenomenonChecklistForm locale={locale} directory={directory} observerFromAccount={observerFromAccount} photos={photos} />
         )}
       </div>
     </MotionConfig>

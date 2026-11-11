@@ -287,8 +287,8 @@ export const PHENOMENON_ITEMS: PhenomenonChoiceItem[] = [
     kind: 'choice',
     scored: true,
     title: {
-      ru: 'Раскрытие феномена «Эпохи России» (основной пункт урока, двойной вес)',
-      en: 'Exploring the phenomenon "Epochs of Russia" (key criterion, double weight)',
+      ru: 'Раскрытие феномена «Эпохи России»',
+      en: 'Exploring the phenomenon “Epochs of Russia”',
     },
     options: [
       { id: 'none', score: 0, label: { ru: 'феномен не раскрыт', en: 'the phenomenon was not explored' } },
