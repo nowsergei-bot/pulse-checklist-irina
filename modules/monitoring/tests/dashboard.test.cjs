@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { summarize, studentRisk, weakestSection } = require('../server/dashboard.cjs');
+const { summarize, studentRisk, weakestSection, classLabel } = require('../server/dashboard.cjs');
 
 test('сводка: средняя отметка с двумя знаками, процент целый, качество и успеваемость', () => {
   const s = summarize([{ percent: 90, mark: '5' }, { percent: 74, mark: '4' }, { percent: 46, mark: '2' }], 3, true);
@@ -36,6 +36,10 @@ test('самый слабый раздел ученика: наименьший 
   assert.deepEqual(weakestSection(parts, cols), { name: 'Grammar', percent: 33 });
   assert.deepEqual(weakestSection({ sections: { 's:L': { got: 4, max: 10 }, 's:R': { got: 4, max: 10 } } }, cols), { name: 'Listening', percent: 40 });
   assert.equal(weakestSection({ sections: {} }, cols), null);
+});
+
+test('школьный класс: «9Б», «9 б», «9-Б» -> 9 «Б», другое как есть', () => {
+  assert.deepEqual(['9Б', '9 б', '9-Б', '11«А»', '10 IT'].map(classLabel), ['9 «Б»', '9 «Б»', '9 «Б»', '11 «А»', '10 IT']);
 });
 
 const url = process.env.MONITORING_TEST_DATABASE_URL;
@@ -203,8 +207,15 @@ test('дашборд в базе', { skip: !url && 'нет MONITORING_TEST_DATAB
     const b = await dash({ work: 'Модуль 1' });
     assert.equal(b.low.kind, 'two');
     // Ученик 3: 5, 5, 5, 8 из 10, 10, 15, 15 = 23 из 50, 46 %; Grammar 5 / 15 = 33 % слабее всего.
-    assert.deepEqual(b.low.students.map(s => [s.full_name, s.parallel, s.group, s.teacher, s.total, s.max, s.percent, s.weak]),
-      [['Ученик 3', 9, '9 А', 'Учитель 1', 23, 50, 46, { name: 'Grammar', percent: 33 }]]);
+    assert.deepEqual(b.low.students.map(s => [s.full_name, s.parallel, s.group, s.teacher, s.total, s.max, s.percent, s.weak, s.class_label]),
+      [['Ученик 3', 9, '9 А', 'Учитель 1', 23, 50, 46, { name: 'Grammar', percent: 33 }, null]], 'без представления классов класса нет');
+    // Представление классов есть: класс ученика из students.class_id.
+    await db.query(`ALTER TABLE pulse_read.students ADD COLUMN class_id int;
+      CREATE TABLE pulse_read.classes (id int, code_display text); INSERT INTO pulse_read.classes VALUES (7, '9Б');
+      UPDATE pulse_read.students SET class_id = 7 WHERE id = 3`);
+    t.after(() => db.query('DROP TABLE IF EXISTS pulse_read.classes; ALTER TABLE pulse_read.students DROP COLUMN IF EXISTS class_id').catch(() => {}));
+    assert.equal((await dash({ work: 'Модуль 1' })).low.students[0].class_label, '9 «Б»');
+    await db.query('DROP TABLE pulse_read.classes; ALTER TABLE pulse_read.students DROP COLUMN class_id');
   });
 
   await t.test('блок «Ниже 50%» у работы без отметок; порядок параллель, группа, процент', async () => {

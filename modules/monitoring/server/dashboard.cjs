@@ -245,6 +245,34 @@ function studentRisk(values, selectedIndex, mark, settings) {
   return reasons;
 }
 
+// Школьный класс ученика (Ира, 11.11): pulse_read.students.class_id -> pulse_read.classes. Столбцы читаются из
+// information_schema: если класса в представлениях нет, возвращается пустая карта и на экране остаётся группа.
+const CLASS_LABELS = ['code_display', 'title', 'name', 'code'];
+async function studentClasses(db, ids) {
+  if (!ids.length) return new Map();
+  const cols = (await db.query(
+    `SELECT table_name, column_name FROM information_schema.columns
+     WHERE table_schema = 'pulse_read' AND table_name IN ('students', 'classes')`,
+  )).rows;
+  const has = (t, c) => cols.some(r => r.table_name === t && r.column_name === c);
+  const label = CLASS_LABELS.find(c => has('classes', c));
+  if (!has('students', 'class_id') || !has('classes', 'id') || !label) return new Map();
+  const rows = (await db.query(
+    `SELECT DISTINCT s.id, c.${label} AS label FROM pulse_read.students s JOIN pulse_read.classes c ON c.id = s.class_id
+     WHERE s.id = ANY($1::int[]) AND c.${label} IS NOT NULL ORDER BY s.id`,
+    [ids],
+  )).rows;
+  const out = new Map();
+  for (const r of rows) if (!out.has(Number(r.id))) out.set(Number(r.id), classLabel(r.label));
+  return out;
+}
+// «9Б», «9 Б», «9-б» -> «9 «Б»»; другое написание как есть.
+function classLabel(raw) {
+  const t = String(raw).trim();
+  const m = t.match(/^(\d{1,2})\s*[-–]?\s*[«"']?([А-ЯЁA-Z])[»"']?$/i);
+  return m ? `${m[1]} «${m[2].toUpperCase()}»` : t;
+}
+
 // Самый слабый раздел ученика: наименьший процент «сумма баллов / сумма максимумов» раздела; при равенстве первый по порядку.
 function weakestSection(parts, sectionCols) {
   let best = null;
@@ -271,7 +299,7 @@ function lowStudents(wd, nameOf, names) {
       seen.add(id);
       const max = Object.values(r.parts.sections).reduce((a, x) => a + x.max, 0);
       out.push({
-        id, full_name: nameOf.get(id) || '', parallel: g.parallel, group_id: g.id, group: groupLabel(g), teacher: names.get(g.id) || '',
+        id, full_name: nameOf.get(id) || '', parallel: g.parallel, class_label: null, group_id: g.id, group: groupLabel(g), teacher: names.get(g.id) || '',
         total: r.total, max: r.total === null || r.total === undefined ? null : max, percent: r.percent, mark: r.mark,
         weak: weakestSection(r.parts, wd.columns.sections),
       });
@@ -297,6 +325,11 @@ async function dashboard(db, query) {
   const nameOf = new Map();
   for (const g of data.groups) for (const m of data.members.get(g.id) || []) if (!nameOf.has(m.id)) nameOf.set(m.id, m.full_name);
   const recs = (ids) => ids.map(id => wd.records.get(id)).filter(Boolean);
+
+  // Блок «Получили «2»» / «Ниже 50%»: сначала список, потом школьные классы только его учеников.
+  const lowList = lowStudents(wd, nameOf, names);
+  const classOf = await studentClasses(db, lowList.map(x => x.id));
+  const low = { kind: wd.graded ? 'two' : 'below', below: LOW_PERCENT, students: lowList.map(x => ({ ...x, class_label: classOf.get(x.id) || null })) };
 
   // Группы: строка на группу работы.
   const groups = wd.groups.map(g => ({
@@ -377,7 +410,7 @@ async function dashboard(db, query) {
       works: works.map(({ has_results, ...w }) => ({ ...w, has_results })),
       work: { key: option.key, title: option.title, type_code: option.type_code, graded: wd.graded, max_points: wd.max_points },
       settings, top_percent: TOP_PERCENT,
-      low: { kind: wd.graded ? 'two' : 'below', below: LOW_PERCENT, students: lowStudents(wd, nameOf, names) },
+      low,
       school,
       parallels,
       groups,
@@ -447,4 +480,4 @@ async function groupTable(db, query) {
   };
 }
 
-module.exports = { dashboard, groupTable, summarize, cells, studentRisk, weakestSection, TOP_PERCENT, LOW_PERCENT };
+module.exports = { dashboard, groupTable, summarize, cells, studentRisk, weakestSection, classLabel, TOP_PERCENT, LOW_PERCENT };

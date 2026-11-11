@@ -23,7 +23,7 @@ type GroupRow = Sum & { group_id: number; title: string; parallel: number; teach
 type Reason = { code: string; text: string };
 type RiskStudent = { id: number; full_name: string; group_id: number; group: string; parallel: number; teacher: string; values: Record<string, number | null>; percent: number; reasons: Reason[] };
 type LowStudent = {
-  id: number; full_name: string; parallel: number; group_id: number; group: string; teacher: string;
+  id: number; full_name: string; parallel: number; class_label: string | null; group_id: number; group: string; teacher: string;
   total: number | null; max: number | null; percent: number; mark: string | null; weak: { name: string; percent: number } | null;
 };
 type TopStudent = { id: number; full_name: string; group: string; parallel: number; percent: number; mark: string | null };
@@ -113,7 +113,14 @@ function Low({ d }: { d: Data }) {
   const where = parallel === null ? '' : ` в ${parallel} параллели`;
   const cols: ListCol<LowStudent>[] = [
     { key: 'name', label: 'Ученик', left: true, cell: s => s.full_name, sort: s => s.full_name },
-    { key: 'group', label: 'Класс и группа', left: true, cell: s => <span className="mon-low__class">{s.group}<small>{s.parallel} параллель</small></span>, sort: s => `${String(s.parallel).padStart(2, '0')} ${s.group}`, excel: s => s.group },
+    {
+      key: 'group', label: 'Класс и группа', left: true,
+      cell: s => (s.class_label
+        ? <span className="mon-low__class">{s.class_label}<small>группа {s.group}</small></span>
+        : <span className="mon-low__class">{s.group}<small>{s.parallel} параллель</small></span>),
+      sort: s => `${String(s.parallel).padStart(2, '0')} ${s.class_label || ''} ${s.group}`,
+      excel: s => (s.class_label ? `${s.class_label}, группа ${s.group}` : s.group),
+    },
     { key: 'teacher', label: 'Учитель', left: true, cell: s => <span className="mon-dash__teacher">{s.teacher}</span>, sort: s => s.teacher },
     ...(withScore ? [{ key: 'total', label: 'Балл', cell: (s: LowStudent) => (s.total === null ? '' : `${num(s.total)} из ${s.max}`), sort: (s: LowStudent) => s.total, excel: (s: LowStudent) => s.total } as ListCol<LowStudent>] : []),
     { key: 'percent', label: '%', cell: s => s.percent, cls: s => band(s.percent), sort: s => s.percent, heat: true },
@@ -137,7 +144,7 @@ function Low({ d }: { d: Data }) {
     >
       {rows.length ? (
         <ShortList
-          rows={rows} cols={cols} rowKey={s => s.id} search={s => `${s.full_name} ${s.group}`}
+          rows={rows} cols={cols} rowKey={s => s.id} search={s => `${s.full_name} ${s.group} ${s.class_label || ''}`}
           title={`${name}${where}: ${d.work?.title || ''}`} fileName={`${two ? 'poluchili-2' : `nizhe-${low.below}`}_${d.work?.title || ''}${parallel === null ? '' : `_${parallel}`}`}
           tableClass="mon-dash__table mon-dash__list"
         />
@@ -567,9 +574,9 @@ function sheets(d: Data): Sheet[] {
     out.push({
       name: two ? 'Получили 2' : `Ниже ${d.low.below}`, title: `${w.title}: ${two ? 'получили «2»' : `ниже ${d.low.below} %`}`,
       note: `Всего: ${d.low.students.length}. Порядок: параллель, группа, процент от низкого к высокому.`,
-      head: ['Ученик', 'Параллель', 'Группа', 'Учитель', 'Балл', 'Из', '%', 'Самый слабый раздел', 'Раздел, %'],
-      rows: d.low.students.map(x => [x.full_name, x.parallel, x.group, x.teacher, x.total, x.max, x.percent, x.weak?.name ?? null, x.weak?.percent ?? null]),
-      heat: [6, 8],
+      head: ['Ученик', 'Параллель', 'Класс', 'Группа', 'Учитель', 'Балл', 'Из', '%', 'Самый слабый раздел', 'Раздел, %'],
+      rows: d.low.students.map(x => [x.full_name, x.parallel, x.class_label, x.group, x.teacher, x.total, x.max, x.percent, x.weak?.name ?? null, x.weak?.percent ?? null]),
+      heat: [7, 9],
     });
   }
   const sumHead = ['Средняя отметка', 'Средний %', '«5»', '«4»', '«3»', '«2»', 'Качество, %', 'Успеваемость, %', 'Внесено', 'Из'];
