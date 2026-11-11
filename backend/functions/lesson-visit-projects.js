@@ -19,7 +19,7 @@ const {
 } = require('./lib/visit-checklist-analytics-access');
 const { maybeNotifyKhoroshilovVisitChecklist } = require('./lib/khoroshilov-activity-notify');
 const { applyResponseToSnapshot, rebuildProjectSnapshot } = require('./lib/visit-checklist-cloud-snapshot');
-const phenomenonLib = require('./lib/phenomenon-lesson');
+const phenomenonLib = require('./lib/lesson-visit-checklist').phenomenon;
 const {
   PHENOMENON_FORM_TOKEN,
   isPhenomenonDraft,

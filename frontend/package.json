@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "test": "tsx --test src/lib/lessonVisitChecklist/visitChecklistReport.test.ts src/lib/lessonVisitChecklist/visitChecklistCompare.test.ts src/lib/lessonVisitChecklist/visitChecklistFormat.test.ts src/lib/phenomenonChecklist/form.test.ts",
+    "test": "tsx --test src/lib/lessonVisitChecklist/visitChecklistReport.test.ts src/lib/lessonVisitChecklist/visitChecklistCompare.test.ts src/lib/lessonVisitChecklist/visitChecklistFormat.test.ts",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {

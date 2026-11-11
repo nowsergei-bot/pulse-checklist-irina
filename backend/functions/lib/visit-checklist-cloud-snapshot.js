@@ -1,7 +1,9 @@
 'use strict';
 
-const { pickLatestSharedVisitChecklist } = require('./lesson-visit-checklist');
-const { isPhenomenonRow } = require('./phenomenon-lesson');
+const {
+  pickLatestSharedVisitChecklist,
+  phenomenon: { isPhenomenonRow },
+} = require('./lesson-visit-checklist');
 const { notifyRecipient } = require('./protocol-task-notify');
 const { catalogPhotoUrls } = require('./staff-photo-catalog');
 const {

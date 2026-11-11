@@ -3,8 +3,11 @@
  * Schedule and analytics live in this branch, not as top-level items.
  */
 
-import { VISIT_CHECKLIST_FORM_PATH, isVisitChecklistCabinetFormPath } from './lessonVisitChecklist/publicForm.ts';
-import { phenomenonMenuVisible } from './phenomenonChecklist/form.ts';
+import {
+  VISIT_CHECKLIST_FORM_PATH,
+  isVisitChecklistCabinetFormPath,
+  phenomenonMenuVisible,
+} from './lessonVisitChecklist/publicForm.ts';
 import { LESSON_VISIT_SCHEDULE_LEGACY_PATH, LESSON_VISIT_SCHEDULE_PATH } from './lessonVisitScheduleAccess.ts';
 import { isPulseSpreadsheetsPath } from './pulseSpreadsheetsAccess.ts';
 import {
