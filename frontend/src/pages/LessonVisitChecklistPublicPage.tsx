@@ -1,8 +1,7 @@
 import '../styles/publicForm.css';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { PhenomenonChecklistPage } from './lessonFeedback/LessonVisitChecklistCabinetFormPage';
 import { getPublicLessonVisitForm, postPublicLessonVisitResponse } from '../api/visitChecklist';
 import PlatformFeedbackModal from '../components/PlatformFeedbackModal';
 import PublicCampusSlideshow from '../components/PublicCampusSlideshow';
@@ -129,7 +128,58 @@ function EmbeddedChecklistWait() {
   return <div className="pulse-route-fallback pulse-route-fallback--cabinet" aria-busy="true" />;
 }
 
-export function LessonVisitChecklistForm({
+// Форма феноменального урока подгружается отдельно (без статического цикла импортов с кабинетом).
+const PhenomenonChecklistPage = lazy(() =>
+  import('./lessonFeedback/LessonVisitChecklistCabinetFormPage').then((m) => ({ default: m.PhenomenonChecklistPage })),
+);
+
+const PHENOMENON_LINK_ERROR =
+  'Не удалось открыть чек-лист феноменального урока. Обновите страницу или откройте его в личном кабинете: «Чек-лист посещения урока» → «Чек-лист феноменального урока».';
+
+/** Вместо белого экрана при любой ошибке формы показывает понятное сообщение. */
+class PhenomenonLinkBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('phenomenon checklist failed', error);
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="page public-form-root lf-visit-form">
+        <div className="public-form-stack">
+          <div className="card public-form-glass-card">
+            <h1 style={{ marginTop: 0 }}>Чек-лист феноменального урока</h1>
+            <p className="err">{PHENOMENON_LINK_ERROR}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+/** Прямая ссылка /view/lesson-visit/phenomenon-lesson-2026 открывает форму феноменального урока, остальные адреса: обычный чек-лист. */
+export function LessonVisitChecklistForm(props: { token?: string; formatQuery?: string | null; embedded?: boolean }) {
+  const { token: rawToken } = useParams();
+  const token = props.token ?? (rawToken ? decodeURIComponent(rawToken) : '');
+  if (token === PHENOMENON_FORM_TOKEN) {
+    return (
+      <PhenomenonLinkBoundary>
+        <Suspense fallback={<div className="pulse-route-fallback" aria-busy="true" />}>
+          <PhenomenonChecklistPage embedded={Boolean(props.embedded)} />
+        </Suspense>
+      </PhenomenonLinkBoundary>
+    );
+  }
+  return <MainLessonVisitChecklistForm {...props} />;
+}
+
+function MainLessonVisitChecklistForm({
   token: tokenProp,
   formatQuery: formatProp,
   embedded = false,
@@ -184,6 +234,10 @@ export function LessonVisitChecklistForm({
         }
         setTitle(displayVisitChecklistTitle(data.project.title));
         const checklist = normalizeSavedChecklist(data.checklist) ?? data.checklist;
+        // Без списка полей форму не показать: сообщение вместо белого экрана.
+        if (!checklist || !Array.isArray(checklist.generalFields) || !Array.isArray(checklist.sections)) {
+          throw new Error('Форма по этой ссылке не найдена.');
+        }
         setChecklist(checklist);
         setDirectory(resolvePublicLessonVisitDirectory(data.directory, defaultLessonVisitDirectory()));
         setPhotos(data.media?.photos);
@@ -496,11 +550,6 @@ export function LessonVisitChecklistForm({
 }
 
 export default function LessonVisitChecklistPublicPage() {
-  const { token: rawToken } = useParams();
-  // Прямая ссылка на чек-лист феноменального урока: /view/lesson-visit/phenomenon-lesson-2026.
-  if (rawToken && decodeURIComponent(rawToken) === PHENOMENON_FORM_TOKEN) {
-    return <PhenomenonChecklistPage embedded={false} />;
-  }
   return <LessonVisitChecklistForm />;
 }
 

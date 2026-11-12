@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { register } from 'node:module';
+import { Writable } from 'node:stream';
 import test from 'node:test';
 import { VISIT_FORMAT_SELF_ANALYSIS } from './normalizeChecklist.ts';
 import {
@@ -259,7 +261,61 @@ describe('phenomenon checklist', () => {
     assert.match(cabinet, /\{showPhenomenon \? \(/);
     // Прямая ссылка /view/lesson-visit/phenomenon-lesson-2026 открывает сразу форму феноменального урока.
     const publicPage = readFileSync(fileURLToPath(new URL('../../pages/LessonVisitChecklistPublicPage.tsx', import.meta.url)), 'utf8');
-    assert.match(publicPage, /decodeURIComponent\(rawToken\) === PHENOMENON_FORM_TOKEN/);
-    assert.match(publicPage, /<PhenomenonChecklistPage embedded=\{false\} \/>/);
+    assert.match(publicPage, /if \(token === PHENOMENON_FORM_TOKEN\)/);
+    assert.match(publicPage, /<PhenomenonLinkBoundary>/);
   });
+});
+
+// --- Прямая ссылка на чек-лист феноменального урока вне кабинета ----------------------
+// Страница /view/lesson-visit/<токен> рендерится без оболочки кабинета (без входа и его настроек).
+// Стили и картинки в Node заменяются пустыми модулями, import.meta.env: пустым объектом.
+test('direct link /view/lesson-visit/phenomenon-lesson-2026 renders the phenomenon form outside the cabinet', async () => {
+  register(
+    'data:text/javascript,' +
+      encodeURIComponent(
+        "export async function load(url, ctx, next) {" +
+          " if (/\\.(css|png|jpe?g|svg|webp)(\\?.*)?$/.test(url)) return { format: 'module', source: 'export default \"\";', shortCircuit: true };" +
+          " const r = await next(url, ctx);" +
+          " if (url.includes('/frontend/src/') && r.source != null) { const src = String(r.source);" +
+          " if (src.includes('import.meta.env')) return { ...r, source: src.replaceAll('import.meta.env', '(import.meta.env ?? {})') }; }" +
+          " return r; }",
+      ),
+  );
+  const React = await import('react');
+  const { renderToPipeableStream } = await import('react-dom/server');
+  const { MemoryRouter, Route, Routes } = await import('react-router-dom');
+  const { default: LessonVisitChecklistPublicPage } = await import('../../pages/LessonVisitChecklistPublicPage.tsx');
+  const render = (path: string) =>
+    new Promise<string>((resolve, reject) => {
+      let out = '';
+      const sink = new Writable({
+        write(chunk: Buffer, _enc: string, cb: () => void) {
+          out += chunk.toString();
+          cb();
+        },
+        final(cb: () => void) {
+          resolve(out);
+          cb();
+        },
+      });
+      const stream = renderToPipeableStream(
+        React.createElement(
+          MemoryRouter,
+          { initialEntries: [path] },
+          React.createElement(
+            Routes,
+            null,
+            React.createElement(Route, { path: '/view/lesson-visit/:token', element: React.createElement(LessonVisitChecklistPublicPage) }),
+          ),
+        ),
+        { onAllReady: () => stream.pipe(sink), onShellError: reject, onError: reject },
+      );
+    });
+  const phenomenon = await render('/view/lesson-visit/phenomenon-lesson-2026');
+  assert.match(phenomenon, /Чек-лист феноменального урока/);
+  assert.match(phenomenon, />RU</);
+  assert.match(phenomenon, />EN</);
+  assert.doesNotMatch(phenomenon, /Не удалось открыть чек-лист/);
+  const main = await render('/view/lesson-visit/some-main-token');
+  assert.doesNotMatch(main, /Чек-лист феноменального урока/);
 });
