@@ -14,6 +14,91 @@ import type {
   LessonVisitResponseRow,
 } from "./types";
 
+/** SHA-256 (hex) для ключей teacherAliases, синхронно: отчёт строится без await. */
+function sha256Hex(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  const k = new Uint32Array(64);
+  const isPrime = (n: number) => { for (let i = 2; i * i <= n; i++) if (n % i === 0) return false; return true; };
+  const h = new Uint32Array(8);
+  for (let n = 2, i = 0; i < 64; n++) {
+    if (!isPrime(n)) continue;
+    if (i < 8) h[i] = (Math.pow(n, 1 / 2) % 1) * 2 ** 32;
+    k[i++] = (Math.pow(n, 1 / 3) % 1) * 2 ** 32;
+  }
+  const len = bytes.length;
+  const padded = new Uint8Array(((len + 9 + 63) >> 6) << 6);
+  padded.set(bytes);
+  padded[len] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 8, Math.floor((len * 8) / 2 ** 32));
+  view.setUint32(padded.length - 4, (len * 8) >>> 0);
+  const w = new Uint32Array(64);
+  const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
+  for (let off = 0; off < padded.length; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (hh + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + k[i] + w[i]) >>> 0;
+      const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+      hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
+  }
+  return [...h].map((x) => x.toString(16).padStart(8, "0")).join("");
+}
+
+/** Ключ прежнего написания ФИО: как normalizePersonName на сервере. */
+export function teacherAliasKey(raw: string): string {
+  const name = String(raw || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("ru-RU")
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9\s-]/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return name ? sha256Hex(name).slice(0, 16) : "";
+}
+
+/**
+ * Старые ответы после чистки справочника (то же делает сервер, повтор безопасен):
+ * код убранного учителя → его ФИО, прежнее написание ФИО → запись справочника.
+ */
+export function applyTeacherAliases(
+  general: Record<string, string>,
+  directory: LessonVisitDirectory,
+): Record<string, string> {
+  const retired = directory.retiredTeachers || [];
+  const aliases = directory.teacherAliases || [];
+  if (!retired.length && !aliases.length) return general;
+  const tid = String(general.teacher_id || "").trim();
+  if (tid && directory.teachers.some((t) => t.id === tid)) return general;
+  const gone = tid ? retired.find((t) => t.id === tid) : undefined;
+  if (gone?.name) {
+    const out: Record<string, string> = { ...general, teacher_id: gone.name, teacher_name: gone.name, legacy_teacher_id: tid };
+    if (general.teacher) out.teacher = gone.name;
+    if (!String(general.department_id || "").trim() && gone.departmentId) out.department_id = gone.departmentId;
+    return out;
+  }
+  for (const field of ["teacher_id", "teacher_name", "teacher"]) {
+    const key = teacherAliasKey(general[field] || "");
+    if (!key) continue;
+    const alias = aliases.find((a) => a.key === key);
+    const target = alias && directory.teachers.find((t) => t.id === alias.teacherId);
+    if (!target) continue;
+    const out: Record<string, string> = { ...general, teacher_id: target.id, teacher_name: target.name };
+    if (general.teacher) out.teacher = target.name;
+    if (tid) out.legacy_teacher_id = tid;
+    return out;
+  }
+  return general;
+}
+
 export const REPORT_START = "2026-09-01";
 export const RATING_LABELS = [
   "Низкий",
@@ -493,7 +578,7 @@ export function buildLessonReport(
     return departmentName([...ids][0]) || null;
   };
   const visits: ReportVisit[] = rows.map((row) => {
-    const g = row.general;
+    const g = applyTeacherAliases(row.general || {}, directory);
     const get = (...keys: string[]) =>
       keys.map((k) => g[k]?.trim()).find(Boolean) || "";
     const teacherIdentifier = get("teacher_id");

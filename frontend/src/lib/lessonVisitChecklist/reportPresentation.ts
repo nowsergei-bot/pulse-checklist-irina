@@ -512,7 +512,7 @@ export function visitCoverage(
   const rosterKeys = new Set<string>();
   for (const t of directory.teachers) {
     const key = reportPersonKey(t.name);
-    if (!key || excluded.has(t.departmentId)) continue;
+    if (!key || excluded.has(t.departmentId) || t.coverage === false) continue;
     rosterKeys.add(key);
     unitsByKey.set(key, options.staffUnits?.[t.id] || []);
   }

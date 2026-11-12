@@ -5,6 +5,7 @@ import type {
   LessonVisitDirectory,
   LessonVisitResponseRow,
 } from "../lib/lessonVisitChecklist/types";
+import { withSeedRoster } from "../lib/lessonVisitChecklist/types";
 import {
   buildLessonReport,
   withSelfAnalysisLinks,
@@ -1284,7 +1285,7 @@ export default function VisitChecklistReportDashboard({
   responses,
   projectId,
   checklist,
-  directory,
+  directory: sourceDirectory,
   staffUnits,
   directorScreen,
   newTeacherIds,
@@ -1292,6 +1293,8 @@ export default function VisitChecklistReportDashboard({
   analyticsPath,
   now,
 }: Props) {
+  // Охват, «Кто не посещён» и отчёты считаем по справочнику формы, а не по снимку проекта в базе.
+  const directory = useMemo(() => withSeedRoster(sourceDirectory), [sourceDirectory]);
   const [params, setParams] = useSearchParams();
   const { user: profileUser } = useCabinetProfile();
   const canLinkAll = Boolean(profileUser?.permissions?.includes("*"));

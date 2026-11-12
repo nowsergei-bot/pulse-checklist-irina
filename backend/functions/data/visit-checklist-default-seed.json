@@ -867,7 +867,8 @@
       {
         "id": "teacher_33",
         "name": "Верболоз Екатерина Евгеньевна",
-        "departmentId": "dept_0"
+        "departmentId": "dept_0",
+        "coverage": false
       },
       {
         "id": "teacher_150",
@@ -997,7 +998,8 @@
       {
         "id": "teacher_191",
         "name": "Жукова Анна Игоревна",
-        "departmentId": "dept_8"
+        "departmentId": "dept_8",
+        "coverage": false
       },
       {
         "id": "teacher_59",
@@ -1402,7 +1404,8 @@
       {
         "id": "teacher_64",
         "name": "Савиных Иван Сергеевич",
-        "departmentId": "dept_5"
+        "departmentId": "dept_5",
+        "coverage": false
       },
       {
         "id": "teacher_108",

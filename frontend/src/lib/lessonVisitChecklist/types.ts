@@ -43,6 +43,8 @@ export interface LessonVisitTeacher {
   id: string;
   name: string;
   departmentId: string;
+  /** false: человек есть в форме, но не входит в охват «Посещено учителей». */
+  coverage?: boolean;
 }
 
 export interface LessonVisitDirectory {
@@ -110,6 +112,22 @@ export function defaultLessonVisitChecklist(): LessonVisitChecklistConfig {
 export function defaultLessonVisitDirectory(): LessonVisitDirectory {
   const seed = defaultSeed as { directory: LessonVisitDirectory };
   return structuredClone(seed.directory);
+}
+
+/**
+ * Справочник аналитики = справочник формы (seed), даже если сервер отдал старый снимок проекта.
+ * Кафедры, которых нет в seed, остаются из ответа сервера.
+ */
+export function withSeedRoster(source: LessonVisitDirectory | null | undefined): LessonVisitDirectory {
+  const seed = (defaultSeed as { directory: LessonVisitDirectory }).directory;
+  if (!seed?.teachers?.length) return source || { departments: [], teachers: [] };
+  const known = new Set(seed.departments.map((d) => d.id));
+  return {
+    departments: [...seed.departments, ...(source?.departments || []).filter((d) => !known.has(d.id))],
+    teachers: seed.teachers,
+    retiredTeachers: seed.retiredTeachers || [],
+    teacherAliases: seed.teacherAliases || [],
+  };
 }
 
 export function emptyLessonVisitDraft(title?: string): LessonVisitDraft {

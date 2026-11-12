@@ -55,6 +55,8 @@ import type {
   LessonVisitDirectory,
   LessonVisitResponseRow,
 } from "./types.ts";
+import { withSeedRoster } from "./types.ts";
+import { applyTeacherAliases, teacherAliasKey } from "./visitChecklistReport.ts";
 // Форма до 4.1 (действовала до 08.11.2026): старые чек-листы и их баллы.
 const seed = JSON.parse(
   readFileSync(new URL("./formV4.fixture.json", import.meta.url), "utf8"),
@@ -1000,9 +1002,13 @@ test("coverage over the real seed directory counts every listed teacher once", (
   ) as { directory: LessonVisitDirectory };
   const { teachers } = full.directory;
   const counted = teachers.filter(
-    (t) => t.departmentId !== "dept_admin" && t.departmentId !== "dept_academic",
+    (t) =>
+      t.departmentId !== "dept_admin" &&
+      t.departmentId !== "dept_academic" &&
+      t.coverage !== false,
   );
-  assert.equal(counted.length, 169);
+  assert.equal(counted.length, 166);
+  assert.equal(teachers.filter((t) => t.coverage === false).length, 3);
   assert.equal(new Set(teachers.map((t) => t.id)).size, teachers.length);
   const entry = (t: (typeof teachers)[number], visited: boolean) => ({
     key: reportPersonKey(t.name),
@@ -1014,16 +1020,16 @@ test("coverage over the real seed directory counts every listed teacher once", (
   });
   assert.equal(new Set(counted.map((t) => reportPersonKey(t.name))).size, counted.length);
   const none = visitCoverage(counted.map((t) => entry(t, false)), full.directory, {});
-  assert.equal(none.total, 169);
+  assert.equal(none.total, 166);
   assert.equal(none.visited, 0);
-  assert.equal(none.notVisited.length, 169);
+  assert.equal(none.notVisited.length, 166);
   const one = visitCoverage(
     counted.map((t, i) => entry(t, i === 0)),
     full.directory,
     {},
   );
   assert.equal(one.visited, 1);
-  assert.equal(one.notVisited.length, 168);
+  assert.equal(one.notVisited.length, 165);
 });
 
 // ---- Чек-лист 4.1 (с 09.11.2026): вымышленные учителя и ответы. ----
@@ -1348,4 +1354,81 @@ test("rows for removed and merged teachers keep the right name after directory c
   assert.equal(petrov.length, 1);
   assert.equal(petrov[0].visits.length, 2);
   assert.ok(report.teachers.some((t) => t.name === "Сидорова Ольга Олеговна"));
+});
+
+test("teacherAliasKey matches the server key: sha256 of the normalized name", () => {
+  assert.equal(teacherAliasKey("abc"), "ba7816bf8f01cfea");
+  assert.equal(teacherAliasKey("  ABC "), "ba7816bf8f01cfea");
+  assert.equal(teacherAliasKey(""), "");
+});
+
+test("summary coverage uses the form roster of 166, not a stale project snapshot", () => {
+  const full = JSON.parse(
+    readFileSync(new URL("./defaultSeed.json", import.meta.url), "utf8"),
+  ) as { directory: LessonVisitDirectory };
+  const seedDir = full.directory;
+  const retired = seedDir.retiredTeachers || [];
+  assert.ok(retired.length > 0);
+  // Снимок проекта в базе: старый справочник с убранными учителями и лишними записями.
+  const stale: LessonVisitDirectory = {
+    departments: seedDir.departments,
+    teachers: [
+      ...seedDir.teachers,
+      ...retired,
+      ...Array.from({ length: 11 }, (_, i) => ({ id: `stale_${i}`, name: `Учитель Снимок${i} Тестович`, departmentId: "dept_2" })),
+    ],
+  };
+  const dir = withSeedRoster(stale);
+  assert.equal(dir.teachers.length, seedDir.teachers.length);
+  const rows: LessonVisitResponseRow[] = retired.slice(0, 2).map((t, i) => ({
+    id: 900 + i,
+    created_at: "2026-10-01",
+    general: { teacher_id: t.id, visit_date: "2026-10-01", subject: "Предмет", class_name: "5А", visit_format: "Наблюдение" },
+    answers: { "10.1": "высокий" },
+  }));
+  const report = buildLessonReport(rows, seed, dir, new Date("2026-10-06T12:00:00Z"));
+  const coverage = visitCoverage(report.teachers, dir, {});
+  assert.equal(coverage.total, 166);
+  assert.equal(coverage.visited, 0);
+  assert.equal(coverage.notVisited.length, 166);
+  const missing = new Set(coverage.notVisited.map((r) => r.name));
+  for (const t of retired) assert.equal(missing.has(t.name), false);
+  // Старые чек-листы на убранных учителей видны с их ФИО.
+  assert.deepEqual(report.visits.map((v) => v.teacher).sort(), retired.slice(0, 2).map((t) => t.name).sort());
+});
+
+test("old checklists on merged records count as one teacher in coverage", () => {
+  const dir: LessonVisitDirectory = {
+    departments: [{ id: "d", name: "Математика" }],
+    teachers: [
+      { id: "a", name: "Учитель Первый Тестович", departmentId: "d" },
+      { id: "b", name: "Учитель Второй Тестович", departmentId: "d" },
+    ],
+    retiredTeachers: [{ id: "gone", name: "Учитель Ушедший Тестович", departmentId: "d" }],
+    teacherAliases: [{ key: teacherAliasKey("First Teacher"), teacherId: "a" }],
+  };
+  const make = (id: number, general: Record<string, string>): LessonVisitResponseRow => ({
+    id,
+    created_at: "2026-09-15",
+    general: { visit_date: "2026-09-15", subject: "Математика", class_name: "5А", visit_format: "Наблюдение", ...general },
+    answers: { "10.1": "высокий" },
+  });
+  const rows = [
+    make(1, { teacher_id: "a" }),
+    make(2, { teacher_id: "First  Teacher" }),
+    make(3, { teacher_id: "", teacher_name: "first teacher" }),
+    make(4, { teacher_id: "gone" }),
+  ];
+  const report = buildLessonReport(rows, seed, dir, now);
+  const first = report.teachers.filter((t) => t.name === "Учитель Первый Тестович");
+  assert.equal(first.length, 1);
+  assert.equal(first[0].visits.length, 3);
+  const coverage = visitCoverage(report.teachers, dir, {});
+  assert.equal(coverage.total, 2);
+  assert.equal(coverage.visited, 1);
+  assert.deepEqual(coverage.notVisited.map((r) => r.name), ["Учитель Второй Тестович"]);
+  assert.equal(report.visits.find((v) => v.id === 4)?.teacher, "Учитель Ушедший Тестович");
+  // Повторная обработка (сервер уже применил) ничего не меняет.
+  const once = applyTeacherAliases({ teacher_id: "gone" }, dir);
+  assert.deepEqual(applyTeacherAliases(once, dir), once);
 });
