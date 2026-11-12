@@ -9,6 +9,7 @@ const {
   pickLatestSharedVisitChecklist,
   buildTeacherUnitMap,
   sanitizeNewTeacherIds,
+  applyTeacherAliases,
 } = require('./lib/lesson-visit-checklist');
 const { buildProjectGetPayload } = require('./lib/project-get-payload');
 const { resolveProjectOwner } = require('./lib/resolve-project-owner');
@@ -189,7 +190,7 @@ async function listResponseRows(pool, projectId, limit = 5000) {
     return {
       id: row.id,
       created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-      general: aj.general && typeof aj.general === 'object' ? aj.general : {},
+      general: applyTeacherAliases(aj.general && typeof aj.general === 'object' ? aj.general : {}),
       answers: aj.answers && typeof aj.answers === 'object' ? aj.answers : {},
     };
   });

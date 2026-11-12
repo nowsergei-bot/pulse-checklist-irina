@@ -8,6 +8,7 @@ const {
   resolveTeacherLabelFromSchedule,
 } = require('./visit-checklist-schedule-match');
 const { isSelfAnalysisFormat, pickVisitFormat } = require('./visit-checklist-format');
+const { applyTeacherAliases } = require('./lesson-visit-checklist');
 
 const UNKNOWN_TEACHER_LABEL = 'Педагог без ФИО';
 
@@ -53,7 +54,7 @@ function looksLikeTeacherCode(raw) {
 function displayTeacherLabel(raw, directory, seedDirectory) {
   const label = collapseSpaces(raw);
   if (!label) return UNKNOWN_TEACHER_LABEL;
-  if (looksLikeTeacherCode(label)) {
+  if (looksLikeTeacherCode(label) || applyTeacherAliases({ teacher_id: label }).teacher_id !== label) {
     return resolveTeacherName({ teacher_id: label }, directory, seedDirectory);
   }
   const hit = findTeacherByLooseName(directoryTeachers(directory, seedDirectory), label);
@@ -128,13 +129,16 @@ function parseVisitPhrase(phrase) {
 }
 
 function resolveTeacherName(general, directory, seedDirectory) {
-  const g = general && typeof general === 'object' ? general : {};
+  const raw = general && typeof general === 'object' ? general : {};
+  const seed = seedDirectory && typeof seedDirectory === 'object' ? seedDirectory : loadSeedDirectory();
+  const rawId = collapseSpaces(raw.teacher_id);
+  const listed = findDirectoryRow(directory && directory.teachers, rawId) || findDirectoryRow(seed.teachers, rawId);
+  const g = listed ? raw : applyTeacherAliases(raw);
   const teacherId = collapseSpaces(g.teacher_id);
   const named = collapseSpaces(g.teacher_name || g.teacher);
   const projectHit = findDirectoryRow(directory && directory.teachers, teacherId);
   const projectName = projectHit ? collapseSpaces(projectHit.name) : '';
   if (projectName && !looksLikeTeacherCode(projectName)) return projectName;
-  const seed = seedDirectory && typeof seedDirectory === 'object' ? seedDirectory : loadSeedDirectory();
   const seedHit = findDirectoryRow(seed.teachers, teacherId);
   const seedName = seedHit ? collapseSpaces(seedHit.name) : '';
   if (seedName && !looksLikeTeacherCode(seedName)) return seedName;
@@ -146,7 +150,11 @@ function resolveTeacherName(general, directory, seedDirectory) {
 }
 
 function resolveTeacherIdentity(general, directory, seedDirectory) {
-  const g = general && typeof general === 'object' ? general : {};
+  const raw = general && typeof general === 'object' ? general : {};
+  const seed = seedDirectory && typeof seedDirectory === 'object' ? seedDirectory : loadSeedDirectory();
+  const rawId = collapseSpaces(raw.teacher_id);
+  const listed = findDirectoryRow(directory && directory.teachers, rawId) || findDirectoryRow(seed.teachers, rawId);
+  const g = listed ? raw : applyTeacherAliases(raw);
   const teacherId = collapseSpaces(g.teacher_id);
   const label = resolveTeacherName(g, directory, seedDirectory);
   const key = teacherKey(teacherId || label);
@@ -313,7 +321,7 @@ function parseResponseRow(row) {
   return {
     id: Number(row.id),
     created_at: row.created_at,
-    general: raw.general && typeof raw.general === 'object' ? raw.general : {},
+    general: applyTeacherAliases(raw.general && typeof raw.general === 'object' ? raw.general : {}),
     answers: raw.answers && typeof raw.answers === 'object' ? raw.answers : {},
   };
 }

@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { normalizePersonName } = require('./english-assessment-match');
@@ -72,7 +73,53 @@ function loadSeedDirectory() {
   return {
     departments: Array.isArray(dir.departments) ? dir.departments : [],
     teachers: Array.isArray(dir.teachers) ? dir.teachers : [],
+    retiredTeachers: Array.isArray(dir.retiredTeachers) ? dir.retiredTeachers : [],
+    teacherAliases: Array.isArray(dir.teacherAliases) ? dir.teacherAliases : [],
   };
+}
+
+/** Ключ написания ФИО для teacherAliases: в открытом репозитории храним не имя, а его хеш. */
+function teacherAliasKey(raw) {
+  const name = normalizePersonName(raw);
+  return name ? crypto.createHash('sha256').update(name).digest('hex').slice(0, 16) : '';
+}
+
+/**
+ * Старые ответы после чистки справочника.
+ * Код убранного учителя (retiredTeachers) заменяется его ФИО: так старые ответы хранили имя
+ * в teacher_id, и все экраны это понимают. Прежнее написание ФИО (teacherAliases)
+ * переводится на запись справочника, чтобы склеенные записи считались одним учителем.
+ * Исходный код остаётся в legacy_teacher_id. Ответ в базе не меняется.
+ */
+function applyTeacherAliases(general, directory) {
+  const g = general && typeof general === 'object' ? general : {};
+  const dir = directory && typeof directory === 'object' ? directory : loadSeedDirectory();
+  const teachers = Array.isArray(dir.teachers) ? dir.teachers : [];
+  const retired = Array.isArray(dir.retiredTeachers) ? dir.retiredTeachers : [];
+  const aliases = Array.isArray(dir.teacherAliases) ? dir.teacherAliases : [];
+  if (!retired.length && !aliases.length) return g;
+  const tid = String(g.teacher_id || '').trim();
+  if (tid && teachers.some((t) => t && String(t.id) === tid)) return g;
+  const gone = tid ? retired.find((t) => t && String(t.id) === tid) : null;
+  if (gone && gone.name) {
+    const out = { ...g, teacher_id: gone.name, teacher_name: gone.name, legacy_teacher_id: tid };
+    if (g.teacher) out.teacher = gone.name;
+    if (!String(g.department_id || '').trim() && gone.departmentId) out.department_id = gone.departmentId;
+    return out;
+  }
+  if (!aliases.length) return g;
+  for (const field of ['teacher_id', 'teacher_name', 'teacher']) {
+    const key = teacherAliasKey(g[field]);
+    if (!key) continue;
+    const alias = aliases.find((a) => a && a.key === key);
+    const target = alias && teachers.find((t) => t && String(t.id) === String(alias.teacherId));
+    if (!target) continue;
+    const out = { ...g, teacher_id: String(target.id), teacher_name: target.name };
+    if (g.teacher) out.teacher = target.name;
+    if (tid) out.legacy_teacher_id = tid;
+    return out;
+  }
+  return g;
 }
 
 /** Публичная форма: актуальный seed важнее снимка проекта в БД. */
@@ -466,6 +513,8 @@ module.exports = {
   ensureChecklistFormV41,
   VISIT_CHECKLIST_FORM_VERSION,
   loadSeedDirectory,
+  applyTeacherAliases,
+  teacherAliasKey,
   resolvePublicLessonVisitDirectory,
   buildTeacherUnitMap,
   sanitizeNewTeacherIds,

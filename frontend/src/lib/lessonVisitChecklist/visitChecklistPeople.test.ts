@@ -58,7 +58,7 @@ test('visitor groups keep only four surnames in Administration', () => {
   );
   const names = visitChecklistVisitorNames(directory);
   assert.equal(new Set(names).size, names.length);
-  assert.equal(names.length, 189);
+  assert.equal(names.length, 190);
 });
 
 test('former Administration people sit in their staff/JD subdivisions', () => {
@@ -133,7 +133,7 @@ test('visitor and teacher lists merge Campus 1+2 and drop UVP sections', () => {
 
 test('observed teachers exclude administration and academic office', () => {
   const chairs = visitChecklistObservedTeachers(directory);
-  assert.equal(chairs.length, 177);
+  assert.equal(chairs.length, 169);
   assert.equal(chairs.some((t) => t.departmentId === VISIT_ADMIN_DEPT_ID), false);
   assert.equal(chairs.some((t) => t.departmentId === VISIT_ACADEMIC_DEPT_ID), false);
   assert.deepEqual(
@@ -141,7 +141,7 @@ test('observed teachers exclude administration and academic office', () => {
     false,
   );
   const leadership = visitChecklistObservedTeachers(directory, 'dept_8');
-  assert.equal(leadership.length, 5);
+  assert.equal(leadership.length, 4);
   const groups = visitChecklistObservedTeacherGroups(directory);
   assert.ok(groups.some((g) => g.heading === 'Кафедра лидерства' && g.choices.includes('Круглова Галина Игоревна')));
   assert.equal(groups.some((g) => g.heading === 'Администрация'), false);
@@ -202,4 +202,23 @@ test('teacher162-style ids are unknown unless the directory has a real FIO', () 
   assert.equal(isKnownVisitTeacherResponse({ general: { teacher_id: 'teacher162' } }, directory), false);
   assert.equal(isKnownVisitTeacherResponse({ general: { teacher_id: 'teacher_162' } }, directory), true);
   assert.equal(isKnownVisitTeacherResponse({ general: { teacher_name: 'Петрова Анна' } }, directory), true);
+});
+
+test('teachers removed from the list stay in visitor choices but not in observed teachers', () => {
+  const dir: LessonVisitDirectory = {
+    departments: [{ id: 'dept_q', name: 'Кафедра математики и информатики' }],
+    teachers: [{ id: 't_a', name: 'Учитель Первый Тестович', departmentId: 'dept_q' }],
+    retiredTeachers: [{ id: 't_gone', name: 'Учитель Ушедший Тестович', departmentId: 'dept_q' }],
+  };
+  assert.deepEqual(visitChecklistObservedTeachers(dir).map((t) => t.id), ['t_a']);
+  assert.deepEqual(visitChecklistVisitorNames(dir), ['Учитель Ушедший Тестович', 'Учитель Первый Тестович'].sort((a, b) => a.localeCompare(b, 'ru')));
+  const seedDir = directory;
+  const retired = seedDir.retiredTeachers || [];
+  assert.ok(retired.length > 0);
+  const observed = new Set(visitChecklistObservedTeachers(seedDir).map((t) => t.id));
+  const visitors = new Set(visitChecklistVisitorNames(seedDir));
+  for (const t of retired) {
+    assert.equal(observed.has(t.id), false);
+    assert.equal(visitors.has(t.name), true);
+  }
 });

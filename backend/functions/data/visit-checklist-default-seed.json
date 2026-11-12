@@ -850,11 +850,6 @@
         "departmentId": "dept_9"
       },
       {
-        "id": "teacher_189",
-        "name": "Васенкова Елена Владимировна",
-        "departmentId": "dept_8"
-      },
-      {
         "id": "teacher_176",
         "name": "Васильева Валерия Анатольевна",
         "departmentId": "dept_1"
@@ -898,11 +893,6 @@
         "id": "teacher_36",
         "name": "Волкова Ольга Ивановна",
         "departmentId": "dept_2"
-      },
-      {
-        "id": "staff_academic_vorobeva",
-        "name": "Воробьева Лидия Анатольевна",
-        "departmentId": "dept_academic"
       },
       {
         "id": "teacher_38",
@@ -1035,11 +1025,6 @@
         "departmentId": "dept_4"
       },
       {
-        "id": "staff_academic_zubova",
-        "name": "Зубова Кристина Андреевна",
-        "departmentId": "dept_academic"
-      },
-      {
         "id": "teacher_63",
         "name": "Зыков Михаил Анатольевич",
         "departmentId": "dept_4"
@@ -1113,11 +1098,6 @@
         "id": "teacher_73",
         "name": "Коновалова Елена Игоревна",
         "departmentId": "dept_0"
-      },
-      {
-        "id": "teacher_170",
-        "name": "Конрад Кристина Олеговна",
-        "departmentId": "dept_9"
       },
       {
         "id": "teacher_115",
@@ -1200,11 +1180,6 @@
         "departmentId": "dept_0"
       },
       {
-        "id": "teacher_185",
-        "name": "Лоскутов Дмитрий Алексеевич",
-        "departmentId": "dept_6"
-      },
-      {
         "id": "teacher_86",
         "name": "Любимов Сергей Евгеньевич",
         "departmentId": "dept_4"
@@ -1263,11 +1238,6 @@
         "id": "teacher_65",
         "name": "Матвеев Игорь Алексеевич",
         "departmentId": "dept_1"
-      },
-      {
-        "id": "teacher_97",
-        "name": "Матюхин Андрей Николаевич",
-        "departmentId": "dept_5"
       },
       {
         "id": "teacher_164",
@@ -1370,11 +1340,6 @@
         "departmentId": "dept_0"
       },
       {
-        "id": "staff_academic_petrova",
-        "name": "Петрова Наталья Витальевна",
-        "departmentId": "dept_academic"
-      },
-      {
         "id": "teacher_106",
         "name": "Петрушевски Никола",
         "departmentId": "dept_9"
@@ -1450,6 +1415,11 @@
         "departmentId": "dept_2"
       },
       {
+        "id": "teacher_193",
+        "name": "Свертилова Ксения Александровна",
+        "departmentId": "dept_9"
+      },
+      {
         "id": "teacher_116",
         "name": "Слонимский Денис Львович",
         "departmentId": "dept_2"
@@ -1461,7 +1431,7 @@
       },
       {
         "id": "teacher_8",
-        "name": "Собакина Алина Михайловна",
+        "name": "Марковкина Алина Михайловна",
         "departmentId": "dept_0"
       },
       {
@@ -1550,11 +1520,6 @@
         "departmentId": "dept_admin"
       },
       {
-        "id": "teacher_183",
-        "name": "Федоров Олег Дмитриевич",
-        "departmentId": "dept_4"
-      },
-      {
         "id": "teacher_129",
         "name": "Фешина Юлия Владимировна",
         "departmentId": "dept_2"
@@ -1595,11 +1560,6 @@
         "departmentId": "dept_admin"
       },
       {
-        "id": "teacher_133",
-        "name": "Чаплыгина Мария Олеговна",
-        "departmentId": "dept_0"
-      },
-      {
         "id": "teacher_68",
         "name": "Шагинян Кристина Левановна",
         "departmentId": "dept_0"
@@ -1622,11 +1582,6 @@
       {
         "id": "teacher_136",
         "name": "Шаров Владимир Юрьевич",
-        "departmentId": "dept_5"
-      },
-      {
-        "id": "teacher_137",
-        "name": "Шевченко Елена Сергеевна",
         "departmentId": "dept_5"
       },
       {
@@ -1675,6 +1630,63 @@
         "departmentId": "dept_2"
       },
       {
+        "id": "teacher_171",
+        "name": "Конрад Пол Франсиско",
+        "departmentId": "dept_9"
+      }
+    ],
+    "retiredTeachers": [
+      {
+        "id": "teacher_189",
+        "name": "Васенкова Елена Владимировна",
+        "departmentId": "dept_8"
+      },
+      {
+        "id": "staff_academic_vorobeva",
+        "name": "Воробьева Лидия Анатольевна",
+        "departmentId": "dept_academic"
+      },
+      {
+        "id": "staff_academic_zubova",
+        "name": "Зубова Кристина Андреевна",
+        "departmentId": "dept_academic"
+      },
+      {
+        "id": "teacher_170",
+        "name": "Конрад Кристина Олеговна",
+        "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_185",
+        "name": "Лоскутов Дмитрий Алексеевич",
+        "departmentId": "dept_6"
+      },
+      {
+        "id": "teacher_97",
+        "name": "Матюхин Андрей Николаевич",
+        "departmentId": "dept_5"
+      },
+      {
+        "id": "staff_academic_petrova",
+        "name": "Петрова Наталья Витальевна",
+        "departmentId": "dept_academic"
+      },
+      {
+        "id": "teacher_183",
+        "name": "Федоров Олег Дмитриевич",
+        "departmentId": "dept_4"
+      },
+      {
+        "id": "teacher_133",
+        "name": "Чаплыгина Мария Олеговна",
+        "departmentId": "dept_0"
+      },
+      {
+        "id": "teacher_137",
+        "name": "Шевченко Елена Сергеевна",
+        "departmentId": "dept_5"
+      },
+      {
         "id": "teacher_166",
         "name": "Elena Rasmussen",
         "departmentId": "dept_9"
@@ -1683,11 +1695,24 @@
         "id": "teacher_167",
         "name": "Gary Krautkramer",
         "departmentId": "dept_9"
+      }
+    ],
+    "teacherAliases": [
+      {
+        "key": "5b72cf67345f728c",
+        "teacherId": "teacher_171"
       },
       {
-        "id": "teacher_171",
-        "name": "Paul Conrad",
-        "departmentId": "dept_9"
+        "key": "f6540426578a1d5b",
+        "teacherId": "teacher_164"
+      },
+      {
+        "key": "eaac05bc9ac29e9c",
+        "teacherId": "teacher_165"
+      },
+      {
+        "key": "0c436918b99b6be3",
+        "teacherId": "teacher_8"
       }
     ]
   }

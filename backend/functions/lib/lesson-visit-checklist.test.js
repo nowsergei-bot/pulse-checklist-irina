@@ -12,6 +12,8 @@ const {
   buildTeacherUnitMap,
   sanitizeNewTeacherIds,
   loadSeedDirectory,
+  applyTeacherAliases,
+  teacherAliasKey,
 } = require('./lesson-visit-checklist');
 
 test('displayVisitChecklistTitle strips 4.0 from user-visible names', () => {
@@ -796,3 +798,61 @@ test('the switch has the same value on the server and in the interface', () => {
   assert.equal(m[1] === 'true', phenomenonLib.PHENOMENON_OPEN_FOR_ALL);
 });
 }
+
+// Чистка справочника: старые ответы на убранных и склеенных учителей. Данные обезличены.
+const ALIAS_DIRECTORY = {
+  departments: [{ id: 'dept_q', name: 'Кафедра Q' }],
+  teachers: [{ id: 'teacher_a', name: 'Учитель Первый Тестович', departmentId: 'dept_q' }],
+  retiredTeachers: [{ id: 'teacher_gone', name: 'Учитель Ушедший Тестович', departmentId: 'dept_q' }],
+  teacherAliases: [{ key: teacherAliasKey('First Teacher'), teacherId: 'teacher_a' }],
+};
+
+test('applyTeacherAliases shows a retired teacher by name and keeps the old code', () => {
+  const general = { teacher_id: 'teacher_gone', visit_date: '2026-10-01' };
+  const out = applyTeacherAliases(general, ALIAS_DIRECTORY);
+  assert.equal(out.teacher_id, 'Учитель Ушедший Тестович');
+  assert.equal(out.teacher_name, 'Учитель Ушедший Тестович');
+  assert.equal(out.legacy_teacher_id, 'teacher_gone');
+  assert.equal(out.department_id, 'dept_q');
+  assert.equal(out.visit_date, '2026-10-01');
+  assert.deepEqual(general, { teacher_id: 'teacher_gone', visit_date: '2026-10-01' });
+});
+
+test('applyTeacherAliases merges an old spelling into the directory record', () => {
+  for (const general of [
+    { teacher_id: 'First  Teacher' },
+    { teacher_id: '', teacher_name: 'first teacher' },
+    { teacher: 'FIRST TEACHER' },
+  ]) {
+    const out = applyTeacherAliases(general, ALIAS_DIRECTORY);
+    assert.equal(out.teacher_id, 'teacher_a');
+    assert.equal(out.teacher_name, 'Учитель Первый Тестович');
+  }
+  const active = { teacher_id: 'teacher_a', teacher_name: 'First Teacher' };
+  assert.equal(applyTeacherAliases(active, ALIAS_DIRECTORY), active);
+  const other = { teacher_id: 'Другой Учитель' };
+  assert.equal(applyTeacherAliases(other, ALIAS_DIRECTORY), other);
+});
+
+test('seed directory keeps every removed and merged teacher resolvable', () => {
+  const dir = loadSeedDirectory();
+  const active = new Set(dir.teachers.map((t) => t.id));
+  assert.ok(dir.retiredTeachers.length > 0);
+  for (const gone of dir.retiredTeachers) {
+    assert.equal(active.has(gone.id), false);
+    assert.ok(String(gone.name || '').trim());
+    const out = applyTeacherAliases({ teacher_id: gone.id });
+    assert.equal(out.teacher_name, gone.name);
+    assert.equal(out.legacy_teacher_id, gone.id);
+  }
+  const keys = new Set();
+  for (const alias of dir.teacherAliases) {
+    assert.match(alias.key, /^[0-9a-f]{16}$/);
+    assert.ok(active.has(alias.teacherId));
+    assert.equal(keys.has(alias.key), false);
+    keys.add(alias.key);
+  }
+  for (const teacher of dir.teachers) {
+    assert.equal(keys.has(teacherAliasKey(teacher.name)), false);
+  }
+});

@@ -1002,7 +1002,7 @@ test("coverage over the real seed directory counts every listed teacher once", (
   const counted = teachers.filter(
     (t) => t.departmentId !== "dept_admin" && t.departmentId !== "dept_academic",
   );
-  assert.equal(counted.length, 177);
+  assert.equal(counted.length, 169);
   assert.equal(new Set(teachers.map((t) => t.id)).size, teachers.length);
   const entry = (t: (typeof teachers)[number], visited: boolean) => ({
     key: reportPersonKey(t.name),
@@ -1014,16 +1014,16 @@ test("coverage over the real seed directory counts every listed teacher once", (
   });
   assert.equal(new Set(counted.map((t) => reportPersonKey(t.name))).size, counted.length);
   const none = visitCoverage(counted.map((t) => entry(t, false)), full.directory, {});
-  assert.equal(none.total, 177);
+  assert.equal(none.total, 169);
   assert.equal(none.visited, 0);
-  assert.equal(none.notVisited.length, 177);
+  assert.equal(none.notVisited.length, 169);
   const one = visitCoverage(
     counted.map((t, i) => entry(t, i === 0)),
     full.directory,
     {},
   );
   assert.equal(one.visited, 1);
-  assert.equal(one.notVisited.length, 176);
+  assert.equal(one.notVisited.length, 168);
 });
 
 // ---- Чек-лист 4.1 (с 09.11.2026): вымышленные учителя и ответы. ----
@@ -1239,6 +1239,20 @@ test("v4.1 report: observer department from the directory, practice falls back t
     new Date("2026-11-20T12:00:00Z"),
   ).visits[0];
   assert.equal(unknown.score.items.find((i) => i.code === "4.2")?.value, 10);
+  // Наблюдатель убран из списка учителей: его кафедра для старых чек-листов не теряется.
+  const retiredDir: LessonVisitDirectory = {
+    ...dir,
+    teachers: [dir.teachers[0]],
+    retiredTeachers: [dir.teachers[1]],
+  };
+  const retired = buildLessonReport(
+    [visit("2026-11-10", "Наблюдатель Второй Тестович")],
+    formV41,
+    retiredDir,
+    new Date("2026-11-20T12:00:00Z"),
+  ).visits[0];
+  assert.equal(retired.score.items.find((i) => i.code === "4.2")?.na, true);
+  assert.deepEqual(retired.score, v.score);
 });
 
 test("ТЗ 8: a 05.11.2026 checklist scores the same before and after the v4.1 form update", () => {
@@ -1304,4 +1318,34 @@ test("a late v4.1 form for an earlier lesson is scored by v4.1 rules", () => {
   assert.equal(score.items[0].version, RUBRIC_V41_VERSION);
   const old = directLessonScore(formV41, { [v41Q("1.1").id]: "готов" }, { date: "2026-11-06" });
   assert.equal(old.items[0].version, "pulse-100-v4-2026-10-05");
+});
+test("rows for removed and merged teachers keep the right name after directory cleanup", () => {
+  // Так сервер отдаёт старые ответы: код убранного учителя заменён ФИО,
+  // прежнее написание ФИО переведено на запись справочника.
+  const retired = row(31, "2026-09-15");
+  retired.general = {
+    ...retired.general,
+    teacher_id: "Сидорова Ольга Олеговна",
+    teacher_name: "Сидорова Ольга Олеговна",
+    legacy_teacher_id: "teacher_gone",
+    department_id: "d",
+  };
+  const merged = row(32, "2026-09-16");
+  merged.general = {
+    ...merged.general,
+    teacher_id: "b",
+    teacher_name: "Петров Пётр Петрович",
+    legacy_teacher_id: "Old Spelling",
+  };
+  const current = row(33, "2026-09-17");
+  current.general = { ...current.general, teacher_id: "b" };
+  const report = buildLessonReport([retired, merged, current], seed, directory, now);
+  const byId = new Map(report.visits.map((v) => [v.id, v]));
+  assert.equal(byId.get(31)?.teacher, "Сидорова Ольга Олеговна");
+  assert.equal(byId.get(31)?.department, "Математика");
+  assert.equal(byId.get(32)?.teacher, "Петров Пётр Петрович");
+  const petrov = report.teachers.filter((t) => t.name === "Петров Пётр Петрович");
+  assert.equal(petrov.length, 1);
+  assert.equal(petrov[0].visits.length, 2);
+  assert.ok(report.teachers.some((t) => t.name === "Сидорова Ольга Олеговна"));
 });

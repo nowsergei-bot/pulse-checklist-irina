@@ -479,7 +479,8 @@ export function buildLessonReport(
       });
   }
   const departmentIdsByPerson = new Map<string, Set<string>>();
-  for (const teacher of directory.teachers) {
+  // Убранные из списка учителей остаются наблюдателями старых чек-листов.
+  for (const teacher of [...directory.teachers, ...(directory.retiredTeachers || [])]) {
     const key = reportPersonKey(teacher.name);
     if (!key) continue;
     if (!departmentIdsByPerson.has(key)) departmentIdsByPerson.set(key, new Set());

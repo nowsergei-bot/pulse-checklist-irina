@@ -48,6 +48,10 @@ export interface LessonVisitTeacher {
 export interface LessonVisitDirectory {
   departments: LessonVisitDepartment[];
   teachers: LessonVisitTeacher[];
+  /** Убраны из списка учителей: нужны для старых чек-листов и как посетившие урок. */
+  retiredTeachers?: LessonVisitTeacher[];
+  /** Прежние написания ФИО (хеш) → запись справочника; применяет сервер. */
+  teacherAliases?: { key: string; teacherId: string }[];
 }
 
 export interface LessonVisitChecklistConfig {

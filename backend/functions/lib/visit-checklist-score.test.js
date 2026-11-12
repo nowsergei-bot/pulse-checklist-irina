@@ -10,6 +10,7 @@ const {
   scoreProjectResponses,
   aggregateDashboardKpis,
 } = require('./visit-checklist-score');
+const { loadSeedDirectory } = require('./lesson-visit-checklist');
 
 const CHECKLIST = {
   sections: [
@@ -297,4 +298,22 @@ test('aggregateDashboardKpis builds traffic-light slices for chairs, teachers, l
   assert.equal(kpis.charts.by_visitor[0].name, 'Методист');
   assert.equal(kpis.charts.by_ordinal[0].name, 'высокий');
   assert.equal(kpis.charts.trend[0].name, '2026-09-01');
+});
+
+test('old checklists on removed teachers keep the directory name in reports', () => {
+  const seed = loadSeedDirectory();
+  const draft = { checklist: CHECKLIST, directory: seed };
+  assert.ok(seed.retiredTeachers.length > 0);
+  for (const gone of seed.retiredTeachers) {
+    assert.equal(resolveTeacherName({ teacher_id: gone.id }, seed, seed), gone.name);
+    assert.equal(displayTeacherLabel(gone.id, seed, seed), gone.name);
+    const rows = [1, 2].map((id) => ({
+      id,
+      created_at: '2026-10-01',
+      answers_json: { general: { teacher_id: gone.id, visit_date: `2026-10-0${id}` }, answers: {} },
+    }));
+    const teachers = scoreProjectResponses(draft, rows);
+    assert.equal(teachers.length, 1);
+    assert.equal(teachers[0].stats.teacher_label, gone.name);
+  }
 });
