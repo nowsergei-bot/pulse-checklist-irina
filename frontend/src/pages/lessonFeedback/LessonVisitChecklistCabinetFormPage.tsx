@@ -718,7 +718,7 @@ export function PhenomenonResultsTable({ records }: { records: PhenomenonRecord[
 }
 
 /** Страница кабинета: форма на двух языках и, для группы аналитики, таблица результатов. */
-function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolean }) {
+export function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolean }) {
   const { user } = useCabinetProfile();
   const [locale, setLocale] = useState<PhenomenonLocale>(readLocale);
   const [directory, setDirectory] = useState<LessonVisitDirectory | null>(null);

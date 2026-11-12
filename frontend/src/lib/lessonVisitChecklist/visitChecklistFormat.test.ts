@@ -257,5 +257,9 @@ describe('phenomenon checklist', () => {
     assert.match(page, /access === 'denied'/);
     const cabinet = readFileSync(fileURLToPath(new URL('../../pages/lessonFeedback/LessonVisitChecklistCabinetFormPage.tsx', import.meta.url)), 'utf8');
     assert.match(cabinet, /\{showPhenomenon \? \(/);
+    // Прямая ссылка /view/lesson-visit/phenomenon-lesson-2026 открывает сразу форму феноменального урока.
+    const publicPage = readFileSync(fileURLToPath(new URL('../../pages/LessonVisitChecklistPublicPage.tsx', import.meta.url)), 'utf8');
+    assert.match(publicPage, /decodeURIComponent\(rawToken\) === PHENOMENON_FORM_TOKEN/);
+    assert.match(publicPage, /<PhenomenonChecklistPage embedded=\{false\} \/>/);
   });
 });

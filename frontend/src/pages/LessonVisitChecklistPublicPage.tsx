@@ -2,6 +2,7 @@ import '../styles/publicForm.css';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { PhenomenonChecklistPage } from './lessonFeedback/LessonVisitChecklistCabinetFormPage';
 import { getPublicLessonVisitForm, postPublicLessonVisitResponse } from '../api/visitChecklist';
 import PlatformFeedbackModal from '../components/PlatformFeedbackModal';
 import PublicCampusSlideshow from '../components/PublicCampusSlideshow';
@@ -40,6 +41,7 @@ import {
 } from '../lib/lessonVisitChecklist/normalizeChecklist';
 import {
   answersForVisibleQuestions,
+  PHENOMENON_FORM_TOKEN,
   preferredVisitFormatFromQuery,
   visibleLessonVisitChecklist,
   VISIT_FORMAT_QUERY,
@@ -494,6 +496,11 @@ export function LessonVisitChecklistForm({
 }
 
 export default function LessonVisitChecklistPublicPage() {
+  const { token: rawToken } = useParams();
+  // Прямая ссылка на чек-лист феноменального урока: /view/lesson-visit/phenomenon-lesson-2026.
+  if (rawToken && decodeURIComponent(rawToken) === PHENOMENON_FORM_TOKEN) {
+    return <PhenomenonChecklistPage embedded={false} />;
+  }
   return <LessonVisitChecklistForm />;
 }
 
