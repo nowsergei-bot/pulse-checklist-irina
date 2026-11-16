@@ -835,6 +835,7 @@ export type PhenomenonRecord = {
   teacher2: string;
   teacher1Key: string;
   teacher2Key: string;
+  /** Дата + пара педагогов. Окончательный урок: summarizePhenomenonLessons / phenomenonLessonByRecord. */
   lessonKey: string;
   score: PhenomenonScore;
   mastery1: number | null;
@@ -847,14 +848,55 @@ function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim();
 }
 
-function classKey(raw: string): string {
-  return personKey(raw).replace(/[\s«»"'-]/g, '');
+/** № урока в форме: выбор из списка. */
+export const PHENOMENON_LESSON_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+
+/**
+ * № урока из записи: первое число 1-9 («3», «3 урок», «3rd period»). Время («11:50-12:30»),
+ * номер кабинета и пустое поле дают null.
+ */
+export function parsePhenomenonLessonNumber(raw: string): number | null {
+  const m = /\d+/.exec(String(raw || ''));
+  if (!m) return null;
+  const n = Number(m[0]);
+  return n >= 1 && n <= 9 && !/^\s*\d{1,2}[:.]\d{2}/.test(String(raw)) ? n : null;
 }
 
-/** Урок = пара педагогов (без учёта порядка) + дата + класс. */
-export function phenomenonLessonKey(r: Pick<PhenomenonRecord, 'date' | 'className' | 'teacher1Key' | 'teacher2Key'>): string {
-  const pair = [r.teacher1Key, r.teacher2Key].sort().join('+');
-  return `${r.date}|${classKey(r.className)}|${pair}`;
+/** Латинские буквы, которые пишут вместо русских в названии класса («4AC» = «4АС», «2D» = «2Д»). */
+const CLASS_LATIN_TO_CYRILLIC: Record<string, string> = {
+  A: 'А', B: 'В', C: 'С', D: 'Д', E: 'Е', G: 'Г', H: 'Н', K: 'К', M: 'М', O: 'О', P: 'Р', T: 'Т', X: 'Х', Y: 'У',
+};
+
+/** Класс для сравнения: верхний регистр, латиница как кириллица, без пробелов и знаков. */
+export function normalizePhenomenonClass(raw: string): string {
+  return String(raw || '')
+    .toUpperCase()
+    .replace(/Ё/g, 'Е')
+    .replace(/[A-Z]/g, (ch) => CLASS_LATIN_TO_CYRILLIC[ch] ?? ch)
+    .replace(/[^0-9А-ЯA-Z]/g, '');
+}
+
+/** Похоже на один класс: одинаковая запись или одна запись только номер параллели другой («10» и «10А»). */
+function sameClass(a: string, b: string): boolean {
+  const x = normalizePhenomenonClass(a);
+  const y = normalizePhenomenonClass(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const grade = (s: string) => /^(\d+)/.exec(s)?.[1] ?? '';
+  if (/^\d+$/.test(x)) return grade(y) === x;
+  if (/^\d+$/.test(y)) return grade(x) === y;
+  return false;
+}
+
+function pairKeyOf(r: Pick<PhenomenonRecord, 'teacher1' | 'teacher2' | 'teacher1Key' | 'teacher2Key'>): string {
+  const one = personKey(r.teacher1) || r.teacher1Key;
+  const two = personKey(r.teacher2) || r.teacher2Key;
+  return [one, two].sort().join('+');
+}
+
+/** Дата + пара педагогов (без учёта порядка). Класс в ключ не входит: его пишут по-разному. */
+export function phenomenonLessonKey(r: Pick<PhenomenonRecord, 'date' | 'teacher1' | 'teacher2' | 'teacher1Key' | 'teacher2Key'>): string {
+  return `${r.date}|${pairKeyOf(r)}`;
 }
 
 export function toPhenomenonRecord(row: PhenomenonResponseRow): PhenomenonRecord {
@@ -886,40 +928,122 @@ export function toPhenomenonRecord(row: PhenomenonResponseRow): PhenomenonRecord
   return { ...base, lessonKey: phenomenonLessonKey(base) };
 }
 
+/**
+ * Делит чек-листы одной пары за один день на уроки.
+ * Обычно это один урок. Два урока, только если указаны разные № урока и классы в них разные
+ * (у одного урока наблюдатели могли ошибиться в номере: тогда класс совпадает и урок один).
+ * Чек-лист без распознанного номера идёт к уроку с тем же классом, иначе к самому большому.
+ */
+function splitPairDay(list: PhenomenonRecord[]): PhenomenonRecord[][] {
+  const byNo = new Map<number, PhenomenonRecord[]>();
+  const unknown: PhenomenonRecord[] = [];
+  for (const r of list) {
+    const n = parsePhenomenonLessonNumber(r.lessonNumber);
+    if (n == null) unknown.push(r);
+    else byNo.set(n, [...(byNo.get(n) || []), r]);
+  }
+  let groups = [...byNo.entries()].sort((x, y) => x[0] - y[0]).map(([, g]) => g);
+  if (groups.length <= 1) return [list];
+  // Склеиваем номера, у которых есть общий класс.
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer: for (let i = 0; i < groups.length; i += 1) {
+      for (let j = i + 1; j < groups.length; j += 1) {
+        if (groups[i].some((a) => groups[j].some((b) => sameClass(a.className, b.className)))) {
+          groups[i] = [...groups[i], ...groups[j]];
+          groups = groups.filter((_, k) => k !== j);
+          merged = true;
+          break outer;
+        }
+      }
+    }
+  }
+  for (const r of unknown) {
+    const target =
+      groups.find((g) => g.some((x) => sameClass(x.className, r.className))) ||
+      groups.reduce((best, g) => (g.length > best.length ? g : best), groups[0]);
+    target.push(r);
+  }
+  return groups;
+}
+
+function mostCommon<T>(values: T[]): T | undefined {
+  const counts = new Map<T, number>();
+  for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
+  let best: T | undefined;
+  let bestCount = 0;
+  for (const [v, c] of counts) {
+    if (c > bestCount) {
+      best = v;
+      bestCount = c;
+    }
+  }
+  return best;
+}
+
 export type PhenomenonLessonSummary = {
   lessonKey: string;
   date: string;
+  /** Все варианты написания класса через запятую. */
   className: string;
+  /** № урока (чаще всего указанный), пусто, если не распознан. */
+  lessonNumber: string;
   teachers: string[];
   checklists: number;
+  recordIds: number[];
   percent: number;
   level: PhenomenonLevel;
 };
 
 /** Итог урока: среднее по чек-листам всех наблюдателей этого урока. */
 export function summarizePhenomenonLessons(records: PhenomenonRecord[]): PhenomenonLessonSummary[] {
-  const groups = new Map<string, PhenomenonRecord[]>();
+  const byPairDay = new Map<string, PhenomenonRecord[]>();
   for (const r of records) {
-    const list = groups.get(r.lessonKey) || [];
-    list.push(r);
-    groups.set(r.lessonKey, list);
+    const key = phenomenonLessonKey(r);
+    byPairDay.set(key, [...(byPairDay.get(key) || []), r]);
   }
   const out: PhenomenonLessonSummary[] = [];
-  for (const [lessonKey, list] of groups) {
-    const raw = list.reduce((s, r) => s + (r.score.points / r.score.max) * 100, 0) / list.length;
-    const percent = round1(raw);
-    const first = list[0];
-    out.push({
-      lessonKey,
-      date: first.date,
-      className: first.className,
-      teachers: [first.teacher1, first.teacher2].sort((x, y) => x.localeCompare(y, 'ru')),
-      checklists: list.length,
-      percent,
-      level: phenomenonLevel(raw),
-    });
+  for (const [pairDayKey, all] of byPairDay) {
+    const parts = splitPairDay(all);
+    for (const list of parts) {
+      const raw = list.reduce((s, r) => s + (r.score.points / r.score.max) * 100, 0) / list.length;
+      const numbers = list.map((r) => parsePhenomenonLessonNumber(r.lessonNumber)).filter((n): n is number => n != null);
+      const no = mostCommon(numbers);
+      const classes: string[] = [];
+      for (const r of list) {
+        const c = r.className.trim();
+        if (c && !classes.includes(c)) classes.push(c);
+      }
+      const first = list[0];
+      out.push({
+        lessonKey: parts.length > 1 ? `${pairDayKey}|${no ?? ''}` : pairDayKey,
+        date: first.date,
+        className: classes.join(', '),
+        lessonNumber: no != null ? String(no) : '',
+        teachers: [first.teacher1, first.teacher2].sort((x, y) => x.localeCompare(y, 'ru')),
+        checklists: list.length,
+        recordIds: list.map((r) => r.id),
+        percent: round1(raw),
+        level: phenomenonLevel(raw),
+      });
+    }
   }
-  return out.sort((x, y) => (x.date === y.date ? x.className.localeCompare(y.className, 'ru') : x.date < y.date ? 1 : -1));
+  return out.sort((x, y) => {
+    if (x.date !== y.date) return x.date < y.date ? 1 : -1;
+    const nx = Number(x.lessonNumber) || 99;
+    const ny = Number(y.lessonNumber) || 99;
+    return nx !== ny ? nx - ny : x.className.localeCompare(y.className, 'ru');
+  });
+}
+
+/** Урок каждого чек-листа: номер чек-листа → урок. */
+export function phenomenonLessonByRecord(records: PhenomenonRecord[]): Map<number, PhenomenonLessonSummary> {
+  const map = new Map<number, PhenomenonLessonSummary>();
+  for (const lesson of summarizePhenomenonLessons(records)) {
+    for (const id of lesson.recordIds) map.set(id, lesson);
+  }
+  return map;
 }
 
 export type PhenomenonTeacherSummary = {
@@ -984,7 +1108,8 @@ function formatRuDate(iso: string): string {
 /** Листы выгрузки в Excel: чек-листы, уроки, мастерство педагогов. */
 export function phenomenonExcelSheets(records: PhenomenonRecord[]): Array<{ name: string; rows: Array<Array<string | number>> }> {
   const lessons = summarizePhenomenonLessons(records);
-  const lessonByKey = new Map(lessons.map((l) => [l.lessonKey, l]));
+  const lessonByRecord = new Map<number, PhenomenonLessonSummary>();
+  for (const l of lessons) for (const id of l.recordIds) lessonByRecord.set(id, l);
   const itemHeaders = PHENOMENON_ITEMS.map((i) => i.title.ru);
   const checklistRows: Array<Array<string | number>> = [
     [
@@ -1007,7 +1132,7 @@ export function phenomenonExcelSheets(records: PhenomenonRecord[]): Array<{ name
     ],
   ];
   for (const r of records) {
-    const lesson = lessonByKey.get(r.lessonKey);
+    const lesson = lessonByRecord.get(r.id);
     checklistRows.push([
       formatRuDate(r.date),
       r.className,
@@ -1028,9 +1153,10 @@ export function phenomenonExcelSheets(records: PhenomenonRecord[]): Array<{ name
     ]);
   }
   const lessonRows: Array<Array<string | number>> = [
-    ['Дата', 'Класс', 'Педагоги', 'Чек-листов', 'Итог урока, %', 'Уровень'],
+    ['Дата', '№ урока', 'Класс', 'Педагоги', 'Чек-листов', 'Итог урока, %', 'Уровень'],
     ...lessons.map((l) => [
       formatRuDate(l.date),
+      l.lessonNumber,
       l.className,
       l.teachers.join(', '),
       l.checklists,

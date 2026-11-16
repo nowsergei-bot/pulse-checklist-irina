@@ -24,6 +24,9 @@ import {
   masteryQuestionText,
   maxScoreFromDefinition,
   phenomenonExcelSheets,
+  phenomenonLessonByRecord,
+  parsePhenomenonLessonNumber,
+  PHENOMENON_LESSON_NUMBERS,
   phenomenonLevel,
   scorePhenomenon,
   summarizePhenomenonLessons,
@@ -204,6 +207,74 @@ describe('phenomenon checklist', () => {
     assert.equal(sheets[0].rows.length, 4);
     assert.equal(sheets[0].rows[1][8], 100);
     assert.equal(sheets[0].rows[1][9], 'очень высокий');
+  });
+
+  describe('lesson count: lesson = date + teacher pair', () => {
+    const row = (id: number, general: Partial<PhenomenonGeneral>, answers: PhenomenonAnswers = maxAnswers()) =>
+      toPhenomenonRecord({ id, created_at: '2026-11-16T10:00:00Z', general: { ...GENERAL, ...general }, answers });
+    const pairB = { teacher1_id: 't3', teacher1_name: 'Педагог Третий', teacher2_id: 't4', teacher2_name: 'Педагог Четвёртый' };
+    const low = { ...maxAnswers(), ph_phenomenon: 'none' }; // 16 из 22
+
+    it('«4АС» and «4AC» (Latin letters) for the same pair and date are one lesson; total = mean of all its checklists', () => {
+      const records = [
+        row(1, { class_name: '4АС', lesson_number: '8' }),
+        row(2, { class_name: '4AC', lesson_number: '8' }, low),
+        // Педагоги в другом порядке.
+        row(3, { class_name: '4АС', lesson_number: '8', teacher1_id: 't2', teacher1_name: 'Педагог Второй', teacher2_id: 't1', teacher2_name: 'Педагог Первый' }),
+      ];
+      const lessons = summarizePhenomenonLessons(records);
+      assert.equal(lessons.length, 1);
+      assert.equal(lessons[0].checklists, 3);
+      assert.equal(lessons[0].className, '4АС, 4AC');
+      assert.equal(lessons[0].lessonNumber, '8');
+      assert.equal(lessons[0].percent, Math.round(((100 + (16 / 22) * 100 + 100) / 3) * 10) / 10);
+      const byRecord = phenomenonLessonByRecord(records);
+      assert.equal(byRecord.get(2)?.percent, lessons[0].percent);
+    });
+
+    it('«10» and «10А», a wrong period number or an unreadable one do not split a lesson', () => {
+      const records = [
+        row(1, { class_name: '10', lesson_number: '8' }),
+        row(2, { class_name: '10А', lesson_number: '8' }),
+        row(3, { class_name: '10 А', lesson_number: '7' }),
+        row(4, { class_name: 'кабинет 111', lesson_number: '11:50-12:30' }),
+        row(5, { class_name: '10a', lesson_number: '8th period' }),
+      ];
+      const lessons = summarizePhenomenonLessons(records);
+      assert.equal(lessons.length, 1);
+      assert.equal(lessons[0].checklists, 5);
+      assert.equal(lessons[0].lessonNumber, '8');
+    });
+
+    it('one pair with two lessons on one day (different period and class) gives two lessons', () => {
+      const records = [
+        row(1, { class_name: '5А', lesson_number: '2' }),
+        row(2, { class_name: '5A', lesson_number: '2' }),
+        row(3, { class_name: '6Б', lesson_number: '4' }, low),
+        row(4, { class_name: '6Б', lesson_number: '' }, low),
+        row(5, { ...pairB, class_name: '5А', lesson_number: '2' }),
+        row(6, { class_name: '5А', lesson_number: '2', date: '2026-11-17' }),
+      ];
+      const lessons = summarizePhenomenonLessons(records);
+      assert.equal(lessons.length, 4);
+      const day1 = lessons.filter((l) => l.date === '2026-11-16' && l.teachers.includes('Педагог Первый'));
+      assert.deepEqual(day1.map((l) => [l.lessonNumber, l.checklists]), [['2', 2], ['4', 2]]);
+      assert.notEqual(day1[0].lessonKey, day1[1].lessonKey);
+      const sheet = phenomenonExcelSheets(records).find((s) => s.name === 'Уроки')!;
+      assert.deepEqual(sheet.rows[0], ['Дата', '№ урока', 'Класс', 'Педагоги', 'Чек-листов', 'Итог урока, %', 'Уровень']);
+      assert.equal(sheet.rows.length, 5);
+    });
+
+    it('period number is read from the start of the answer; the form offers 1-9', () => {
+      assert.deepEqual([...PHENOMENON_LESSON_NUMBERS], ['1', '2', '3', '4', '5', '6', '7', '8', '9']);
+      assert.equal(parsePhenomenonLessonNumber('3'), 3);
+      assert.equal(parsePhenomenonLessonNumber('3rd period'), 3);
+      assert.equal(parsePhenomenonLessonNumber('3 урок'), 3);
+      assert.equal(parsePhenomenonLessonNumber('11:50-12:30'), null);
+      assert.equal(parsePhenomenonLessonNumber('9.30'), null);
+      assert.equal(parsePhenomenonLessonNumber(''), null);
+      assert.equal(parsePhenomenonLessonNumber('12'), null);
+    });
   });
 
   it('6. the phenomenon checklist stays out of the main checklist', () => {

@@ -53,7 +53,8 @@ import {
   phenomenonExcelSheets,
   phenomenonTeacherNames,
   pick,
-  summarizePhenomenonLessons,
+  phenomenonLessonByRecord,
+  PHENOMENON_LESSON_NUMBERS,
   summarizePhenomenonTeachers,
   teacherNameFor,
   toPhenomenonRecord,
@@ -490,7 +491,14 @@ export function PhenomenonChecklistForm({
           <input className="field" type="text" inputMode="numeric" value={general.students_count} onChange={(e) => setG({ students_count: e.target.value }, 'students_count')} />
         </FieldWrap>
         <FieldWrap id="general-lesson_number" invalid={invalid.has('general-lesson_number')} label={L('lesson_number')}>
-          <input className="field" type="text" value={general.lesson_number} onChange={(e) => setG({ lesson_number: e.target.value }, 'lesson_number')} />
+          <select className="field" value={general.lesson_number} onChange={(e) => setG({ lesson_number: e.target.value }, 'lesson_number')}>
+            <option value="">{locale === 'en' ? 'Choose…' : 'Выберите…'}</option>
+            {PHENOMENON_LESSON_NUMBERS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
         </FieldWrap>
         <FieldWrap id="general-teacher1" invalid={invalid.has('general-teacher1')} label={L('teacher1')}>
           <PersonSelectField
@@ -585,7 +593,7 @@ export function PhenomenonResultsTable({ records }: { records: PhenomenonRecord[
   const [busy, setBusy] = useState(false);
   const teachers = useMemo(() => phenomenonTeacherNames(records), [records]);
   const filtered = useMemo(() => filterPhenomenonRecords(records, { from, to, teacher }), [records, from, to, teacher]);
-  const lessons = useMemo(() => new Map(summarizePhenomenonLessons(filtered).map((l) => [l.lessonKey, l])), [filtered]);
+  const lessons = useMemo(() => phenomenonLessonByRecord(filtered), [filtered]);
   const mastery = useMemo(() => summarizePhenomenonTeachers(filtered), [filtered]);
 
   const exportXlsx = async () => {
@@ -666,7 +674,7 @@ export function PhenomenonResultsTable({ records }: { records: PhenomenonRecord[
                       {r.score.percent} ({r.score.points} из {r.score.max})
                     </td>
                     <td>{PHENOMENON_LEVEL_LABELS[r.score.level].ru}</td>
-                    <td>{lessons.get(r.lessonKey)?.percent ?? ''}</td>
+                    <td>{lessons.get(r.id)?.percent ?? ''}</td>
                     <td>{r.mastery1 ?? ''}</td>
                     <td>{r.mastery2 ?? ''}</td>
                     {PHENOMENON_ITEMS.map((i) => (
