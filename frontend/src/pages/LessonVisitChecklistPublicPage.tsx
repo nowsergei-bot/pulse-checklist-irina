@@ -1,7 +1,7 @@
 import '../styles/publicForm.css';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getPublicLessonVisitForm, postPublicLessonVisitResponse } from '../api/visitChecklist';
 import PlatformFeedbackModal from '../components/PlatformFeedbackModal';
 import PublicCampusSlideshow from '../components/PublicCampusSlideshow';
@@ -40,6 +40,10 @@ import {
 } from '../lib/lessonVisitChecklist/normalizeChecklist';
 import {
   answersForVisibleQuestions,
+  ORDINARY_CHECKLIST_PAUSE_START,
+  ORDINARY_CHECKLIST_PAUSE_END,
+  ORDINARY_CHECKLIST_PAUSE_MESSAGE,
+  ordinaryChecklistPaused,
   PHENOMENON_FORM_TOKEN,
   preferredVisitFormatFromQuery,
   visibleLessonVisitChecklist,
@@ -167,6 +171,23 @@ class PhenomenonLinkBoundary extends Component<{ children: ReactNode }, { failed
 export function LessonVisitChecklistForm(props: { token?: string; formatQuery?: string | null; embedded?: boolean }) {
   const { token: rawToken } = useParams();
   const token = props.token ?? (rawToken ? decodeURIComponent(rawToken) : '');
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const refresh = () => setNow(Date.now());
+    const boundary = now < ORDINARY_CHECKLIST_PAUSE_START
+      ? ORDINARY_CHECKLIST_PAUSE_START
+      : ORDINARY_CHECKLIST_PAUSE_END;
+    const timer = boundary > now
+      ? window.setTimeout(refresh, Math.min(boundary - now, 2_147_483_647))
+      : undefined;
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [now]);
   if (token === PHENOMENON_FORM_TOKEN) {
     return (
       <PhenomenonLinkBoundary>
@@ -176,7 +197,28 @@ export function LessonVisitChecklistForm(props: { token?: string; formatQuery?: 
       </PhenomenonLinkBoundary>
     );
   }
+  if (ordinaryChecklistPaused(now)) {
+    return <OrdinaryChecklistPauseNotice embedded={Boolean(props.embedded)} />;
+  }
   return <MainLessonVisitChecklistForm {...props} />;
+}
+
+function OrdinaryChecklistPauseNotice({ embedded }: { embedded: boolean }) {
+  useDocumentTitle('Чек-лист посещения урока');
+  return (
+    <section className={embedded ? 'lf-visit-form' : 'page public-form-root lf-visit-form'}>
+      <div className="public-form-stack">
+        <div className="card public-form-glass-card">
+          <h1 style={{ marginTop: 0 }}>Чек-лист посещения урока</h1>
+          <p role="status">{ORDINARY_CHECKLIST_PAUSE_MESSAGE}</p>
+          <Link className="btn primary" to={`/view/lesson-visit/${PHENOMENON_FORM_TOKEN}`}>
+            Открыть чек-лист феноменального урока
+          </Link>
+          <p>Обычный чек-лист будет доступен с 19 ноября.</p>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function MainLessonVisitChecklistForm({

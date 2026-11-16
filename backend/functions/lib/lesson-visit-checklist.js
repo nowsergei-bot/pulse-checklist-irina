@@ -8,6 +8,20 @@ const { normalizePersonName } = require('./english-assessment-match');
 const VISIT_CHECKLIST_TITLE = 'Чек-лист посещения урока';
 const VISIT_FORMAT_SELF_ANALYSIS = 'Самоанализ';
 
+/** 16–18 ноября включительно, по московскому времени; затем открывается автоматически. */
+const ORDINARY_CHECKLIST_PAUSE_START = Date.parse('2026-11-16T00:00:00+03:00');
+const ORDINARY_CHECKLIST_PAUSE_END = Date.parse('2026-11-19T00:00:00+03:00');
+
+function ordinaryChecklistPause(now = Date.now()) {
+  if (now < ORDINARY_CHECKLIST_PAUSE_START || now >= ORDINARY_CHECKLIST_PAUSE_END) return null;
+  return {
+    error: 'ChecklistTemporarilyPaused',
+    message: 'На\u00a0период проведения феноменальных уроков действует отдельный чек-лист',
+    form_url: '/view/lesson-visit/phenomenon-lesson-2026',
+    resumes_at: new Date(ORDINARY_CHECKLIST_PAUSE_END).toISOString(),
+  };
+}
+
 /** Убирает «4.0» из пользовательских названий. */
 function displayVisitChecklistTitle(raw) {
   const cleaned = String(raw || '')
@@ -504,6 +518,7 @@ const phenomenonLib = {
 };
 
 module.exports = {
+  ordinaryChecklistPause,
   VISIT_CHECKLIST_TITLE,
   VISIT_FORMAT_SELF_ANALYSIS,
   displayVisitChecklistTitle,

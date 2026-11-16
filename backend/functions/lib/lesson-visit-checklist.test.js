@@ -14,7 +14,17 @@ const {
   loadSeedDirectory,
   applyTeacherAliases,
   teacherAliasKey,
+  ordinaryChecklistPause,
 } = require('./lesson-visit-checklist');
+
+test('ordinary checklist pause follows Moscow calendar boundaries and provides the special form link', () => {
+  assert.equal(ordinaryChecklistPause(Date.parse('2026-11-15T23:59:59.999+03:00')), null);
+  const pause = ordinaryChecklistPause(Date.parse('2026-11-16T00:00:00+03:00'));
+  assert.equal(pause.form_url, '/view/lesson-visit/phenomenon-lesson-2026');
+  assert.equal(pause.resumes_at, '2026-11-18T21:00:00.000Z');
+  assert.equal(ordinaryChecklistPause(Date.parse('2026-11-18T23:59:59.999+03:00')).error, pause.error);
+  assert.equal(ordinaryChecklistPause(Date.parse('2026-11-19T00:00:00+03:00')), null);
+});
 
 test('displayVisitChecklistTitle strips 4.0 from user-visible names', () => {
   assert.equal(displayVisitChecklistTitle('Чек-лист 4.0'), VISIT_CHECKLIST_TITLE);
@@ -650,7 +660,7 @@ function fakePool() {
     queries,
     async query(sql, params = []) {
       queries.push(sql);
-      if (/^\s*SELECT id, title, state_json, updated_at, form_token, director_share_token\s+FROM lesson_visit_projects WHERE form_token = \$1/.test(sql)) {
+      if (/^\s*SELECT id, title, state_json, updated_at, form_token, director_share_token\s+FROM lesson_visit_projects\s+WHERE form_token = \$1/.test(sql)) {
         return { rows: projects.filter((p) => p.form_token === params[0]) };
       }
       if (/INSERT INTO lesson_visit_projects/.test(sql)) {
@@ -670,7 +680,20 @@ function fakePool() {
   };
 }
 
-test('phenomenon form: GET creates one shared project, POST stores only there and skips main analytics', () => withOpen(true, async () => {
+test('ordinary form rejects submissions from an old tab during the pause without writing data', async (t) => {
+  t.mock.method(Date, 'now', () => Date.parse('2026-11-16T12:00:00+03:00'));
+  const pool = fakePool();
+  const response = await projects.handlePostPublicLessonVisitResponse(pool, 'main-token', putBody({
+    general: { teacher_id: 'teacher-test' }, answers: {},
+  }));
+  assert.equal(response.statusCode, 409);
+  assert.equal(JSON.parse(response.body).form_url, '/view/lesson-visit/phenomenon-lesson-2026');
+  assert.equal(pool.responses.length, 0);
+  assert.ok(pool.queries.every((sql) => /^\s*SELECT\b/.test(sql)));
+});
+
+test('phenomenon form: GET creates one shared project, POST stores only there and skips main analytics', (t) => withOpen(true, async () => {
+  t.mock.method(Date, 'now', () => Date.parse('2026-11-16T12:00:00+03:00'));
   const handlers = require('../lesson-visit-projects');
   const pool = fakePool();
 

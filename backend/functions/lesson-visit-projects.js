@@ -10,6 +10,7 @@ const {
   buildTeacherUnitMap,
   sanitizeNewTeacherIds,
   applyTeacherAliases,
+  ordinaryChecklistPause,
 } = require('./lib/lesson-visit-checklist');
 const { buildProjectGetPayload } = require('./lib/project-get-payload');
 const { resolveProjectOwner } = require('./lib/resolve-project-owner');
@@ -632,6 +633,9 @@ async function handlePostPublicLessonVisitResponse(pool, tokenRaw, event) {
     if (isPhenomenonToken(tokenRaw)) return await postPhenomenonResponse(pool, event);
     const row = await loadProjectByFormToken(pool, tokenRaw);
     if (!row) return json(404, { error: 'Not found' });
+
+    const pause = ordinaryChecklistPause();
+    if (pause) return json(409, pause);
 
     const body = parseAllowedBody(event, ['general', 'answers']);
     const general = body.general && typeof body.general === 'object' ? body.general : {};

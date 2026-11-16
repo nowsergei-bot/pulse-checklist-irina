@@ -160,6 +160,16 @@ export const PHENOMENON_MAX_SCORE = 22;
 /** Постоянный адрес формы. По нему сервер находит (и при первом обращении создаёт) отдельный проект. */
 export const PHENOMENON_FORM_TOKEN = 'phenomenon-lesson-2026';
 
+/** 16–18 ноября включительно, по московскому времени. */
+export const ORDINARY_CHECKLIST_PAUSE_START = Date.parse('2026-11-16T00:00:00+03:00');
+export const ORDINARY_CHECKLIST_PAUSE_END = Date.parse('2026-11-19T00:00:00+03:00');
+export const ORDINARY_CHECKLIST_PAUSE_MESSAGE =
+  'На\u00a0период проведения феноменальных уроков действует отдельный чек-лист';
+
+export function ordinaryChecklistPaused(now = Date.now()): boolean {
+  return now >= ORDINARY_CHECKLIST_PAUSE_START && now < ORDINARY_CHECKLIST_PAUSE_END;
+}
+
 /**
  * ПЕРЕКЛЮЧАТЕЛЬ. false: форма видна только участникам пробного доступа (список на сервере),
  * остальным «Раздел пока недоступен». true: форма открыта всем. Значение должно совпадать с

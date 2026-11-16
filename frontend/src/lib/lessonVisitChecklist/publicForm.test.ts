@@ -15,7 +15,15 @@ import {
   lessonVisitPublicFormPath,
   lessonVisitSelfAnalysisFormPath,
   preferredVisitFormatFromQuery,
+  ordinaryChecklistPaused,
 } from './publicForm.ts';
+
+test('ordinary checklist is paused only on November 16–18 in Moscow', () => {
+  assert.equal(ordinaryChecklistPaused(Date.parse('2026-11-15T23:59:59.999+03:00')), false);
+  assert.equal(ordinaryChecklistPaused(Date.parse('2026-11-16T00:00:00+03:00')), true);
+  assert.equal(ordinaryChecklistPaused(Date.parse('2026-11-18T23:59:59.999+03:00')), true);
+  assert.equal(ordinaryChecklistPaused(Date.parse('2026-11-19T00:00:00+03:00')), false);
+});
 
 test('public form token is env-only and never the 2026 9-block project', () => {
   assert.notEqual(LESSON_VISIT_PUBLIC_FORM_TOKEN, 'be57bd59186a4b30b467c9d2eb6b4b49');
