@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/publicForm.css';
 import '../../corporateEvent.css';
 import './lessonFeedback.css';
@@ -7,10 +7,15 @@ import {
   getPublicLatestLessonVisitForm,
   getPublicLessonVisitForm,
   listLessonVisitResponses,
+  postPhenomenonWeekAi,
+  type PhenomenonWeekAi,
 } from '../../api/visitChecklist';
 import { API_BASE, parseJson, sessionHeaders } from '../../api/http';
 import PersonSelectField from '../../components/corporate/PersonSelectField';
 import PublicCampusSlideshow from '../../components/PublicCampusSlideshow';
+import { Badge, Empty, PercentBar, Table } from '../../components/VisitChecklistReportDashboard';
+import { LEVEL_COLORS, LEVELS, displayScore, niceAxis } from '../../lib/lessonVisitChecklist/reportPresentation';
+import { VCD_PDF_HIDE_CLASS, downloadVisitChecklistPdf } from '../../lib/lessonVisitChecklist/visitChecklistCloudPdf';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { loadJdMe } from '../../lib/cabinet/sharedResources';
 import { useCabinetProfile } from '../../lib/cabinet/profile';
@@ -55,6 +60,37 @@ import {
   pick,
   phenomenonLessonByRecord,
   PHENOMENON_LESSON_NUMBERS,
+  PHENOMENON_ALL_WEEKS,
+  PHENOMENON_LEVEL_ORDER,
+  PHENOMENON_WEEKS,
+  defaultPhenomenonWeek,
+  phenomenonLessonDetail,
+  phenomenonLessonRows,
+  phenomenonRecordsForWeek,
+  phenomenonWeekLabel,
+  summarizePhenomenonWeek,
+  PHENOMENON_RATING_GAP,
+  PHENOMENON_SPREAD_LIMIT,
+  phenomenonDepartmentPairSlices,
+  phenomenonDiscrepancies,
+  phenomenonStageSlices,
+  phenomenonTeacherRows,
+  sortPhenomenonTeachers,
+  PHENOMENON_KEY_INDICATORS,
+  phenomenonComments,
+  phenomenonDynamics,
+  type PhenomenonWeek,
+  type PhenomenonWeekDynamics,
+  type PhenomenonSliceRow,
+  type PhenomenonTeacherRow,
+  type PhenomenonTeacherSort,
+  type PhenomenonLessonDetail,
+  type PhenomenonLessonSort,
+  type PhenomenonLessonSummary,
+  type PhenomenonLevel,
+  type PhenomenonProfileItem,
+  type PhenomenonShare,
+  type PhenomenonWeekSummary,
   summarizePhenomenonTeachers,
   teacherNameFor,
   toPhenomenonRecord,
@@ -851,11 +887,887 @@ export function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolea
             </div>
           </div>
         ) : tab === 'results' && records ? (
-          <PhenomenonResultsTable records={records} />
+          <PhenomenonAnalytics records={records} directory={directory} />
         ) : (
           <PhenomenonChecklistForm locale={locale} directory={directory} observerFromAccount={observerFromAccount} photos={photos} />
         )}
       </div>
     </MotionConfig>
+  );
+}
+
+// ---------- Аналитика феноменальных уроков (вкладка «Результаты») ----------
+
+type PhView = 'summary' | 'lessons' | 'teachers' | 'slices' | 'discrepancies' | 'comments' | 'dynamics' | 'checklists';
+
+const PH_SORTS: Array<{ id: PhenomenonLessonSort; label: string }> = [
+  { id: 'date_desc', label: 'Сначала новые' },
+  { id: 'date_asc', label: 'Сначала старые' },
+  { id: 'score_desc', label: 'Итог: по убыванию' },
+  { id: 'score_asc', label: 'Итог: по возрастанию' },
+];
+
+const levelIdx = (level: PhenomenonLevel | null) => (level ? PHENOMENON_LEVEL_ORDER.indexOf(level) : -1);
+
+/** Цвет варианта ответа: по доле балла от максимума пункта (как уровни); пункт без баллов: оттенки серого. */
+function optionColor(item: PhenomenonChoiceItem, optionId: string, index: number): string {
+  if (!item.scored) return ['#5b6b73', '#7d8d94', '#a3b0b5', '#c5cfd2', '#e1e7e9'][index % 5];
+  const max = Math.max(...item.options.map((o) => o.score ?? 0)) || 1;
+  const score = item.options.find((o) => o.id === optionId)?.score ?? 0;
+  return LEVEL_COLORS[Math.max(0, Math.min(4, Math.round((score / max) * 4)))];
+}
+
+function PhLevelChart({ counts, onOpen }: { counts: number[]; onOpen: (levelIndex: number) => void }) {
+  const total = counts.reduce((s, n) => s + n, 0);
+  const { top, ticks } = niceAxis(Math.max(1, ...counts));
+  return (
+    <section className="vcr-panel" id="ph-levels">
+      <h3>Уроки по уровням</h3>
+      <p>Уроков: {total}</p>
+      <div className="vcr-level-chart" aria-label="Распределение уроков по уровням">
+        <div className="vcr-chart-axis">
+          <small>Уроков</small>
+          <div className="vcr-chart-ticks">
+            {ticks.map((n) => (
+              <span key={n} style={{ bottom: `${(n / top) * 100}%` }}>
+                {n}
+              </span>
+            ))}
+          </div>
+        </div>
+        {counts.map((n, i) => (
+          <button key={LEVELS[i]} className="vcr-chart-column" onClick={() => onOpen(i)} aria-label={`${LEVELS[i]}: ${n}`}>
+            <span>{n}</span>
+            <div className="vcr-chart-track">
+              <div className="vcr-chart-stack">
+                <div style={{ height: `${(n / top) * 180}px`, backgroundColor: LEVEL_COLORS[i] }} />
+              </div>
+            </div>
+            <small>{LEVELS[i]}</small>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ShareCell({ value }: { value: PhenomenonShare }) {
+  if (value.percent == null) return <span className="muted">нет данных</span>;
+  return (
+    <span className="vcr-scorecell">
+      <span className="vcr-scorecell__value">{value.percent}%</span>
+      <small>
+        {value.count} из {value.total}
+      </small>
+    </span>
+  );
+}
+
+function OptionsBar({ item, profile }: { item: PhenomenonChoiceItem; profile: PhenomenonProfileItem }) {
+  return (
+    <div>
+      <div className="ph-optbar" role="img" aria-label={profile.options.map((o) => `${o.label}: ${o.percent}%`).join('; ')}>
+        {profile.options.map((o, i) =>
+          o.count ? (
+            <div key={o.id} title={`${o.label}: ${o.percent}% (${o.count})`} style={{ width: `${o.percent}%`, backgroundColor: optionColor(item, o.id, i) }}>
+              {o.percent >= 9 ? `${Math.round(o.percent)}%` : ''}
+            </div>
+          ) : null,
+        )}
+      </div>
+      <ul className="ph-optlegend">
+        {profile.options.map((o, i) => (
+          <li key={o.id}>
+            <i style={{ backgroundColor: optionColor(item, o.id, i) }} />
+            {o.label}: <b>{o.percent}%</b> <span className="muted">({o.count})</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PhenomenonSummaryView({
+  summary,
+  onLessons,
+  onLesson,
+}: {
+  summary: PhenomenonWeekSummary;
+  onLessons: (level?: number) => void;
+  onLesson: (lesson: PhenomenonLessonSummary) => void;
+}) {
+  const top = phenomenonLessonRows(summary.lessons, { sort: 'score_desc' });
+  return (
+    <>
+      <div className="vcr-metrics">
+        <button type="button" className="vcr-metric vcr-metric--link" onClick={() => onLessons()}>
+          <strong>{summary.average == null ? 'Нет данных' : `${displayScore(summary.average)} из 100`}</strong>
+          <span>Средний итог по урокам</span>
+          <Badge percent={summary.average} />
+        </button>
+        <button type="button" className="vcr-metric vcr-metric--link" onClick={() => onLessons()}>
+          <strong>{summary.lessons.length}</strong>
+          <span>Уроков посещено</span>
+        </button>
+        <div className="vcr-metric">
+          <strong>{summary.checklists}</strong>
+          <span>Чек-листов</span>
+        </div>
+        <div className="vcr-metric">
+          <strong>{summary.observers}</strong>
+          <span>Наблюдателей</span>
+        </div>
+        <div className="vcr-metric">
+          <strong>{summary.teachers}</strong>
+          <span>Педагогов</span>
+        </div>
+      </div>
+      <PhLevelChart counts={summary.levelCounts} onOpen={(i) => onLessons(i)} />
+      <section className="vcr-panel" id="ph-indicators">
+        <h3>Ключевые показатели формата</h3>
+        <Table headers={['Показатель', 'Доля уроков', 'Доля чек-листов']} stack>
+          {summary.indicators.map(({ group, rows }) => (
+            <Fragment key={group.id}>
+              <tr className="ph-group-row">
+                <th colSpan={3} scope="colgroup">
+                  {group.title}
+                </th>
+              </tr>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td data-label="Показатель">{row.label}</td>
+                  <td data-label="Доля уроков">
+                    <ShareCell value={row.lessons} />
+                  </td>
+                  <td data-label="Доля чек-листов">
+                    <ShareCell value={row.checklists} />
+                  </td>
+                </tr>
+              ))}
+            </Fragment>
+          ))}
+        </Table>
+      </section>
+      <section className="vcr-panel" id="ph-profile">
+        <h3>Профиль по критериям</h3>
+        <div className="ph-profile">
+          {summary.profile.map((p) => {
+            const item = PHENOMENON_ITEMS.find((i) => i.id === p.id)!;
+            return (
+              <div key={p.id} className="ph-profile__item">
+                <div className="ph-profile__head">
+                  <strong>{p.title.replace(/\s*\(.*$/, '')}</strong>
+                  {p.scored && p.percent != null ? (
+                    <span className="vcr-scorecell">
+                      <span className="vcr-scorecell__value">{displayScore(p.percent)}% от максимума</span>
+                    </span>
+                  ) : (
+                    <span className="muted">без баллов, только распределение</span>
+                  )}
+                </div>
+                {p.scored && p.percent != null ? <PercentBar percent={p.percent} label={`${p.title}: ${p.percent}%`} /> : null}
+                <OptionsBar item={item} profile={p} />
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <section className="vcr-panel vcr-compact" id="ph-top-lessons">
+        <div className="vcr-head">
+          <h3>Уроки</h3>
+          {summary.lessons.length > 5 ? (
+            <button type="button" className={`vcr-link ${VCD_PDF_HIDE_CLASS}`} onClick={() => onLessons()}>
+              Все {summary.lessons.length} →
+            </button>
+          ) : null}
+        </div>
+        {summary.lessons.length ? <PhLessonTable rows={top.slice(0, 5)} onOpen={onLesson} /> : <Empty />}
+      </section>
+    </>
+  );
+}
+
+function PhLessonTable({ rows, onOpen }: { rows: PhenomenonLessonSummary[]; onOpen: (lesson: PhenomenonLessonSummary) => void }) {
+  return (
+    <Table headers={['Дата', '№ урока', 'Класс', 'Педагоги', 'Наблюдателей', 'Итог урока', 'Разброс']} stack>
+      {rows.map((l) => (
+        <tr key={l.lessonKey} className="vcr-row-link" onClick={(e) => !(e.target as HTMLElement).closest('a,button') && onOpen(l)}>
+          <td data-label="Дата">{formatPhenomenonDate(l.date)}</td>
+          <td data-label="№ урока">{l.lessonNumber || '—'}</td>
+          <td data-label="Класс">{l.className}</td>
+          <td data-label="Педагоги">
+            <button type="button" className="vcr-rowlink" onClick={() => onOpen(l)}>
+              {l.teachers.join(' и ')}
+            </button>
+          </td>
+          <td data-label="Наблюдателей">{l.observers}</td>
+          <td data-label="Итог урока">
+            <span className="vcr-scorecell">
+              <span className="vcr-scorecell__value">{displayScore(l.percent)} из 100</span>
+              <Badge percent={l.percent} />
+            </span>
+          </td>
+          <td data-label="Разброс">
+            {l.checklists > 1 ? `${displayScore(l.minPercent)}-${displayScore(l.maxPercent)}` : '—'}
+          </td>
+        </tr>
+      ))}
+    </Table>
+  );
+}
+
+function PhenomenonLessonsView({
+  lessons,
+  title,
+  onReset,
+  level,
+  onLevel,
+  onOpen,
+}: {
+  lessons: PhenomenonLessonSummary[];
+  title?: string;
+  onReset?: () => void;
+  level: number | null;
+  onLevel: (level: number | null) => void;
+  onOpen: (lesson: PhenomenonLessonSummary) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<PhenomenonLessonSort>('date_desc');
+  const rows = phenomenonLessonRows(level == null ? lessons : lessons.filter((l) => levelIdx(l.level) === level), { search, sort });
+  return (
+    <section className="vcr-panel">
+      <div className="vcr-head">
+        <h3>
+          {title ?? 'Уроки'}
+          {level != null ? `: ${LEVELS[level].toLowerCase()} уровень` : ''}
+        </h3>
+        {onReset ? (
+          <button type="button" className="vcr-link" onClick={onReset}>
+            Все уроки
+          </button>
+        ) : null}
+        {level != null ? (
+          <button type="button" className="vcr-link" onClick={() => onLevel(null)}>
+            Все уровни
+          </button>
+        ) : null}
+      </div>
+      <div className="vcr-filters">
+        <label>
+          Поиск по педагогу <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </label>
+        <label>
+          Сортировка{' '}
+          <select value={sort} onChange={(e) => setSort(e.target.value as PhenomenonLessonSort)}>
+            {PH_SORTS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p>Уроков: {rows.length}</p>
+      {rows.length ? <PhLessonTable rows={rows} onOpen={onOpen} /> : <Empty />}
+    </section>
+  );
+}
+
+function PhenomenonLessonCard({ detail, onBack }: { detail: PhenomenonLessonDetail; onBack: () => void }) {
+  const { lesson } = detail;
+  return (
+    <>
+      <header className="vcr-header">
+        <div className="vcr-header__title">
+          <h2>
+            {lesson.teachers.join(' и ')} · {formatPhenomenonDate(lesson.date)}
+            {lesson.lessonNumber ? ` · ${lesson.lessonNumber} урок` : ''} · {lesson.className}
+          </h2>
+        </div>
+        <div className="vcr-header__actions">
+          <button type="button" className="vcr-action" onClick={onBack}>
+            ← К списку
+          </button>
+        </div>
+      </header>
+      <div className="vcr-metrics">
+        <div className="vcr-metric">
+          <strong>{displayScore(lesson.percent)} из 100</strong>
+          <span>Итог урока (среднее по чек-листам)</span>
+          <Badge percent={lesson.percent} />
+        </div>
+        <div className="vcr-metric">
+          <strong>{lesson.checklists}</strong>
+          <span>Чек-листов</span>
+        </div>
+        <div className="vcr-metric">
+          <strong className="vcr-metric__nowrap">
+            {lesson.checklists > 1 ? `${displayScore(lesson.minPercent)}-${displayScore(lesson.maxPercent)}` : '—'}
+          </strong>
+          <span>Разброс итогов</span>
+        </div>
+      </div>
+      <section className="vcr-panel">
+        <h3>Мастерство педагогов (1-10, среднее по наблюдателям)</h3>
+        <Table headers={['Педагог', 'Среднее', 'Оценок']} fit>
+          {detail.mastery.map((m) => (
+            <tr key={m.name}>
+              <td>{m.name}</td>
+              <td>{m.mean ?? '—'}</td>
+              <td>{m.ratings}</td>
+            </tr>
+          ))}
+        </Table>
+      </section>
+      {detail.checklists.map((r) => (
+        <section key={r.id} className="vcr-panel ph-checklist">
+          <div className="vcr-head">
+            <h3>{r.observer || 'Наблюдатель не указан'}</h3>
+            <span className="vcr-scorecell">
+              <span className="vcr-scorecell__value">
+                {displayScore(r.score.percent)} из 100 ({r.score.points} из {r.score.max} баллов)
+              </span>
+              <Badge percent={r.score.percent} />
+            </span>
+          </div>
+          <Table headers={['Пункт', 'Ответ']} fit>
+            {PHENOMENON_ITEMS.map((i) => (
+              <tr key={i.id}>
+                <td>{i.title.ru.replace(/\s*\(.*$/, '')}</td>
+                <td>{optionLabel(i.id, r.answers[i.id] || '') || '—'}</td>
+              </tr>
+            ))}
+            <tr>
+              <td>{PHENOMENON_OVERALL.title.ru}</td>
+              <td>{optionLabel(PHENOMENON_OVERALL.id, r.answers[PHENOMENON_OVERALL.id] || '') || '—'}</td>
+            </tr>
+            <tr>
+              <td>Мастерство: {r.teacher1}</td>
+              <td>{r.mastery1 ?? '—'}</td>
+            </tr>
+            <tr>
+              <td>Мастерство: {r.teacher2}</td>
+              <td>{r.mastery2 ?? '—'}</td>
+            </tr>
+          </Table>
+          {r.comments ? (
+            <blockquote>
+              <strong>{PHENOMENON_COMMENTS_TITLE.ru}:</strong> {r.comments}
+            </blockquote>
+          ) : null}
+        </section>
+      ))}
+    </>
+  );
+}
+
+const PH_TEACHER_SORTS: Array<{ id: PhenomenonTeacherSort; label: string }> = [
+  { id: 'name', label: 'По алфавиту' },
+  { id: 'average_desc', label: 'Средний итог: сначала высокий' },
+  { id: 'average_asc', label: 'Средний итог: сначала низкий' },
+  { id: 'mastery_desc', label: 'Мастерство: сначала высокое' },
+  { id: 'mastery_asc', label: 'Мастерство: сначала низкое' },
+  { id: 'lessons_desc', label: 'Больше уроков' },
+];
+
+function PhenomenonTeachersView({ rows, onOpen }: { rows: PhenomenonTeacherRow[]; onOpen: (t: PhenomenonTeacherRow) => void }) {
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<PhenomenonTeacherSort>('name');
+  const list = sortPhenomenonTeachers(rows, sort, search);
+  return (
+    <section className="vcr-panel">
+      <h3>Педагоги</h3>
+      <div className="vcr-filters">
+        <label>
+          Поиск по ФИО или кафедре <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </label>
+        <label>
+          Сортировка{' '}
+          <select value={sort} onChange={(e) => setSort(e.target.value as PhenomenonTeacherSort)}>
+            {PH_TEACHER_SORTS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p>Педагогов: {list.length}</p>
+      {list.length ? (
+        <Table headers={['Педагог', 'Кафедра', 'Уроков', 'Средний итог уроков', 'Мастерство (1-10)', 'Оценок']} stack>
+          {list.map((t) => (
+            <tr key={t.key} className="vcr-row-link" onClick={(e) => !(e.target as HTMLElement).closest('a,button') && onOpen(t)}>
+              <td data-label="Педагог">
+                <button type="button" className="vcr-rowlink" onClick={() => onOpen(t)}>
+                  {t.name}
+                </button>
+              </td>
+              <td data-label="Кафедра">{t.department || '—'}</td>
+              <td data-label="Уроков">{t.lessons}</td>
+              <td data-label="Средний итог уроков">
+                {t.average == null ? (
+                  '—'
+                ) : (
+                  <span className="vcr-scorecell">
+                    <span className="vcr-scorecell__value">{displayScore(t.average)} из 100</span>
+                    <Badge percent={t.average} />
+                  </span>
+                )}
+              </td>
+              <td data-label="Мастерство (1-10)">{t.mastery ?? '—'}</td>
+              <td data-label="Оценок">{t.ratings}</td>
+            </tr>
+          ))}
+        </Table>
+      ) : (
+        <Empty />
+      )}
+    </section>
+  );
+}
+
+function SliceTable({ title, group, rows }: { title: string; group: string; rows: PhenomenonSliceRow[] }) {
+  return (
+    <section className="vcr-panel">
+      <h3>{title}</h3>
+      {rows.length ? (
+        <Table headers={[group, 'Уроков', 'Средний итог']} stack fit>
+          {rows.map((r) => (
+            <tr key={r.label}>
+              <td data-label={group}>{r.label}</td>
+              <td data-label="Уроков">{r.lessons}</td>
+              <td data-label="Средний итог">
+                {r.average == null ? (
+                  '—'
+                ) : (
+                  <span className="vcr-scorecell">
+                    <span className="vcr-scorecell__value">{displayScore(r.average)} из 100</span>
+                    <Badge percent={r.average} />
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      ) : (
+        <Empty />
+      )}
+    </section>
+  );
+}
+
+function PhenomenonDiscrepanciesView({
+  records,
+  onOpen,
+}: {
+  records: PhenomenonRecord[];
+  onOpen: (lesson: PhenomenonLessonSummary) => void;
+}) {
+  const d = useMemo(() => phenomenonDiscrepancies(records), [records]);
+  return (
+    <>
+      <section className="vcr-panel">
+        <h3>Наблюдатели разошлись: итоги отличаются на {PHENOMENON_SPREAD_LIMIT} баллов и больше</h3>
+        {d.spread.length ? (
+          <Table headers={['Урок', 'Итоги наблюдателей', 'Разница']} stack>
+            {d.spread.map((l) => {
+              const list = records.filter((r) => l.recordIds.includes(r.id)).sort((a, b) => a.score.percent - b.score.percent);
+              return (
+                <tr key={l.lessonKey} className="vcr-row-link" onClick={(e) => !(e.target as HTMLElement).closest('a,button') && onOpen(l)}>
+                  <td data-label="Урок">
+                    <button type="button" className="vcr-rowlink" onClick={() => onOpen(l)}>
+                      {l.teachers.join(' и ')}
+                    </button>
+                    <small>
+                      {formatPhenomenonDate(l.date)}
+                      {l.lessonNumber ? ` · ${l.lessonNumber} урок` : ''} · {l.className}
+                    </small>
+                  </td>
+                  <td data-label="Итоги наблюдателей">
+                    {list.map((r) => (
+                      <div key={r.id}>
+                        {r.observer}: {displayScore(r.score.percent)}
+                      </div>
+                    ))}
+                  </td>
+                  <td data-label="Разница">{displayScore(l.maxPercent - l.minPercent)}</td>
+                </tr>
+              );
+            })}
+          </Table>
+        ) : (
+          <Empty />
+        )}
+      </section>
+      <section className="vcr-panel">
+        <h3>Оценка наблюдателя расходится с баллами на {PHENOMENON_RATING_GAP} уровня и больше</h3>
+        {d.ratingGaps.length ? (
+          <Table headers={['Урок', 'Наблюдатель', 'По баллам', 'Оценка наблюдателя']} stack>
+            {d.ratingGaps.map((g) => (
+              <tr key={g.record.id} className="vcr-row-link" onClick={(e) => g.lesson && !(e.target as HTMLElement).closest('a,button') && onOpen(g.lesson)}>
+                <td data-label="Урок">
+                  <button type="button" className="vcr-rowlink" onClick={() => g.lesson && onOpen(g.lesson)}>
+                    {[g.record.teacher1, g.record.teacher2].join(' и ')}
+                  </button>
+                  <small>
+                    {formatPhenomenonDate(g.record.date)} · {g.record.className}
+                  </small>
+                </td>
+                <td data-label="Наблюдатель">{g.record.observer}</td>
+                <td data-label="По баллам">
+                  <span className="vcr-scorecell">
+                    <span className="vcr-scorecell__value">{displayScore(g.record.score.percent)}</span>
+                    <Badge percent={g.record.score.percent} />
+                  </span>
+                </td>
+                <td data-label="Оценка наблюдателя">
+                  {optionLabel(PHENOMENON_OVERALL.id, g.record.answers[PHENOMENON_OVERALL.id])} {g.gap > 0 ? '↑ выше баллов' : '↓ ниже баллов'}
+                </td>
+              </tr>
+            ))}
+          </Table>
+        ) : (
+          <Empty />
+        )}
+      </section>
+    </>
+  );
+}
+
+function PhenomenonCommentsView({ records, week }: { records: PhenomenonRecord[]; week: PhenomenonWeek | undefined }) {
+  const [search, setSearch] = useState('');
+  const [ai, setAi] = useState<PhenomenonWeekAi | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
+  useEffect(() => {
+    setAi(null);
+    setAiError('');
+  }, [week?.id]);
+  const list = phenomenonComments(records, search);
+  const runAi = async () => {
+    if (!week) return;
+    setAiBusy(true);
+    setAiError('');
+    try {
+      const r = await postPhenomenonWeekAi({ from: week.from, to: week.to });
+      setAi(r);
+      if (r.error) setAiError(r.error);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'Не удалось получить обзор');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  return (
+    <>
+      <section className="vcr-panel">
+        <div className="vcr-head">
+          <h3>Обзор недели</h3>
+          {week ? (
+            <button type="button" className="vcr-action vcr-action--primary" disabled={aiBusy} onClick={() => void runAi()}>
+              {aiBusy ? 'Готовим обзор…' : ai ? 'Обновить обзор' : 'Обзор недели'}
+            </button>
+          ) : null}
+        </div>
+        {!week ? (
+          <p className="muted">Обзор строится по одной неделе: выберите неделю вверху.</p>
+        ) : !ai && !aiError ? (
+          <p className="muted">Сводка общих выводов наблюдателей в два списка, без оценок конкретных учителей. Готовит ГигаЧат, имена в запрос не попадают.</p>
+        ) : null}
+        {aiError ? <p role="alert">{aiError}</p> : null}
+        {ai && (ai.repeat.length || ai.strengthen.length) ? (
+          <div className="ph-ai">
+            <div>
+              <h4>Находки, которые стоит повторить</h4>
+              <ul>
+                {ai.repeat.map((t, i) => (
+                  <li key={i}>{t}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4>Что усилить</h4>
+              <ul>
+                {ai.strengthen.map((t, i) => (
+                  <li key={i}>{t}</li>
+                ))}
+              </ul>
+            </div>
+            {ai.note ? <p className="muted">{ai.note}</p> : null}
+          </div>
+        ) : null}
+      </section>
+      <section className="vcr-panel">
+        <h3>Общие выводы наблюдателей</h3>
+        <div className="vcr-filters">
+          <label>
+            Поиск по тексту <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+        </div>
+        <p>Комментариев: {list.length}</p>
+        {list.length ? (
+          <div className="ph-comments">
+            {list.map((c) => (
+              <article key={c.id} className="ph-comment">
+                <header>
+                  <strong>{c.teachers.join(' и ')}</strong>
+                  <span className="muted">
+                    {formatPhenomenonDate(c.date)}
+                    {c.lesson?.lessonNumber ? ` · ${c.lesson.lessonNumber} урок` : ''}
+                    {c.lesson ? ` · ${c.lesson.className}` : ''} · {c.observer}
+                  </span>
+                </header>
+                <p>{c.text}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <Empty />
+        )}
+      </section>
+    </>
+  );
+}
+
+function LevelMiniBar({ counts }: { counts: number[] }) {
+  const total = counts.reduce((s, n) => s + n, 0) || 1;
+  return (
+    <div className="ph-optbar" role="img" aria-label={counts.map((n, i) => `${LEVELS[i]}: ${n}`).join('; ')}>
+      {counts.map((n, i) =>
+        n ? (
+          <div key={i} title={`${LEVELS[i]}: ${n}`} style={{ width: `${(n / total) * 100}%`, backgroundColor: LEVEL_COLORS[i] }}>
+            {n}
+          </div>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+function PhenomenonDynamicsView({ rows }: { rows: PhenomenonWeekDynamics[] }) {
+  if (rows.length < 2) {
+    return (
+      <section className="vcr-panel">
+        <h3>Динамика</h3>
+        <p className="muted">Динамика появится, когда будут данные хотя бы за две феноменальные недели.</p>
+      </section>
+    );
+  }
+  const indicatorRows = PHENOMENON_KEY_INDICATORS.flatMap((g) => g.rows.map((r) => ({ group: g.title, row: r })));
+  return (
+    <>
+      <section className="vcr-panel">
+        <h3>Динамика по неделям</h3>
+        <Table headers={['Неделя', 'Средний итог', 'Уроков', 'Чек-листов', 'Уроки по уровням']} stack>
+          {rows.map(({ week, summary }) => (
+            <tr key={week.id}>
+              <td data-label="Неделя">{phenomenonWeekLabel(week)}</td>
+              <td data-label="Средний итог">
+                {summary.average == null ? (
+                  '—'
+                ) : (
+                  <span className="vcr-scorecell">
+                    <span className="vcr-scorecell__value">{displayScore(summary.average)} из 100</span>
+                    <Badge percent={summary.average} />
+                  </span>
+                )}
+              </td>
+              <td data-label="Уроков">{summary.lessons.length}</td>
+              <td data-label="Чек-листов">{summary.checklists}</td>
+              <td data-label="Уроки по уровням" style={{ minWidth: 220 }}>
+                <LevelMiniBar counts={summary.levelCounts} />
+              </td>
+            </tr>
+          ))}
+        </Table>
+      </section>
+      <section className="vcr-panel">
+        <h3>Ключевые показатели формата по неделям (доля уроков / доля чек-листов)</h3>
+        <Table headers={['Показатель', ...rows.map((r) => r.week.title)]}>
+          {indicatorRows.map(({ group, row }) => (
+            <tr key={row.id}>
+              <td>
+                <small>{group}</small>
+                {row.label}
+              </td>
+              {rows.map(({ week, summary }) => {
+                const v = summary.indicators.flatMap((x) => x.rows).find((x) => x.id === row.id)!;
+                return (
+                  <td key={week.id}>
+                    {v.lessons.percent == null ? '—' : `${v.lessons.percent}%`} / {v.checklists.percent == null ? '—' : `${v.checklists.percent}%`}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </Table>
+      </section>
+    </>
+  );
+}
+
+export function PhenomenonAnalytics({
+  records,
+  directory,
+  today,
+  weeks = PHENOMENON_WEEKS,
+}: {
+  records: PhenomenonRecord[];
+  directory?: LessonVisitDirectory | null;
+  today?: Date;
+  /** Список недель (по умолчанию из кода); параметр нужен для проверок. */
+  weeks?: PhenomenonWeek[];
+}) {
+  const [week, setWeek] = useState(() => defaultPhenomenonWeek(weeks, today));
+  const [view, setView] = useState<PhView>('summary');
+  const [level, setLevel] = useState<number | null>(null);
+  const [lessonKey, setLessonKey] = useState<string | null>(null);
+  const [teacherFilter, setTeacherFilter] = useState<PhenomenonTeacherRow | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+  const pdfRef = useRef<HTMLDivElement | null>(null);
+  const scoped = useMemo(() => phenomenonRecordsForWeek(records, week, weeks), [records, week, weeks]);
+  const dynamics = useMemo(() => phenomenonDynamics(records, weeks), [records, weeks]);
+  const summary = useMemo(() => summarizePhenomenonWeek(scoped), [scoped]);
+  const teacherRows = useMemo(() => phenomenonTeacherRows(scoped, directory), [scoped, directory]);
+  const stageSlices = useMemo(() => phenomenonStageSlices(summary.lessons), [summary]);
+  const pairSlices = useMemo(() => phenomenonDepartmentPairSlices(scoped, summary.lessons, directory), [scoped, summary, directory]);
+  const lesson = lessonKey ? summary.lessons.find((l) => l.lessonKey === lessonKey) ?? null : null;
+  const weekObj = weeks.find((w) => w.id === week);
+
+  const exportXlsx = async () => {
+    setBusy(true);
+    try {
+      await downloadAoaXlsx(`Феноменальные_уроки_${weekObj ? weekObj.from : 'все_недели'}.xlsx`, phenomenonExcelSheets(scoped, directory));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const exportPdf = async () => {
+    if (!pdfRef.current) return;
+    setBusy(true);
+    setPdfError('');
+    try {
+      await downloadVisitChecklistPdf(pdfRef.current, `Феноменальные_уроки_сводка_${weekObj ? weekObj.from : 'все_недели'}.pdf`);
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : 'Не удалось собрать PDF');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const openLessons = (lvl?: number) => {
+    setLevel(lvl ?? null);
+    setTeacherFilter(null);
+    setView('lessons');
+    setLessonKey(null);
+  };
+
+  return (
+    <div className="vcr-dashboard ph-analytics">
+      {lesson ? (
+        <PhenomenonLessonCard detail={phenomenonLessonDetail(scoped, lesson)} onBack={() => setLessonKey(null)} />
+      ) : (
+        <>
+          <header className="vcr-header vcr-header--compact">
+            <div className="vcr-header__title">
+              <h2>Аналитика феноменальных уроков</h2>
+            </div>
+          </header>
+          <div className="vcr-navbar">
+            <nav className="vcr-navigation" aria-label="Разделы аналитики">
+              {(
+                [
+                  ['summary', 'Сводка'],
+                  ['lessons', 'Уроки'],
+                  ['teachers', 'Педагоги'],
+                  ['slices', 'Срезы'],
+                  ['discrepancies', 'Расхождения'],
+                  ['comments', 'Комментарии'],
+                  ...(weeks.length >= 2 ? [['dynamics', 'Динамика']] : []),
+                  ['checklists', 'Чек-листы'],
+                ] as Array<[PhView, string]>
+              ).map(([id, name]) => (
+                <button key={id} aria-current={view === id ? 'page' : undefined} onClick={() => (id === 'lessons' ? openLessons() : setView(id))}>
+                  {name}
+                </button>
+              ))}
+            </nav>
+            <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {view === 'summary' ? (
+                <button type="button" className="vcr-action" disabled={busy || !scoped.length} onClick={() => void exportPdf()}>
+                  Скачать PDF сводки
+                </button>
+              ) : null}
+              <button type="button" className="vcr-action vcr-action--primary" disabled={busy || !scoped.length} onClick={() => void exportXlsx()}>
+                {busy ? 'Выгрузка…' : 'Скачать Excel'}
+              </button>
+            </span>
+          </div>
+          <div className="vcr-filters" hidden={view === 'dynamics'}>
+            <label>
+              Неделя{' '}
+              <select
+                value={week}
+                onChange={(e) => {
+                  setWeek(e.target.value);
+                  setLessonKey(null);
+                }}
+              >
+                {[...weeks].reverse().map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {phenomenonWeekLabel(w)}
+                  </option>
+                ))}
+                <option value={PHENOMENON_ALL_WEEKS}>Все недели</option>
+              </select>
+            </label>
+          </div>
+          {pdfError ? <p role="alert">{pdfError}</p> : null}
+          {view === 'dynamics' ? (
+            <PhenomenonDynamicsView rows={dynamics} />
+          ) : !scoped.length ? (
+            <section className="vcr-panel">
+              <Empty />
+            </section>
+          ) : view === 'summary' ? (
+            <div ref={pdfRef}>
+              <h3 className="ph-pdf-title">
+                Сводка: {weekObj ? phenomenonWeekLabel(weekObj) : 'все недели'}
+              </h3>
+              <PhenomenonSummaryView summary={summary} onLessons={openLessons} onLesson={(l) => setLessonKey(l.lessonKey)} />
+            </div>
+          ) : view === 'lessons' ? (
+            <PhenomenonLessonsView
+              lessons={teacherFilter ? summary.lessons.filter((l) => teacherFilter.lessonKeys.includes(l.lessonKey)) : summary.lessons}
+              title={teacherFilter ? `Уроки: ${teacherFilter.name}` : undefined}
+              onReset={teacherFilter ? () => setTeacherFilter(null) : undefined}
+              level={level}
+              onLevel={setLevel}
+              onOpen={(l) => setLessonKey(l.lessonKey)}
+            />
+          ) : view === 'teachers' ? (
+            <PhenomenonTeachersView
+              rows={teacherRows}
+              onOpen={(t) => {
+                setLevel(null);
+                setTeacherFilter(t);
+                setView('lessons');
+              }}
+            />
+          ) : view === 'slices' ? (
+            <>
+              <SliceTable title="По ступеням" group="Ступень" rows={stageSlices} />
+              <SliceTable title="По сочетанию кафедр пары" group="Кафедры пары" rows={pairSlices} />
+            </>
+          ) : view === 'discrepancies' ? (
+            <PhenomenonDiscrepanciesView records={scoped} onOpen={(l) => setLessonKey(l.lessonKey)} />
+          ) : view === 'comments' ? (
+            <PhenomenonCommentsView records={scoped} week={weekObj} />
+          ) : (
+            <PhenomenonResultsTable records={scoped} />
+          )}
+        </>
+      )}
+    </div>
   );
 }

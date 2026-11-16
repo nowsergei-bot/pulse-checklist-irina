@@ -747,7 +747,7 @@ function withListQueries(pool) {
   return pool;
 }
 
-test('results of the phenomenon checklist: only the main checklist analytics group gets them', () => withOpen(true, async () => {
+test('phenomenon analytics: only three records see the results, admins with full access do not', () => withOpen(true, async () => {
   const handlers = require('../lesson-visit-projects');
   const pool = fakePool();
   await handlers.handleGetPublicLessonVisitForm(pool, PHENOMENON_FORM_TOKEN);
@@ -758,18 +758,86 @@ test('results of the phenomenon checklist: only the main checklist analytics gro
   withListQueries(pool);
   const list = (sessionUser) => handlers.handleListLessonVisitResponses(pool, null, false, sessionUser, ph.id);
 
-  const teacher = await list({ id: 501, email: 'teacher@example.org', role: 'teacher', permissions: [] });
-  assert.ok([403, 404].includes(teacher.statusCode), 'обычный учитель не видит результаты');
-  const methodist = await list({ id: 502, email: 'm@example.org', role: 'methodist', permissions: ['pulse.analytics.view'] });
-  assert.ok([403, 404].includes(methodist.statusCode), 'право просмотра своей аналитики без назначения кафедры не открывает общие результаты');
-  const anon = await handlers.handleListLessonVisitResponses(pool, null, false, null, ph.id);
-  assert.equal(anon.statusCode, 403);
-
-  for (const permissions of [['pulse.analytics.all'], ['*'], ['pulse.director.checklist']]) {
-    const ok = await list({ id: 503, email: 'a@example.org', role: 'methodist', permissions });
-    assert.equal(ok.statusCode, 200, permissions.join());
+  assert.deepEqual([...phenomenonLib.PHENOMENON_ANALYTICS_PERSON_KEYS].sort(), ['khoroshilov', 'kostyukovich', 'novozhilov']);
+  assert.equal(phenomenonLib.PHENOMENON_ANALYTICS_OPEN_TO_GROUP, false, 'пока открыто только трём');
+  for (const key of phenomenonLib.PHENOMENON_ANALYTICS_PERSON_KEYS) {
+    assert.ok(personByKey(key), `запись ${key} есть в списке аналитики`);
+    const ok = await list(personByKey(key));
+    assert.equal(ok.statusCode, 200, key);
     assert.equal(JSON.parse(ok.body).responses.length, 1);
   }
+  const teacher = await list({ id: 501, email: 'teacher@example.org', role: 'teacher', permissions: [] });
+  assert.ok([403, 404].includes(teacher.statusCode), 'учитель не видит');
+  const anon = await handlers.handleListLessonVisitResponses(pool, null, false, null, ph.id);
+  assert.equal(anon.statusCode, 403);
+  for (const permissions of [['pulse.analytics.all'], ['*'], ['pulse.director.checklist']]) {
+    const r = await list({ id: 503, email: 'a@example.org', role: 'methodist', permissions });
+    assert.equal(r.statusCode, 404, `${permissions.join()}: администратор и группа аналитики пока не видят`);
+  }
+  assert.equal((await list(personByKey('maisuradze'))).statusCode, 404, 'другой человек из списка аналитики пока не видит');
+  // Ключ API ответы феноменального урока не открывает.
+  assert.equal((await handlers.handleListLessonVisitResponses(pool, null, true, null, ph.id)).statusCode, 404);
+  // Основной чек-лист ограничение не затрагивает.
+  assert.equal((await handlers.handleListLessonVisitResponses(pool, null, false, { id: 503, email: 'a@example.org', permissions: ['*'] }, 1)).statusCode, 200);
+  // Публичная ссылка директора не отдаёт ответы феноменального урока.
+  pool.query = ((base) => async (sql, params = []) => {
+    if (/WHERE director_share_token = \$1/.test(sql)) return { rows: pool.projects.filter((p) => p.director_share_token === params[0]) };
+    return base(sql, params);
+  })(pool.query.bind(pool));
+  assert.equal((await handlers.handleGetPublicLessonVisitDirector(pool, ph.director_share_token)).statusCode, 404);
+
+  // После включения переключателя: вся группа аналитики основного чек-листа, учителя по-прежнему нет.
+  const before = phenomenonLib.phenomenonAccess.analyticsOpenToGroup;
+  phenomenonLib.phenomenonAccess.analyticsOpenToGroup = true;
+  try {
+    for (const permissions of [['pulse.analytics.all'], ['*'], ['pulse.director.checklist']]) {
+      assert.equal((await list({ id: 503, email: 'a@example.org', role: 'methodist', permissions })).statusCode, 200, permissions.join());
+    }
+    assert.equal((await list(personByKey('maisuradze'))).statusCode, 200);
+    for (const key of phenomenonLib.PHENOMENON_ANALYTICS_PERSON_KEYS) assert.equal((await list(personByKey(key))).statusCode, 200, key);
+    const t2 = await list({ id: 501, email: 'teacher@example.org', role: 'teacher', permissions: [] });
+    assert.ok([403, 404].includes(t2.statusCode), 'учитель по-прежнему не видит');
+    const m2 = await list({ id: 502, email: 'm@example.org', role: 'methodist', permissions: ['pulse.analytics.view'] });
+    assert.ok([403, 404].includes(m2.statusCode), 'своя аналитика кафедры не открывает');
+  } finally {
+    phenomenonLib.phenomenonAccess.analyticsOpenToGroup = before;
+  }
+}));
+
+test('phenomenon week overview: same access as the analytics, comments go out without names', () => withOpen(true, async () => {
+  const handlers = require('../lesson-visit-projects');
+  const ai = require('./visit-checklist-cloud-ai');
+  const pool = fakePool();
+  await handlers.handleGetPublicLessonVisitForm(pool, PHENOMENON_FORM_TOKEN);
+  const post = (general, comment) =>
+    handlers.handlePostPublicLessonVisitResponse(pool, PHENOMENON_FORM_TOKEN, {
+      body: JSON.stringify({ general: { ...GENERAL, ...general }, answers: { ...MAX_ANSWERS, ph_comments: comment } }),
+    });
+  await post({}, `Педагог Первый и Педагог Второй выстроили общий маршрут, ученики сами связали эпохи. Первый хорошо вёл дискуссию.`);
+  await post({ date: '2026-11-25' }, 'Вне недели');
+  withListQueries(pool);
+  let seen = null;
+  const fake = async (input) => {
+    seen = ai.buildPhenomenonWeekPayload(input);
+    return { repeat: ['Общий маршрут урока'], strengthen: ['Время на вывод'], note: '', error: null, source: 'test' };
+  };
+  const call = (sessionUser, viaKey = false) =>
+    handlers.handlePhenomenonWeekAi(pool, null, viaKey, sessionUser, { from: '2026-11-16', to: '2026-11-18' }, fake);
+
+  assert.equal((await call({ id: 2, email: 'admin@example.org', permissions: ['*'] })).statusCode, 404);
+  assert.equal((await call(null, true)).statusCode, 404, 'ключ API не подходит');
+  assert.equal(seen, null, 'без доступа модель не вызывается');
+  const ok = await call(personByKey('kostyukovich'));
+  assert.equal(ok.statusCode, 200);
+  assert.deepEqual(JSON.parse(ok.body).phenomenon_ai.repeat, ['Общий маршрут урока']);
+  assert.equal(seen.count, 1, 'только комментарии выбранной недели');
+  const sent = seen.comments.join(' ');
+  assert.doesNotMatch(sent, /Педагог Первый|Педагог Второй|Наблюдатель Тестовый/);
+  assert.match(sent, /ученики сами связали эпохи/);
+  // Ответ модели: псевдонимы убираются, пустой ответ не принимается.
+  assert.deepEqual(ai.normalizePhenomenonWeek({ repeat: ['УЧ_AB12CD3 вёл дискуссию'], strengthen: [] }).repeat, ['педагог вёл дискуссию']);
+  assert.equal(ai.normalizePhenomenonWeek({ repeat: [], strengthen: [] }), null);
+  assert.equal((await handlers.handlePhenomenonWeekAi(pool, null, false, personByKey('kostyukovich'), { from: 'x' }, fake)).statusCode, 400);
 }));
 
 test('closed form: only the two pilot records may submit and read results, others get «Раздел пока недоступен»', () =>

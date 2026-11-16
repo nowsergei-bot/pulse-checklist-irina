@@ -318,6 +318,11 @@ async function handlePostVisitChecklistDashboardSchoolAi(pool, user, viaAdminKey
   const denied = requireAnalyst(user, viaAdminKey, sessionUser);
   if (denied) return denied;
   try {
+    const raw = parseBody(event);
+    if (raw && typeof raw === 'object' && raw.phenomenon) {
+      // Обзор недели феноменальных уроков: доступ и данные проверяются в lesson-visit-projects.js.
+      return await require('./lesson-visit-projects').handlePhenomenonWeekAi(pool, user, viaAdminKey, sessionUser, raw.phenomenon);
+    }
     const q = parseQuery(event);
     const projectId = await resolveProjectId(pool, q.project);
     if (!projectId) return json(404, { error: 'Not found' });

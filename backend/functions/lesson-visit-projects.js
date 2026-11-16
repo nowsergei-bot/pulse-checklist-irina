@@ -726,11 +726,12 @@ async function handleListLessonVisitResponses(pool, user, viaAdminKey, sessionUs
     });
     if (!check.ok) return json(check.code, { error: 'Not found' });
 
-    // Пока феноменальный чек-лист не открыт для всех, его результаты видят только участники пробного доступа.
-    if (!phenomenonLib.phenomenonAccess.openForAll) {
-      const tok = await pool.query('SELECT form_token FROM lesson_visit_projects WHERE id = $1', [pid]);
-      const isPhenomenon = isPhenomenonToken(tok.rows[0] && tok.rows[0].form_token);
-      if (isPhenomenon && !phenomenonLib.canUsePhenomenon(visitChecklistAnalyticsActor(user, sessionUser))) {
+    // Ответы феноменального урока: только тем, кому открыта его аналитика (см. canViewPhenomenonAnalytics).
+    // Ключ API и полный доступ администратора сами по себе ответы не открывают.
+    const tok = await pool.query('SELECT form_token FROM lesson_visit_projects WHERE id = $1', [pid]);
+    if (isPhenomenonToken(tok.rows[0] && tok.rows[0].form_token)) {
+      const actor = viaAdminKey ? null : visitChecklistAnalyticsActor(user, sessionUser);
+      if (!phenomenonLib.canViewPhenomenonAnalytics(actor)) {
         return json(404, { error: 'Not found', message: PHENOMENON_CLOSED_MESSAGE });
       }
     }
@@ -747,7 +748,8 @@ async function handleListLessonVisitResponses(pool, user, viaAdminKey, sessionUs
 async function handleGetPublicLessonVisitDirector(pool, tokenRaw) {
   try {
     const row = await loadProjectByDirectorToken(pool, tokenRaw);
-    if (!row) return json(404, { error: 'Not found' });
+    // Ответы феноменального урока по публичной ссылке не отдаются.
+    if (!row || isPhenomenonToken(row.form_token)) return json(404, { error: 'Not found' });
     // Список новых учителей нужен только внутренней аналитике, по публичной ссылке его не отдаём.
     const { newTeacherIds: _hidden, ...draft } = normalizeDraft(row);
     const responses = await listResponseRows(pool, row.id);
@@ -757,6 +759,40 @@ async function handleGetPublicLessonVisitDirector(pool, tokenRaw) {
       responses,
       lessonAnalyticsProjectId: draft.lessonAnalyticsProjectId ?? null,
     });
+  } catch (err) {
+    const mapped = schemaErrorResponse(err);
+    if (mapped) return mapped;
+    throw err;
+  }
+}
+
+/**
+ * Обзор недели феноменальных уроков (ИИ). Вызывается с адреса обзора обычной аналитики
+ * (visit-checklist-dashboard.js) с полем phenomenon: { from, to }.
+ * Доступ как к аналитике феноменальных уроков; ключ API не подходит.
+ */
+async function handlePhenomenonWeekAi(pool, user, viaAdminKey, sessionUser, range, generate) {
+  const actor = viaAdminKey ? null : visitChecklistAnalyticsActor(user, sessionUser);
+  if (!phenomenonLib.canViewPhenomenonAnalytics(actor)) return json(404, { error: 'Not found' });
+  const iso = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : '');
+  const from = iso(range && range.from);
+  const to = iso(range && range.to);
+  if (!from || !to) return json(400, { error: 'Нужны даты недели' });
+  try {
+    const project = await ensurePhenomenonProject(pool);
+    if (!project) return json(404, { error: 'Not found' });
+    const rows = (await listResponseRows(pool, project.id)).filter((r) => {
+      const d = String((r.general && r.general.date) || '').slice(0, 10);
+      return d >= from && d <= to;
+    });
+    const comments = rows.map((r) => r.answers && r.answers.ph_comments).filter(Boolean);
+    const people = new Set();
+    for (const r of rows) {
+      for (const k of ['teacher1_name', 'teacher2_name', 'observer_name']) if (r.general && r.general[k]) people.add(r.general[k]);
+    }
+    const run = generate || require('./lib/visit-checklist-cloud-ai').generatePhenomenonWeekAi;
+    const result = await run({ comments, people: [...people] });
+    return json(200, { phenomenon_ai: result });
   } catch (err) {
     const mapped = schemaErrorResponse(err);
     if (mapped) return mapped;
@@ -776,6 +812,7 @@ module.exports = {
   handleListLessonVisitResponses,
   handleDeleteLessonVisitResponse,
   handleGetPublicLessonVisitDirector,
+  handlePhenomenonWeekAi,
   emptyDraft,
   normalizeDraft,
   listResponseRows,

@@ -379,6 +379,27 @@ export async function postVisitChecklistDashboardTeacherAi(
   };
 }
 
+export type PhenomenonWeekAi = {
+  repeat: string[];
+  strengthen: string[];
+  note?: string;
+  error?: string | null;
+  insufficient?: boolean;
+  source?: string;
+};
+
+/** Обзор недели феноменальных уроков: тот же адрес, что обзор обычной аналитики, с полем phenomenon. */
+export async function postPhenomenonWeekAi(range: { from: string; to: string }): Promise<PhenomenonWeekAi> {
+  const res = await apiFetch(`${API_BASE}/api/visit-checklist-dashboard/school-ai`, {
+    method: 'POST',
+    headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phenomenon: range }),
+  });
+  const data = await parseJson<{ phenomenon_ai?: PhenomenonWeekAi; error?: string; message?: string }>(res);
+  if (!res.ok || !data.phenomenon_ai) throw new Error(apiErrText(data, res.statusText));
+  return data.phenomenon_ai;
+}
+
 export async function postVisitChecklistDashboardSchoolAi(
   projectId?: number,
   opts?: { force?: boolean; filters?: { status?: string } },

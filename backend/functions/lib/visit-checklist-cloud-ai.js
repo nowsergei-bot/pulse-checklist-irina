@@ -946,7 +946,94 @@ function packSchoolAiRecord(generated, fingerprint) {
   };
 }
 
+// ---------- Обзор недели феноменальных уроков ----------
+
+const PHENOMENON_WEEK_PROMPT_VERSION = 'phenomenon-week-2026-11';
+
+const PHENOMENON_WEEK_SYSTEM = `Ты — методист школы. Тебе дают «Общие выводы по уроку» наблюдателей феноменальных уроков за одну неделю.
+Феноменальный урок ведут два учителя разных предметов вокруг одного феномена. Это подготовленные показательные уроки.
+
+Сделай сводку комментариев в два списка:
+- repeat: находки формата, которые стоит повторить на следующих феноменальных неделях;
+- strengthen: что усилить в формате.
+
+Правила:
+- используй только переданные комментарии, ничего не придумывай;
+- пиши о формате и приёмах, а не о людях: без оценок конкретных учителей, без имён, без рейтингов;
+- псевдонимы вида УЧ_..., ПД_... не упоминай;
+- 3-7 пунктов в каждом списке, каждый пункт одно-два предложения на русском языке;
+- если комментариев мало, так и скажи в note.
+
+Ответь ОДНИМ JSON-объектом без markdown:
+{"repeat": ["..."], "strengthen": ["..."], "note": "..."}`;
+
+function phenomenonWeekEntities(comments, people) {
+  const list = [];
+  for (const name of people || []) {
+    const full = String(name || '').trim();
+    if (!full) continue;
+    list.push({ type: 'teacher', value: full });
+    const surname = full.split(/\s+/)[0];
+    if (surname && surname.length >= 3) list.push({ type: 'teacher', value: surname });
+  }
+  list.push(...extractAutoPiiEntities(comments.join('\n')));
+  return list;
+}
+
+/** Комментарии без имён: ФИО педагогов и наблюдателей, фамилии и найденные персональные данные заменяются псевдонимами. */
+function buildPhenomenonWeekPayload({ comments, people }) {
+  const texts = (comments || []).map((c) => String(c || '').trim()).filter(Boolean).slice(0, 300);
+  const { redactedText } = buildRedactedPack(texts.join('\n␞\n'), phenomenonWeekEntities(texts, people));
+  return { comments: redactedText ? redactedText.split('\n␞\n').map((t) => t.slice(0, 1500)) : [], count: texts.length };
+}
+
+function cleanPhenomenonItem(text) {
+  return String(text || '')
+    .replace(/(УЧ|ПД|РЕБ|КЛ|ТЛФ|АДР)_[A-Z0-9]{4,}/g, 'педагог')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizePhenomenonWeek(parsed) {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const list = (v) => (Array.isArray(v) ? v.map(cleanPhenomenonItem).filter(Boolean).slice(0, 10) : []);
+  const repeat = list(parsed.repeat);
+  const strengthen = list(parsed.strengthen);
+  if (!repeat.length && !strengthen.length) return null;
+  return { repeat, strengthen, note: cleanPhenomenonItem(parsed.note || '') };
+}
+
+/**
+ * ИИ-обзор недели феноменальных уроков: «находки, которые стоит повторить» и «что усилить».
+ * Использует тот же GigaChat, что и обзор обычной аналитики; новых настроек сервера не требует.
+ */
+async function generatePhenomenonWeekAi(input) {
+  const payload = buildPhenomenonWeekPayload(input || {});
+  if (!payload.comments.length) {
+    return { repeat: [], strengthen: [], note: '', insufficient: true, error: 'За эту неделю нет общих выводов наблюдателей.', source: 'insufficient' };
+  }
+  const gigaOpts = gigaChatChatOpts({ maxTokens: 1600, temperature: 0.2, jsonObject: true });
+  if (!gigaOpts) return { repeat: [], strengthen: [], note: '', error: GIGA_NOT_CONFIGURED, source: 'none' };
+  try {
+    const giga = await requestGigaStructured(
+      payload,
+      JSON.stringify(payload),
+      gigaOpts,
+      PHENOMENON_WEEK_SYSTEM,
+      normalizePhenomenonWeek,
+      50000,
+    );
+    if (giga?.ok) return { ...giga.ok.report, source: giga.ok.source, error: null, prompt_version: PHENOMENON_WEEK_PROMPT_VERSION };
+    return { repeat: [], strengthen: [], note: '', error: humanizeLlmError(giga?.fail || {}), source: 'error' };
+  } catch (err) {
+    return { repeat: [], strengthen: [], note: '', error: humanizeLlmError({ detail: String((err && err.message) || err) }), source: 'error' };
+  }
+}
+
 module.exports = {
+  buildPhenomenonWeekPayload,
+  generatePhenomenonWeekAi,
+  normalizePhenomenonWeek,
   SCHOOL_PROMPT_VERSION,
   SCHOOL_SYSTEM,
   SYSTEM,

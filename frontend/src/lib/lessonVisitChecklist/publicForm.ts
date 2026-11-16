@@ -992,8 +992,13 @@ export type PhenomenonLessonSummary = {
   teachers: string[];
   checklists: number;
   recordIds: number[];
+  /** Сколько разных наблюдателей. */
+  observers: number;
   percent: number;
   level: PhenomenonLevel;
+  /** Разброс: минимальный и максимальный итог чек-листов урока. */
+  minPercent: number;
+  maxPercent: number;
 };
 
 /** Итог урока: среднее по чек-листам всех наблюдателей этого урока. */
@@ -1024,8 +1029,11 @@ export function summarizePhenomenonLessons(records: PhenomenonRecord[]): Phenome
         teachers: [first.teacher1, first.teacher2].sort((x, y) => x.localeCompare(y, 'ru')),
         checklists: list.length,
         recordIds: list.map((r) => r.id),
+        observers: new Set(list.map((r) => personKey(r.observer) || `#${r.id}`)).size,
         percent: round1(raw),
         level: phenomenonLevel(raw),
+        minPercent: Math.min(...list.map((r) => r.score.percent)),
+        maxPercent: Math.max(...list.map((r) => r.score.percent)),
       });
     }
   }
@@ -1105,8 +1113,11 @@ function formatRuDate(iso: string): string {
   return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
 }
 
-/** Листы выгрузки в Excel: чек-листы, уроки, мастерство педагогов. */
-export function phenomenonExcelSheets(records: PhenomenonRecord[]): Array<{ name: string; rows: Array<Array<string | number>> }> {
+/** Листы выгрузки в Excel: чек-листы, уроки, педагоги, профиль по критериям, расхождения. */
+export function phenomenonExcelSheets(
+  records: PhenomenonRecord[],
+  directory?: LessonVisitDirectory | null,
+): Array<{ name: string; rows: Array<Array<string | number>> }> {
   const lessons = summarizePhenomenonLessons(records);
   const lessonByRecord = new Map<number, PhenomenonLessonSummary>();
   for (const l of lessons) for (const id of l.recordIds) lessonByRecord.set(id, l);
@@ -1153,26 +1164,561 @@ export function phenomenonExcelSheets(records: PhenomenonRecord[]): Array<{ name
     ]);
   }
   const lessonRows: Array<Array<string | number>> = [
-    ['Дата', '№ урока', 'Класс', 'Педагоги', 'Чек-листов', 'Итог урока, %', 'Уровень'],
+    ['Дата', '№ урока', 'Класс', 'Педагоги', 'Наблюдателей', 'Чек-листов', 'Итог урока, %', 'Уровень', 'Минимум, %', 'Максимум, %'],
     ...lessons.map((l) => [
       formatRuDate(l.date),
       l.lessonNumber,
       l.className,
       l.teachers.join(', '),
+      l.observers,
       l.checklists,
       l.percent,
       PHENOMENON_LEVEL_LABELS[l.level].ru,
+      l.minPercent,
+      l.maxPercent,
     ]),
   ];
   const teacherRows: Array<Array<string | number>> = [
-    ['Педагог', 'Оценок', 'Среднее мастерство (1-10)'],
-    ...summarizePhenomenonTeachers(records).map((t) => [t.name, t.ratings, t.mastery]),
+    ['Педагог', 'Кафедра', 'Феноменальных уроков', 'Средний итог уроков, %', 'Среднее мастерство (1-10)', 'Оценок мастерства'],
+    ...sortPhenomenonTeachers(phenomenonTeacherRows(records, directory), 'name').map((t) => [
+      t.name,
+      t.department,
+      t.lessons,
+      t.average ?? '',
+      t.mastery ?? '',
+      t.ratings,
+    ]),
+  ];
+  const summary = summarizePhenomenonWeek(records);
+  const profileRows: Array<Array<string | number>> = [['Пункт', '% от максимума', 'Вариант ответа', 'Чек-листов', 'Доля, %']];
+  for (const p of summary.profile) {
+    p.options.forEach((o, i) => profileRows.push([i === 0 ? p.title : '', i === 0 ? (p.percent ?? 'без баллов') : '', o.label, o.count, o.percent]));
+  }
+  const d = phenomenonDiscrepancies(records);
+  const discRows: Array<Array<string | number>> = [
+    ['Вид', 'Дата', '№ урока', 'Класс', 'Педагоги', 'Наблюдатель', 'Подробности'],
+    ...d.spread.map((l) => [
+      `Итоги наблюдателей отличаются на ${PHENOMENON_SPREAD_LIMIT} и больше`,
+      formatRuDate(l.date),
+      l.lessonNumber,
+      l.className,
+      l.teachers.join(', '),
+      '',
+      `от ${l.minPercent} до ${l.maxPercent} (${l.checklists} чек-листов)`,
+    ]),
+    ...d.ratingGaps.map((g) => [
+      'Оценка наблюдателя расходится с баллами',
+      formatRuDate(g.record.date),
+      g.lesson?.lessonNumber ?? g.record.lessonNumber,
+      g.record.className,
+      [g.record.teacher1, g.record.teacher2].join(', '),
+      g.record.observer,
+      `по баллам: ${PHENOMENON_LEVEL_LABELS[PHENOMENON_LEVEL_ORDER[g.scoreLevel]].ru} (${g.record.score.percent}); наблюдатель: ${optionLabel(PHENOMENON_OVERALL.id, g.record.answers[PHENOMENON_OVERALL.id])}`,
+    ]),
   ];
   return [
     { name: 'Чек-листы', rows: checklistRows },
     { name: 'Уроки', rows: lessonRows },
-    { name: 'Мастерство педагогов', rows: teacherRows },
+    { name: 'Педагоги', rows: teacherRows },
+    { name: 'Профиль по критериям', rows: profileRows },
+    { name: 'Расхождения', rows: discRows },
   ];
 }
 
 export { formatRuDate as formatPhenomenonDate };
+
+// ---------- Аналитика феноменальных уроков ----------
+
+export type PhenomenonWeek = { id: string; title: string; from: string; to: string };
+
+/**
+ * Феноменальные недели. Одна строка на неделю: id, название феномена, первый и последний день (ГГГГ-ММ-ДД).
+ * Новую неделю добавляем сюда одной строкой. Чек-лист попадает в неделю по дате посещения.
+ */
+export const PHENOMENON_WEEKS: PhenomenonWeek[] = [
+  { id: '2026-11-16', title: 'Эпохи России', from: '2026-11-16', to: '2026-11-18' },
+];
+
+/** Выбор «Все недели» (сюда входят и чек-листы с датой вне недель). */
+export const PHENOMENON_ALL_WEEKS = 'all';
+
+export function phenomenonWeekOf(date: string, weeks: PhenomenonWeek[] = PHENOMENON_WEEKS): PhenomenonWeek | null {
+  const d = String(date || '').slice(0, 10);
+  return weeks.find((w) => d >= w.from && d <= w.to) ?? null;
+}
+
+export function phenomenonWeekLabel(week: PhenomenonWeek): string {
+  return `«${week.title}», ${formatRuDate(week.from)}-${formatRuDate(week.to)}`;
+}
+
+/** По умолчанию последняя начавшаяся неделя (если ни одна не началась, первая). */
+export function defaultPhenomenonWeek(weeks: PhenomenonWeek[] = PHENOMENON_WEEKS, today: Date = new Date()): string {
+  if (!weeks.length) return PHENOMENON_ALL_WEEKS;
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const started = [...weeks].sort((a, b) => (a.from < b.from ? -1 : 1)).filter((w) => w.from <= iso);
+  return (started[started.length - 1] ?? weeks[0]).id;
+}
+
+export function phenomenonRecordsForWeek(
+  records: PhenomenonRecord[],
+  weekId: string,
+  weeks: PhenomenonWeek[] = PHENOMENON_WEEKS,
+): PhenomenonRecord[] {
+  if (!weekId || weekId === PHENOMENON_ALL_WEEKS) return records;
+  const week = weeks.find((w) => w.id === weekId);
+  if (!week) return [];
+  return records.filter((r) => r.date >= week.from && r.date <= week.to);
+}
+
+/** Номер уровня 0-4 (очень низкий … очень высокий), как в обычной аналитике. */
+export const PHENOMENON_LEVEL_ORDER: PhenomenonLevel[] = ['very_low', 'low', 'medium', 'high', 'very_high'];
+
+function itemById(id: string): PhenomenonChoiceItem | undefined {
+  return [...PHENOMENON_ITEMS, PHENOMENON_OVERALL].find((i) => i.id === id);
+}
+
+/**
+ * Ответ урока по пункту: тот, что выбрало больше наблюдателей. При равенстве берётся вариант
+ * с меньшим баллом (осторожная оценка), для пунктов без баллов первый по порядку в форме.
+ */
+export function phenomenonLessonAnswer(list: PhenomenonRecord[], itemId: string): string {
+  const item = itemById(itemId);
+  const counts = new Map<string, number>();
+  for (const r of list) {
+    const a = r.answers[itemId];
+    if (a) counts.set(a, (counts.get(a) || 0) + 1);
+  }
+  if (!counts.size) return '';
+  const order = item?.options ?? [];
+  const rank = (id: string) => {
+    const idx = order.findIndex((o) => o.id === id);
+    const opt = order[idx];
+    return [opt?.score ?? 0, idx < 0 ? 99 : idx] as const;
+  };
+  return [...counts.entries()].sort((x, y) => {
+    if (y[1] !== x[1]) return y[1] - x[1];
+    const [sx, ix] = rank(x[0]);
+    const [sy, iy] = rank(y[0]);
+    return sx !== sy ? sx - sy : ix - iy;
+  })[0][0];
+}
+
+export type PhenomenonIndicatorRow = {
+  id: string;
+  label: string;
+  item: string;
+  options: string[];
+};
+
+export type PhenomenonIndicatorGroup = { id: string; title: string; rows: PhenomenonIndicatorRow[] };
+
+/** Ключевые показатели формата (раздел 2 ТЗ). */
+export const PHENOMENON_KEY_INDICATORS: PhenomenonIndicatorGroup[] = [
+  {
+    id: 'phenomenon',
+    title: 'Раскрытие феномена',
+    rows: [
+      {
+        id: 'students_link',
+        label: 'Ученики сами связывают знания двух предметов и делают вывод о феномене',
+        item: 'ph_phenomenon',
+        options: ['students_link'],
+      },
+      {
+        id: 'not_revealed',
+        label: 'Феномен не раскрыт или раскрыт только через один предмет',
+        item: 'ph_phenomenon',
+        options: ['none', 'parallel'],
+      },
+    ],
+  },
+  {
+    id: 'coteaching',
+    title: 'Совместное ведение',
+    rows: [{ id: 'turns', label: 'Учителя ведут урок по очереди', item: 'ph_coteaching', options: ['turns'] }],
+  },
+  {
+    id: 'reflection',
+    title: 'Рефлексия',
+    rows: [
+      { id: 'reflection_meaningful', label: 'Содержательная', item: 'ph_reflection', options: ['meaningful'] },
+      { id: 'reflection_formal', label: 'Формальная', item: 'ph_reflection', options: ['formal'] },
+      { id: 'reflection_none', label: 'Не проводилась', item: 'ph_reflection', options: ['none'] },
+    ],
+  },
+  {
+    id: 'objectives',
+    title: 'Цели урока',
+    rows: [
+      { id: 'objectives_teachers', label: 'Сформулированы учителями', item: 'ph_objectives', options: ['teachers'] },
+      { id: 'objectives_joint', label: 'Совместно с учащимися', item: 'ph_objectives', options: ['joint'] },
+      { id: 'objectives_students', label: 'Сформулированы учащимися', item: 'ph_objectives', options: ['students'] },
+      { id: 'objectives_none', label: 'Не сформулированы', item: 'ph_objectives', options: ['none'] },
+    ],
+  },
+];
+
+export type PhenomenonShare = { count: number; total: number; percent: number | null };
+
+function share(count: number, total: number): PhenomenonShare {
+  return { count, total, percent: total ? round1((count / total) * 100) : null };
+}
+
+export type PhenomenonIndicatorValue = PhenomenonIndicatorRow & { lessons: PhenomenonShare; checklists: PhenomenonShare };
+
+export type PhenomenonProfileOption = { id: string; label: string; count: number; percent: number };
+
+export type PhenomenonProfileItem = {
+  id: string;
+  title: string;
+  scored: boolean;
+  /** Процент от максимума (среднее по урокам); null у пункта без баллов. */
+  percent: number | null;
+  answered: number;
+  options: PhenomenonProfileOption[];
+};
+
+export type PhenomenonWeekSummary = {
+  lessons: PhenomenonLessonSummary[];
+  /** Средний итог по урокам (каждый урок с равным весом). */
+  average: number | null;
+  averageLevel: PhenomenonLevel | null;
+  checklists: number;
+  observers: number;
+  teachers: number;
+  /** Число уроков по уровням, в порядке PHENOMENON_LEVEL_ORDER. */
+  levelCounts: number[];
+  indicators: Array<{ group: PhenomenonIndicatorGroup; rows: PhenomenonIndicatorValue[] }>;
+  profile: PhenomenonProfileItem[];
+};
+
+function lessonRecords(records: PhenomenonRecord[], lesson: PhenomenonLessonSummary): PhenomenonRecord[] {
+  const ids = new Set(lesson.recordIds);
+  return records.filter((r) => ids.has(r.id));
+}
+
+/** Сводка по набору чек-листов (неделя или все недели). */
+export function summarizePhenomenonWeek(records: PhenomenonRecord[]): PhenomenonWeekSummary {
+  const lessons = summarizePhenomenonLessons(records);
+  const byLesson = lessons.map((l) => ({ lesson: l, list: lessonRecords(records, l) }));
+  const rawLesson = (list: PhenomenonRecord[]) => list.reduce((s, r) => s + (r.score.points / r.score.max) * 100, 0) / list.length;
+  const raws = byLesson.map((x) => rawLesson(x.list));
+  const avgRaw = raws.length ? raws.reduce((s, v) => s + v, 0) / raws.length : null;
+  const teachers = new Set<string>();
+  for (const r of records) {
+    if (r.teacher1) teachers.add(personKey(r.teacher1));
+    if (r.teacher2) teachers.add(personKey(r.teacher2));
+  }
+  const levelCounts = PHENOMENON_LEVEL_ORDER.map((lvl) => lessons.filter((l) => l.level === lvl).length);
+  const indicators = PHENOMENON_KEY_INDICATORS.map((group) => ({
+    group,
+    rows: group.rows.map((row) => {
+      const lessonHits = byLesson.filter((x) => row.options.includes(phenomenonLessonAnswer(x.list, row.item))).length;
+      const lessonTotal = byLesson.filter((x) => phenomenonLessonAnswer(x.list, row.item)).length;
+      const answered = records.filter((r) => r.answers[row.item]);
+      const hits = answered.filter((r) => row.options.includes(r.answers[row.item])).length;
+      return { ...row, lessons: share(lessonHits, lessonTotal), checklists: share(hits, answered.length) };
+    }),
+  }));
+  const profile: PhenomenonProfileItem[] = PHENOMENON_ITEMS.map((item) => {
+    const answered = records.filter((r) => item.options.some((o) => o.id === r.answers[item.id]));
+    const options = item.options.map((o) => {
+      const count = answered.filter((r) => r.answers[item.id] === o.id).length;
+      return { id: o.id, label: o.label.ru, count, percent: answered.length ? round1((count / answered.length) * 100) : 0 };
+    });
+    let percent: number | null = null;
+    if (item.scored) {
+      const max = Math.max(...item.options.map((o) => o.score ?? 0));
+      const perLesson = byLesson
+        .map((x) => {
+          const vals = x.list
+            .map((r) => item.options.find((o) => o.id === r.answers[item.id])?.score)
+            .filter((v): v is number => v != null);
+          return vals.length ? (vals.reduce((s, v) => s + v, 0) / vals.length / max) * 100 : null;
+        })
+        .filter((v): v is number => v != null);
+      percent = perLesson.length ? round1(perLesson.reduce((s, v) => s + v, 0) / perLesson.length) : null;
+    }
+    return { id: item.id, title: item.title.ru, scored: Boolean(item.scored), percent, answered: answered.length, options };
+  });
+  return {
+    lessons,
+    average: avgRaw == null ? null : round1(avgRaw),
+    averageLevel: avgRaw == null ? null : phenomenonLevel(avgRaw),
+    checklists: records.length,
+    observers: new Set(records.map((r) => personKey(r.observer)).filter(Boolean)).size,
+    teachers: teachers.size,
+    levelCounts,
+    indicators,
+    profile,
+  };
+}
+
+export type PhenomenonLessonDetail = {
+  lesson: PhenomenonLessonSummary;
+  checklists: PhenomenonRecord[];
+  /** Мастерство каждого педагога урока: среднее по наблюдателям. */
+  mastery: Array<{ name: string; mean: number | null; ratings: number }>;
+};
+
+/** Карточка урока: все его чек-листы и мастерство каждого педагога. */
+export function phenomenonLessonDetail(records: PhenomenonRecord[], lesson: PhenomenonLessonSummary): PhenomenonLessonDetail {
+  const list = lessonRecords(records, lesson).sort((a, b) => a.observer.localeCompare(b.observer, 'ru'));
+  const values = new Map<string, { name: string; values: number[] }>();
+  const add = (name: string, v: number | null) => {
+    const key = personKey(name);
+    if (!key) return;
+    const row = values.get(key) || { name, values: [] };
+    if (v != null) row.values.push(v);
+    values.set(key, row);
+  };
+  for (const r of list) {
+    add(r.teacher1, r.mastery1);
+    add(r.teacher2, r.mastery2);
+  }
+  const mastery = [...values.values()]
+    .map((v) => ({ name: v.name, ratings: v.values.length, mean: v.values.length ? round1(v.values.reduce((s, x) => s + x, 0) / v.values.length) : null }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  return { lesson, checklists: list, mastery };
+}
+
+export type PhenomenonLessonSort = 'date_desc' | 'date_asc' | 'score_desc' | 'score_asc';
+
+/** Поиск по педагогу и сортировка таблицы уроков. */
+export function phenomenonLessonRows(
+  lessons: PhenomenonLessonSummary[],
+  opts: { search?: string; sort?: PhenomenonLessonSort } = {},
+): PhenomenonLessonSummary[] {
+  const q = personKey(opts.search || '');
+  const rows = q ? lessons.filter((l) => l.teachers.some((t) => personKey(t).includes(q))) : [...lessons];
+  const byDate = (a: PhenomenonLessonSummary, b: PhenomenonLessonSummary) =>
+    a.date === b.date ? (Number(a.lessonNumber) || 99) - (Number(b.lessonNumber) || 99) : a.date < b.date ? -1 : 1;
+  switch (opts.sort || 'date_desc') {
+    case 'date_asc':
+      return rows.sort(byDate);
+    case 'score_desc':
+      return rows.sort((a, b) => b.percent - a.percent || byDate(a, b));
+    case 'score_asc':
+      return rows.sort((a, b) => a.percent - b.percent || byDate(a, b));
+    default:
+      return rows.sort((a, b) => (a.date === b.date ? byDate(a, b) : a.date < b.date ? 1 : -1));
+  }
+}
+
+// ---------- Педагоги, срезы, расхождения ----------
+
+/** Кафедра педагога по справочнику: по коду из формы, иначе по ФИО. */
+export function phenomenonDepartmentOf(directory: LessonVisitDirectory | null | undefined, teacherKey: string, teacherName: string): string {
+  if (!directory) return '';
+  const teachers = directory.teachers || [];
+  const byId = teachers.find((t) => t.id === teacherKey);
+  const name = personKey(teacherName);
+  const t = byId || teachers.find((x) => personKey(x.name) === name);
+  if (!t) return '';
+  return (directory.departments || []).find((d) => d.id === t.departmentId)?.name || '';
+}
+
+export type PhenomenonTeacherRow = {
+  key: string;
+  name: string;
+  department: string;
+  lessons: number;
+  /** Средний итог его уроков. */
+  average: number | null;
+  /** Среднее мастерство 1-10 и число оценок. */
+  mastery: number | null;
+  ratings: number;
+  lessonKeys: string[];
+};
+
+export function phenomenonTeacherRows(records: PhenomenonRecord[], directory?: LessonVisitDirectory | null): PhenomenonTeacherRow[] {
+  const lessons = summarizePhenomenonLessons(records);
+  const byRecord = new Map<number, PhenomenonLessonSummary>();
+  for (const l of lessons) for (const id of l.recordIds) byRecord.set(id, l);
+  const acc = new Map<string, { name: string; id: string; lessons: Map<string, number>; mastery: number[] }>();
+  const add = (name: string, id: string, r: PhenomenonRecord, m: number | null) => {
+    const key = personKey(name);
+    if (!key) return;
+    const row = acc.get(key) || { name, id, lessons: new Map<string, number>(), mastery: [] as number[] };
+    const lesson = byRecord.get(r.id);
+    if (lesson) row.lessons.set(lesson.lessonKey, lesson.percent);
+    if (m != null) row.mastery.push(m);
+    if (!row.id && id) row.id = id;
+    acc.set(key, row);
+  };
+  for (const r of records) {
+    add(r.teacher1, r.teacher1Key, r, r.mastery1);
+    add(r.teacher2, r.teacher2Key, r, r.mastery2);
+  }
+  return [...acc.entries()].map(([key, v]) => {
+    const pct = [...v.lessons.values()];
+    return {
+      key,
+      name: v.name,
+      department: phenomenonDepartmentOf(directory, v.id, v.name),
+      lessons: v.lessons.size,
+      average: pct.length ? round1(pct.reduce((s, x) => s + x, 0) / pct.length) : null,
+      mastery: v.mastery.length ? round1(v.mastery.reduce((s, x) => s + x, 0) / v.mastery.length) : null,
+      ratings: v.mastery.length,
+      lessonKeys: [...v.lessons.keys()],
+    };
+  });
+}
+
+export type PhenomenonTeacherSort = 'name' | 'average_desc' | 'average_asc' | 'mastery_desc' | 'mastery_asc' | 'lessons_desc';
+
+export function sortPhenomenonTeachers(rows: PhenomenonTeacherRow[], sort: PhenomenonTeacherSort, search = ''): PhenomenonTeacherRow[] {
+  const q = personKey(search);
+  const list = q ? rows.filter((r) => personKey(r.name).includes(q) || personKey(r.department).includes(q)) : [...rows];
+  const name = (a: PhenomenonTeacherRow, b: PhenomenonTeacherRow) => a.name.localeCompare(b.name, 'ru');
+  const num = (v: number | null, dir: 1 | -1) => (v == null ? Infinity : dir * v);
+  switch (sort) {
+    case 'average_desc':
+      return list.sort((a, b) => num(a.average, -1) - num(b.average, -1) || name(a, b));
+    case 'average_asc':
+      return list.sort((a, b) => num(a.average, 1) - num(b.average, 1) || name(a, b));
+    case 'mastery_desc':
+      return list.sort((a, b) => num(a.mastery, -1) - num(b.mastery, -1) || name(a, b));
+    case 'mastery_asc':
+      return list.sort((a, b) => num(a.mastery, 1) - num(b.mastery, 1) || name(a, b));
+    case 'lessons_desc':
+      return list.sort((a, b) => b.lessons - a.lessons || name(a, b));
+    default:
+      return list.sort(name);
+  }
+}
+
+export const PHENOMENON_STAGE_UNKNOWN = 'не определено';
+export const PHENOMENON_STAGES = ['1-4 классы', '5-9 классы', '10-11 классы', PHENOMENON_STAGE_UNKNOWN] as const;
+
+/** Ступень по номеру класса в начале записи («4АС» → 1-4, «10А» → 10-11); иначе «не определено». */
+export function phenomenonStageOf(className: string): (typeof PHENOMENON_STAGES)[number] {
+  const m = /^\s*(\d{1,2})(?!\d)/.exec(String(className || ''));
+  const n = m ? Number(m[1]) : NaN;
+  if (n >= 1 && n <= 4) return '1-4 классы';
+  if (n >= 5 && n <= 9) return '5-9 классы';
+  if (n === 10 || n === 11) return '10-11 классы';
+  return PHENOMENON_STAGE_UNKNOWN;
+}
+
+/** Ступень урока: первая распознанная запись класса среди всех вариантов. */
+export function phenomenonLessonStage(lesson: Pick<PhenomenonLessonSummary, 'className'>): (typeof PHENOMENON_STAGES)[number] {
+  for (const part of lesson.className.split(',')) {
+    const s = phenomenonStageOf(part);
+    if (s !== PHENOMENON_STAGE_UNKNOWN) return s;
+  }
+  return PHENOMENON_STAGE_UNKNOWN;
+}
+
+export type PhenomenonSliceRow = { label: string; lessons: number; average: number | null };
+
+function sliceRows(lessons: PhenomenonLessonSummary[], labelOf: (l: PhenomenonLessonSummary) => string): PhenomenonSliceRow[] {
+  const groups = new Map<string, number[]>();
+  for (const l of lessons) {
+    const k = labelOf(l);
+    groups.set(k, [...(groups.get(k) || []), l.percent]);
+  }
+  return [...groups.entries()].map(([label, v]) => ({ label, lessons: v.length, average: round1(v.reduce((s, x) => s + x, 0) / v.length) }));
+}
+
+export function phenomenonStageSlices(lessons: PhenomenonLessonSummary[]): PhenomenonSliceRow[] {
+  const rows = sliceRows(lessons, (l) => phenomenonLessonStage(l));
+  return PHENOMENON_STAGES.map((s) => rows.find((r) => r.label === s)).filter((r): r is PhenomenonSliceRow => Boolean(r));
+}
+
+/** Сочетание кафедр пары, например «Иностранные языки + Социальные науки» (по алфавиту). */
+export function phenomenonDepartmentPairSlices(
+  records: PhenomenonRecord[],
+  lessons: PhenomenonLessonSummary[],
+  directory?: LessonVisitDirectory | null,
+): PhenomenonSliceRow[] {
+  const byId = new Map(records.map((r) => [r.id, r]));
+  return sliceRows(lessons, (l) => {
+    const r = byId.get(l.recordIds[0]);
+    if (!r) return 'Кафедра не указана';
+    const deps = [phenomenonDepartmentOf(directory, r.teacher1Key, r.teacher1), phenomenonDepartmentOf(directory, r.teacher2Key, r.teacher2)].map(
+      (d) => d || 'Кафедра не указана',
+    );
+    return deps.sort((a, b) => a.localeCompare(b, 'ru')).join(' + ');
+  }).sort((a, b) => b.lessons - a.lessons || a.label.localeCompare(b.label, 'ru'));
+}
+
+/** Уроки, где итоги чек-листов разных наблюдателей отличаются на 25 баллов и больше. */
+export const PHENOMENON_SPREAD_LIMIT = 25;
+/** Чек-листы, где оценка наблюдателя отличается от уровня по баллам на 2 уровня и больше. */
+export const PHENOMENON_RATING_GAP = 2;
+
+const OVERALL_LEVEL: Record<string, number> = { low: 0, below_average: 1, average: 2, high: 3, very_high: 4 };
+
+export type PhenomenonRatingGap = {
+  record: PhenomenonRecord;
+  lesson: PhenomenonLessonSummary | undefined;
+  scoreLevel: number;
+  observerLevel: number;
+  /** Положительное: наблюдатель оценил выше баллов. */
+  gap: number;
+};
+
+export function phenomenonDiscrepancies(records: PhenomenonRecord[]): {
+  spread: PhenomenonLessonSummary[];
+  ratingGaps: PhenomenonRatingGap[];
+} {
+  const lessons = summarizePhenomenonLessons(records);
+  const byRecord = new Map<number, PhenomenonLessonSummary>();
+  for (const l of lessons) for (const id of l.recordIds) byRecord.set(id, l);
+  const spread = lessons
+    .filter((l) => l.checklists > 1 && l.maxPercent - l.minPercent >= PHENOMENON_SPREAD_LIMIT)
+    .sort((a, b) => b.maxPercent - b.minPercent - (a.maxPercent - a.minPercent));
+  const ratingGaps: PhenomenonRatingGap[] = [];
+  for (const r of records) {
+    const observerLevel = OVERALL_LEVEL[r.answers[PHENOMENON_OVERALL.id]];
+    if (observerLevel == null) continue;
+    const scoreLevel = PHENOMENON_LEVEL_ORDER_INDEX[r.score.level];
+    const gap = observerLevel - scoreLevel;
+    if (Math.abs(gap) >= PHENOMENON_RATING_GAP) ratingGaps.push({ record: r, lesson: byRecord.get(r.id), scoreLevel, observerLevel, gap });
+  }
+  ratingGaps.sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap) || (a.record.date < b.record.date ? 1 : -1));
+  return { spread, ratingGaps };
+}
+
+const PHENOMENON_LEVEL_ORDER_INDEX: Record<PhenomenonLevel, number> = { very_low: 0, low: 1, medium: 2, high: 3, very_high: 4 };
+
+// ---------- Комментарии и динамика ----------
+
+export type PhenomenonComment = {
+  id: number;
+  date: string;
+  lesson: PhenomenonLessonSummary | undefined;
+  teachers: string[];
+  observer: string;
+  text: string;
+};
+
+/** Лента «Общих выводов»: урок, педагоги, наблюдатель, текст; поиск по тексту. */
+export function phenomenonComments(records: PhenomenonRecord[], search = ''): PhenomenonComment[] {
+  const byRecord = new Map<number, PhenomenonLessonSummary>();
+  for (const l of summarizePhenomenonLessons(records)) for (const id of l.recordIds) byRecord.set(id, l);
+  const q = personKey(search);
+  return records
+    .filter((r) => r.comments.trim())
+    .filter((r) => !q || personKey(r.comments).includes(q))
+    .map((r) => ({
+      id: r.id,
+      date: r.date,
+      lesson: byRecord.get(r.id),
+      teachers: [r.teacher1, r.teacher2].sort((a, b) => a.localeCompare(b, 'ru')),
+      observer: r.observer,
+      text: r.comments,
+    }))
+    .sort((a, b) => (a.date === b.date ? a.id - b.id : a.date < b.date ? 1 : -1));
+}
+
+export type PhenomenonWeekDynamics = { week: PhenomenonWeek; summary: PhenomenonWeekSummary };
+
+/** Динамика: сводка по каждой неделе (по порядку дат), только недели с чек-листами. */
+export function phenomenonDynamics(records: PhenomenonRecord[], weeks: PhenomenonWeek[] = PHENOMENON_WEEKS): PhenomenonWeekDynamics[] {
+  return [...weeks]
+    .sort((a, b) => (a.from < b.from ? -1 : 1))
+    .map((week) => ({ week, summary: summarizePhenomenonWeek(phenomenonRecordsForWeek(records, week.id, weeks)) }))
+    .filter((x) => x.summary.checklists > 0);
+}

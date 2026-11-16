@@ -326,3 +326,148 @@
   width: auto;
   flex: 0 0 auto;
 }
+
+/* Аналитика феноменальных уроков: те же блоки, что в обычной аналитике (vcr-*), плюс профиль по критериям. */
+.vcr-dashboard.ph-analytics {
+  margin-top: 1rem;
+}
+.vcr-dashboard.ph-analytics .ph-group-row th {
+  background: #f1f5f3;
+  text-align: left;
+  font-weight: 700;
+}
+.vcr-dashboard.ph-analytics .ph-profile {
+  display: grid;
+  gap: 1.1rem;
+}
+.vcr-dashboard.ph-analytics .ph-profile__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+.vcr-dashboard.ph-analytics .ph-optbar {
+  display: flex;
+  height: 1.4rem;
+  border-radius: 0.4rem;
+  overflow: hidden;
+  background: #eef2f0;
+  margin-top: 0.4rem;
+}
+.vcr-dashboard.ph-analytics .ph-optbar > div {
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.45);
+  min-width: 2px;
+}
+.vcr-dashboard.ph-analytics .ph-optlegend {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.85rem;
+}
+.vcr-dashboard.ph-analytics .ph-optlegend i {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 0.15rem;
+  margin-right: 0.3rem;
+  vertical-align: -0.05rem;
+}
+.vcr-dashboard.ph-analytics .vcr-rowlink {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vcr-dashboard.ph-analytics #ph-indicators .vcr-table-scroll,
+.vcr-dashboard.ph-analytics .ph-checklist .vcr-table-scroll {
+  max-height: none;
+}
+@media (max-width: 650px) {
+  /* Узкий экран: строка таблицы становится карточкой «подпись: значение», как на сводке директора. */
+  .vcr-dashboard.ph-analytics table {
+    min-width: 0;
+  }
+  .vcr-dashboard.ph-analytics table.vcr-stack,
+  .vcr-dashboard.ph-analytics table.vcr-stack tbody,
+  .vcr-dashboard.ph-analytics table.vcr-stack tr,
+  .vcr-dashboard.ph-analytics table.vcr-stack th,
+  .vcr-dashboard.ph-analytics table.vcr-stack td {
+    display: block;
+    width: auto;
+  }
+  .vcr-dashboard.ph-analytics table.vcr-stack thead {
+    display: none;
+  }
+  .vcr-dashboard.ph-analytics table.vcr-stack tr {
+    margin: 0 0 10px;
+    padding: 6px 12px;
+    border: 1px solid #dfe7e4;
+    border-radius: 10px;
+    background: #fff;
+  }
+  .vcr-dashboard.ph-analytics table.vcr-stack tr.ph-group-row {
+    border: 0;
+    padding: 6px 0 0;
+    background: transparent;
+  }
+  .vcr-dashboard.ph-analytics table.vcr-stack th,
+  .vcr-dashboard.ph-analytics table.vcr-stack td {
+    padding: 6px 0;
+    border: 0;
+    background: transparent;
+    font-size: 13px;
+    overflow-wrap: break-word;
+  }
+  .vcr-dashboard.ph-analytics table.vcr-stack td[data-label] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 4px 12px;
+  }
+  .vcr-dashboard.ph-analytics table.vcr-stack td[data-label]::before {
+    content: attr(data-label);
+    color: #647771;
+    font-size: 12px;
+  }
+}
+.vcr-dashboard.ph-analytics .ph-ai {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.5rem 1.5rem;
+}
+.vcr-dashboard.ph-analytics .ph-ai h4 {
+  margin: 0.6rem 0 0.3rem;
+}
+.vcr-dashboard.ph-analytics .ph-comments {
+  display: grid;
+  gap: 0.6rem;
+}
+.vcr-dashboard.ph-analytics .ph-comment {
+  border: 1px solid #dfe7e4;
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  background: #fff;
+}
+.vcr-dashboard.ph-analytics .ph-comment header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.8rem;
+  font-size: 0.9rem;
+}
+.vcr-dashboard.ph-analytics .ph-comment p {
+  margin: 0.35rem 0 0;
+}

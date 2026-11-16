@@ -354,11 +354,36 @@ const PHENOMENON_OPEN_FOR_ALL = true;
  */
 const PHENOMENON_PILOT_PERSON_KEYS = ['kostyukovich', 'khoroshilov'];
 
+/**
+ * Аналитика феноменальных уроков (вкладка «Результаты» и все ответы проекта).
+ * Пока видят только люди с этими ключами записей из списка аналитики чек-листа
+ * (VISIT_CHECKLIST_ANALYTICS_PEOPLE): без имён, почт и номеров в коде.
+ * Администраторы с полным доступом без такой записи аналитику не видят.
+ */
+const PHENOMENON_ANALYTICS_PERSON_KEYS = ['kostyukovich', 'khoroshilov', 'novozhilov'];
+
+/**
+ * ПЕРЕКЛЮЧАТЕЛЬ аналитики. false: только ключи выше. true: вся группа аналитики основного
+ * чек-листа (canViewSharedVisitChecklistAnalytics). Учителя аналитику не видят в любом случае.
+ */
+const PHENOMENON_ANALYTICS_OPEN_TO_GROUP = false;
+
 /** Изменяемые настройки (тесты подменяют их, рабочий код читает отсюда). */
 const phenomenonAccess = {
   openForAll: PHENOMENON_OPEN_FOR_ALL,
   pilotKeys: PHENOMENON_PILOT_PERSON_KEYS,
+  analyticsKeys: PHENOMENON_ANALYTICS_PERSON_KEYS,
+  analyticsOpenToGroup: PHENOMENON_ANALYTICS_OPEN_TO_GROUP,
 };
+
+/** Можно ли видеть ответы и аналитику феноменальных уроков. */
+function canViewPhenomenonAnalytics(user) {
+  if (!user) return false;
+  const access = require('./visit-checklist-analytics-access');
+  if (phenomenonAccess.analyticsOpenToGroup) return access.canViewSharedVisitChecklistAnalytics(user);
+  const person = access.findVisitChecklistAnalyticsPerson(user);
+  return Boolean(person && phenomenonAccess.analyticsKeys.includes(person.key));
+}
 
 function isPhenomenonPilot(user) {
   if (!user) return false;
@@ -502,6 +527,9 @@ const phenomenonLib = {
   phenomenonAccess,
   isPhenomenonPilot,
   canUsePhenomenon,
+  PHENOMENON_ANALYTICS_PERSON_KEYS,
+  PHENOMENON_ANALYTICS_OPEN_TO_GROUP,
+  canViewPhenomenonAnalytics,
   resolvePhenomenonActor,
   PHENOMENON_FORM_TOKEN,
   PHENOMENON_FORM_VERSION,

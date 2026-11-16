@@ -109,7 +109,8 @@ const dateText = (date: string) =>
   date ? date.split("-").reverse().join(".") : "Дата не указана";
 const lessonText = (v: ReportVisit) =>
   `${shortName(v.teacher)} · ${dateText(v.date)} · ${v.subject} · ${v.className}`;
-function Badge({
+/** Используется и в аналитике феноменальных уроков. */
+export function Badge({
   percent,
   preliminary = false,
   prefix = "",
@@ -254,7 +255,8 @@ function DateField({
     />
   );
 }
-function Empty() {
+/** Используется и в аналитике феноменальных уроков. */
+export function Empty() {
   return <p className="vcr-empty">В выбранном отборе данных нет.</p>;
 }
 /** Кнопка под списком, где строк больше пяти: раскрывает остальные на месте и сворачивает обратно. */
@@ -308,7 +310,8 @@ function SortSelect({
     </label>
   );
 }
-function Table({
+/** Используется и в аналитике феноменальных уроков. */
+export function Table({
   headers,
   children,
   stack = false,
@@ -453,7 +456,8 @@ const generatedText = (date: Date) =>
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
-function PercentBar({
+/** Используется и в аналитике феноменальных уроков. */
+export function PercentBar({
   percent,
   label,
 }: {
