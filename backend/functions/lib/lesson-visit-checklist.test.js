@@ -804,6 +804,58 @@ test('phenomenon analytics: only three records see the results, admins with full
   }
 }));
 
+test('phenomenon-only teachers: stored in the database, edited only by analytics people, never in the main form', () => withOpen(true, async () => {
+  const handlers = require('../lesson-visit-projects');
+  const pool = fakePool();
+  const first = await handlers.handleGetPublicLessonVisitForm(pool, PHENOMENON_FORM_TOKEN);
+  assert.deepEqual(JSON.parse(first.body).directory, { departments: [], teachers: [] });
+  const ph = pool.projects.find((p) => p.form_token === PHENOMENON_FORM_TOKEN);
+  pool.query = ((base) => async (sql, params = []) => {
+    if (/SELECT id, form_token FROM lesson_visit_projects WHERE id = \$1/.test(sql)) {
+      return { rows: pool.projects.filter((p) => p.id === params[0]) };
+    }
+    if (/jsonb_build_object\('extraTeachers'/.test(sql)) {
+      const row = pool.projects.find((p) => p.id === params[0]);
+      row.state_json = { ...row.state_json, draft: { ...row.state_json.draft, extraTeachers: JSON.parse(params[1]) } };
+      return { rows: [] };
+    }
+    return base(sql, params);
+  })(pool.query.bind(pool));
+  const put = (sessionUser, list, viaKey = false, pid = ph.id) =>
+    handlers.handlePutLessonVisitProject(pool, null, viaKey, sessionUser, pid, putBody({ patch: { phenomenonTeachers: list } }));
+
+  const owner = personByKey('kostyukovich');
+  const saved = await put(owner, [{ name: '  Тестова   Анна ' }, { name: 'тестова анна' }, { name: '' }, 'Пробный Педагог']);
+  assert.equal(saved.statusCode, 200);
+  const list = JSON.parse(saved.body).phenomenonTeachers;
+  assert.deepEqual(list.map((t) => t.name), ['Тестова Анна', 'Пробный Педагог']);
+  assert.ok(list.every((t) => /^ph_extra_[a-z0-9]+$/.test(t.id)));
+  // Повторное сохранение сохраняет те же коды.
+  const again = JSON.parse((await put(owner, list)).body).phenomenonTeachers;
+  assert.deepEqual(again, list);
+
+  const form = JSON.parse((await handlers.handleGetPublicLessonVisitForm(pool, PHENOMENON_FORM_TOKEN)).body);
+  assert.deepEqual(form.directory.departments, [{ id: 'dept_ph_other', name: 'Другие сотрудники' }]);
+  assert.deepEqual(form.directory.teachers.map((t) => [t.name, t.departmentId, t.coverage]), [
+    ['Тестова Анна', 'dept_ph_other', false],
+    ['Пробный Педагог', 'dept_ph_other', false],
+  ]);
+
+  // Остальные не меняют список: учитель, администратор, ключ API, другой человек из аналитики.
+  for (const who of [
+    { id: 501, email: 'teacher@example.org', role: 'teacher', permissions: [] },
+    { id: 503, email: 'a@example.org', permissions: ['*'] },
+    personByKey('maisuradze'),
+  ]) {
+    assert.equal((await put(who, [])).statusCode, 404);
+  }
+  assert.equal((await put(null, [], true)).statusCode, 404);
+  // Основной проект через этот режим не меняется.
+  assert.equal((await put(owner, [], false, 1)).statusCode, 404);
+  assert.equal(pool.projects[0].state_json.draft.extraTeachers, undefined);
+  assert.equal(JSON.parse((await handlers.handleGetPublicLessonVisitForm(pool, PHENOMENON_FORM_TOKEN)).body).directory.teachers.length, 2);
+}));
+
 test('phenomenon week overview: same access as the analytics, comments go out without names', () => withOpen(true, async () => {
   const handlers = require('../lesson-visit-projects');
   const ai = require('./visit-checklist-cloud-ai');

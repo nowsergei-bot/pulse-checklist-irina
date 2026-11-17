@@ -471,3 +471,18 @@
 .vcr-dashboard.ph-analytics .ph-comment p {
   margin: 0.35rem 0 0;
 }
+
+/* Феноменальный урок: список «Другие сотрудники» */
+.vcr-dashboard.ph-analytics .ph-extra-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+.vcr-dashboard.ph-analytics .ph-extra-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+}

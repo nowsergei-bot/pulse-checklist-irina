@@ -53,6 +53,11 @@ import {
   validatePhenomenon,
   type PhenomenonAnswers,
   type PhenomenonGeneral,
+  PHENOMENON_EXTRA_DEPARTMENT,
+  phenomenonDepartmentOf,
+  phenomenonExtraTeachersOf,
+  withPhenomenonExtraTeachers,
+  withoutPhenomenonExtraTeachers,
 } from './publicForm.ts';
 import {
   PHENOMENON_CHECKLIST_PATH,
@@ -615,4 +620,34 @@ test('direct link /view/lesson-visit/phenomenon-lesson-2026 renders the phenomen
   assert.doesNotMatch(phenomenon, /Не удалось открыть чек-лист/);
   const main = await render('/view/lesson-visit/some-main-token');
   assert.doesNotMatch(main, /Чек-лист феноменального урока/);
+});
+
+test('phenomenon-only teachers: in the phenomenon form and its analytics, not in the main directory or coverage', async () => {
+  const { defaultLessonVisitDirectory } = await import('./types.ts');
+  const { visitChecklistObservedTeachers, visitChecklistObservedTeacherGroups } = await import('./visitChecklistPeople.ts');
+  const main = defaultLessonVisitDirectory();
+  const mainCount = main.teachers.length;
+  const fromServer = {
+    departments: [{ ...PHENOMENON_EXTRA_DEPARTMENT }],
+    teachers: [{ id: 'ph_extra_abc', name: 'Тестова Анна', departmentId: PHENOMENON_EXTRA_DEPARTMENT.id, coverage: false }],
+  };
+  const extra = phenomenonExtraTeachersOf(fromServer);
+  assert.deepEqual(extra, [{ id: 'ph_extra_abc', name: 'Тестова Анна' }]);
+  const ph = withPhenomenonExtraTeachers(main, extra);
+  // Феноменальная форма: можно выбрать, группа «Другие сотрудники».
+  assert.ok(visitChecklistObservedTeachers(ph).some((t) => t.name === 'Тестова Анна'));
+  const group = visitChecklistObservedTeacherGroups(ph).find((g) => g.heading === 'Другие сотрудники');
+  assert.deepEqual(group?.choices, ['Тестова Анна']);
+  // Аналитика феноменальных уроков знает подразделение.
+  assert.equal(phenomenonDepartmentOf(ph, '', 'Тестова Анна'), 'Другие сотрудники');
+  // Основной справочник не изменился: в основной форме и охвате её нет.
+  assert.equal(main.teachers.length, mainCount);
+  assert.ok(!visitChecklistObservedTeachers(main).some((t) => t.name === 'Тестова Анна'));
+  assert.ok(!main.departments.some((d) => d.id === PHENOMENON_EXTRA_DEPARTMENT.id));
+  assert.equal(ph.teachers.find((t) => t.name === 'Тестова Анна')?.coverage, false);
+  // В список наблюдателей не добавляется.
+  assert.deepEqual(withoutPhenomenonExtraTeachers(ph), main);
+  // Пустой список и дубль из основного справочника ничего не добавляют.
+  assert.equal(withPhenomenonExtraTeachers(main, []), main);
+  assert.equal(withPhenomenonExtraTeachers(main, [{ id: 'ph_extra_x', name: main.teachers[0].name }]), main);
 });

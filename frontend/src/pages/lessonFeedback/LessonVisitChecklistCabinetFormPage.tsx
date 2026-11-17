@@ -8,6 +8,7 @@ import {
   getPublicLessonVisitForm,
   listLessonVisitResponses,
   postPhenomenonWeekAi,
+  savePhenomenonTeachers,
   type PhenomenonWeekAi,
 } from '../../api/visitChecklist';
 import { API_BASE, parseJson, sessionHeaders } from '../../api/http';
@@ -63,6 +64,10 @@ import {
   PHENOMENON_ALL_WEEKS,
   PHENOMENON_LEVEL_ORDER,
   PHENOMENON_WEEKS,
+  PHENOMENON_EXTRA_DEPARTMENT,
+  phenomenonExtraTeachersOf,
+  withPhenomenonExtraTeachers,
+  withoutPhenomenonExtraTeachers,
   defaultPhenomenonWeek,
   phenomenonLessonDetail,
   phenomenonLessonRows,
@@ -410,6 +415,8 @@ export function PhenomenonChecklistForm({
 
   const invalid = useMemo(() => new Set(missing.map((m) => m.id)), [missing]);
   const teacherChoices = useMemo(() => visitChecklistObservedTeachers(directory).map((t) => t.name), [directory]);
+  // «Другие сотрудники» добавлены только в списки педагогов; наблюдателя можно вписать вручную.
+  const visitorDirectory = useMemo(() => withoutPhenomenonExtraTeachers(directory), [directory]);
   const teacherGroups = useMemo(() => visitChecklistObservedTeacherGroups(directory), [directory]);
 
   const setG = (patch: Partial<PhenomenonGeneral>, fieldId: string) => {
@@ -510,8 +517,8 @@ export function PhenomenonChecklistForm({
             <input className="field" type="text" value={general.observer_name} readOnly aria-readonly />
           ) : (
             <PersonSelectField
-              choices={visitChecklistVisitorNames(directory)}
-              groups={visitChecklistVisitorGroups(directory)}
+              choices={visitChecklistVisitorNames(visitorDirectory)}
+              groups={visitChecklistVisitorGroups(visitorDirectory)}
               value={general.observer_name}
               locale={locale}
               placeholder={ui.observerPlaceholder}
@@ -766,7 +773,13 @@ export function PhenomenonResultsTable({ records }: { records: PhenomenonRecord[
 export function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolean }) {
   const { user } = useCabinetProfile();
   const [locale, setLocale] = useState<PhenomenonLocale>(readLocale);
-  const [directory, setDirectory] = useState<LessonVisitDirectory | null>(null);
+  const [mainDirectory, setMainDirectory] = useState<LessonVisitDirectory | null>(null);
+  // «Другие сотрудники»: педагоги только для феноменальной формы, хранятся в базе её проекта.
+  const [extraTeachers, setExtraTeachers] = useState<{ id: string; name: string }[]>([]);
+  const directory = useMemo(
+    () => (mainDirectory ? withPhenomenonExtraTeachers(mainDirectory, extraTeachers) : null),
+    [mainDirectory, extraTeachers],
+  );
   const [photos, setPhotos] = useState<string[] | undefined>();
   const [projectId, setProjectId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -798,7 +811,8 @@ export function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolea
         if (cancelled) return;
         setAccess(checked.access);
         setProjectId(phenomenon.project.id);
-        setDirectory(resolvePublicLessonVisitDirectory(main?.directory ?? null, defaultLessonVisitDirectory()));
+        setMainDirectory(resolvePublicLessonVisitDirectory(main?.directory ?? null, defaultLessonVisitDirectory()));
+        setExtraTeachers(phenomenonExtraTeachersOf(phenomenon.directory));
         // Те же фото, что в обычном чек-листе; без них блок показывает стандартные фото гимназии.
         setPhotos(main?.media?.photos?.map((ph) => ph.src));
       } catch (e) {
@@ -888,7 +902,19 @@ export function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolea
             </div>
           </div>
         ) : tab === 'results' && records ? (
-          <PhenomenonAnalytics records={records} directory={directory} />
+          <PhenomenonAnalytics
+            records={records}
+            directory={directory}
+            extraTeachers={extraTeachers}
+            onSaveExtraTeachers={
+              projectId == null
+                ? undefined
+                : async (list) => {
+                    const saved = await savePhenomenonTeachers(projectId, list);
+                    setExtraTeachers(saved);
+                  }
+            }
+          />
         ) : (
           <PhenomenonChecklistForm locale={locale} directory={directory} observerFromAccount={observerFromAccount} photos={photos} />
         )}
@@ -1278,6 +1304,83 @@ const PH_TEACHER_SORTS: Array<{ id: PhenomenonTeacherSort; label: string }> = [
   { id: 'lessons_desc', label: 'Больше уроков' },
 ];
 
+/** Педагоги только для феноменальной формы: видят и меняют те, кому открыта аналитика. */
+function PhenomenonExtraTeachersEditor({
+  list,
+  onSave,
+}: {
+  list: { id: string; name: string }[];
+  onSave: (list: { id?: string; name: string }[]) => Promise<void>;
+}) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const save = async (next: { id?: string; name: string }[]) => {
+    setBusy(true);
+    setError('');
+    try {
+      await onSave(next);
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const add = async () => {
+    const n = name.replace(/\s+/g, ' ').trim();
+    if (!n) return;
+    if (await save([...list, { name: n }])) setName('');
+  };
+  return (
+    <section className={`vcr-panel ${VCD_PDF_HIDE_CLASS}`}>
+      <h3>{PHENOMENON_EXTRA_DEPARTMENT.name}</h3>
+      <p className="muted">
+        Педагоги только для чек-листа феноменального урока: их можно выбрать первым или вторым педагогом в этой форме.
+        В основном чек-листе, справочнике и охвате основной аналитики их нет.
+      </p>
+      {list.length ? (
+        <ul className="ph-extra-list">
+          {list.map((t) => (
+            <li key={t.id}>
+              <span>{t.name}</span>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => void save(list.filter((x) => x.id !== t.id))}
+              >
+                Убрать
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>Пока никого нет.</p>
+      )}
+      <div className="vcr-filters">
+        <label>
+          ФИО педагога{' '}
+          <input
+            type="text"
+            value={name}
+            maxLength={120}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void add();
+            }}
+          />
+        </label>
+        <button type="button" className="btn primary" disabled={busy || !name.trim()} onClick={() => void add()}>
+          Добавить
+        </button>
+      </div>
+      {error ? <p className="err">{error}</p> : null}
+    </section>
+  );
+}
+
 function PhenomenonTeachersView({ rows, onOpen }: { rows: PhenomenonTeacherRow[]; onOpen: (t: PhenomenonTeacherRow) => void }) {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<PhenomenonTeacherSort>('points_desc');
@@ -1613,10 +1716,15 @@ export function PhenomenonAnalytics({
   directory,
   today,
   weeks = PHENOMENON_WEEKS,
+  extraTeachers,
+  onSaveExtraTeachers,
 }: {
   records: PhenomenonRecord[];
   directory?: LessonVisitDirectory | null;
   today?: Date;
+  /** Педагоги «Другие сотрудники» (только феноменальная форма) и сохранение их списка. */
+  extraTeachers?: { id: string; name: string }[];
+  onSaveExtraTeachers?: (list: { id?: string; name: string }[]) => Promise<void>;
   /** Список недель (по умолчанию из кода); параметр нужен для проверок. */
   weeks?: PhenomenonWeek[];
 }) {
@@ -1748,14 +1856,19 @@ export function PhenomenonAnalytics({
               onOpen={(l) => setLessonKey(l.lessonKey)}
             />
           ) : view === 'teachers' ? (
-            <PhenomenonTeachersView
-              rows={teacherRows}
-              onOpen={(t) => {
-                setLevel(null);
-                setTeacherFilter(t);
-                setView('lessons');
-              }}
-            />
+            <>
+              <PhenomenonTeachersView
+                rows={teacherRows}
+                onOpen={(t) => {
+                  setLevel(null);
+                  setTeacherFilter(t);
+                  setView('lessons');
+                }}
+              />
+              {onSaveExtraTeachers ? (
+                <PhenomenonExtraTeachersEditor list={extraTeachers || []} onSave={onSaveExtraTeachers} />
+              ) : null}
+            </>
           ) : view === 'slices' ? (
             <>
               <SliceTable title="По ступеням" group="Ступень" rows={stageSlices} />

@@ -477,6 +477,45 @@ async function ensurePhenomenonProject(pool) {
   return again.rows[0] || null;
 }
 
+/**
+ * Педагоги только для феноменальной формы (решение Иры 17.11.2026): ФИО хранятся в базе,
+ * в черновике проекта феноменального урока (draft.extraTeachers), а не в коде и не в справочнике.
+ * В основную форму, справочник и охват основной аналитики они не попадают.
+ */
+const PHENOMENON_EXTRA_DEPARTMENT = { id: 'dept_ph_other', name: 'Другие сотрудники' };
+const PHENOMENON_EXTRA_LIMIT = 50;
+
+function sanitizePhenomenonExtraTeachers(list) {
+  if (!Array.isArray(list)) return null;
+  const out = [];
+  const seenNames = new Set();
+  const seenIds = new Set();
+  for (const item of list) {
+    const raw = item && typeof item === 'object' ? item : { name: item };
+    const name = String(raw.name == null ? '' : raw.name).replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!name) continue;
+    const key = name.toLowerCase().replace(/ё/g, 'е');
+    if (seenNames.has(key)) continue;
+    let id = typeof raw.id === 'string' && /^ph_extra_[a-z0-9]{1,24}$/.test(raw.id) ? raw.id : '';
+    if (!id || seenIds.has(id)) id = `ph_extra_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    seenNames.add(key);
+    seenIds.add(id);
+    out.push({ id, name });
+    if (out.length >= PHENOMENON_EXTRA_LIMIT) break;
+  }
+  return out;
+}
+
+/** Справочник для публичной феноменальной формы: только «Другие сотрудники» из базы. */
+function phenomenonExtraDirectory(draft) {
+  const list = sanitizePhenomenonExtraTeachers(draft && draft.extraTeachers) || [];
+  if (!list.length) return { departments: [], teachers: [] };
+  return {
+    departments: [{ ...PHENOMENON_EXTRA_DEPARTMENT }],
+    teachers: list.map((t) => ({ ...t, departmentId: PHENOMENON_EXTRA_DEPARTMENT.id, coverage: false })),
+  };
+}
+
 function text(v, max = 300) {
   return typeof v === 'string' ? v.trim().slice(0, max) : v == null ? '' : String(v).trim().slice(0, max);
 }
@@ -543,6 +582,9 @@ const phenomenonLib = {
   phenomenonDraft,
   ensurePhenomenonProject,
   validatePhenomenonSubmission,
+  PHENOMENON_EXTRA_DEPARTMENT,
+  sanitizePhenomenonExtraTeachers,
+  phenomenonExtraDirectory,
 };
 
 module.exports = {

@@ -450,6 +450,31 @@ async function patchNewTeacherIds(pool, user, viaAdminKey, sessionUser, scope, p
   return json(200, { ok: true, newTeacherIds: ids });
 }
 
+/**
+ * Узкий режим PUT для проекта феноменального урока: `{ patch: { phenomenonTeachers: [{ id?, name }] } }`
+ * меняет только draft.extraTeachers (педагоги «Другие сотрудники» только для феноменальной формы).
+ * Допуск: тот, кому открыта аналитика феноменальных уроков; ключ API и остальные получают 404.
+ */
+async function patchPhenomenonTeachers(pool, user, viaAdminKey, sessionUser, pid, body) {
+  const patch = body.patch;
+  if (body.draft !== undefined || body.title !== undefined || Object.keys(patch).length !== 1) {
+    return json(400, { error: 'Bad request', message: 'Разрешено менять только phenomenonTeachers.' });
+  }
+  const actor = viaAdminKey ? null : visitChecklistAnalyticsActor(user, sessionUser);
+  if (!phenomenonLib.canViewPhenomenonAnalytics(actor)) return json(404, { error: 'Not found' });
+  const r = await pool.query(`SELECT id, form_token FROM lesson_visit_projects WHERE id = $1`, [pid]);
+  if (!r.rows.length || !isPhenomenonToken(r.rows[0].form_token)) return json(404, { error: 'Not found' });
+  const list = phenomenonLib.sanitizePhenomenonExtraTeachers(patch.phenomenonTeachers);
+  if (!list) return json(400, { error: 'Bad request', message: 'phenomenonTeachers: нужен список педагогов.' });
+  await pool.query(
+    `UPDATE lesson_visit_projects
+     SET state_json = jsonb_set(COALESCE(state_json, '{}'::jsonb), '{draft}', COALESCE(state_json->'draft', '{}'::jsonb) || jsonb_build_object('extraTeachers', $2::jsonb), true)
+     WHERE id = $1`,
+    [pid, JSON.stringify(list)],
+  );
+  return json(200, { ok: true, phenomenonTeachers: list });
+}
+
 /** Возвращает в записываемый черновик уже сохранённый newTeacherIds (если он там есть). */
 const KEEP_STORED_NEW_TEACHER_IDS = ` || CASE WHEN jsonb_typeof(state_json->'draft'->'newTeacherIds') = 'array'
          THEN jsonb_build_object('newTeacherIds', state_json->'draft'->'newTeacherIds') ELSE '{}'::jsonb END`;
@@ -462,6 +487,9 @@ async function handlePutLessonVisitProject(pool, user, viaAdminKey, sessionUser,
   const scope = resolveProjectOwner(user, viaAdminKey, sessionUser);
   try {
     const body = parseAllowedBody(event, ['title', 'draft', 'patch']);
+    if (body.patch && typeof body.patch === 'object' && 'phenomenonTeachers' in body.patch) {
+      return await patchPhenomenonTeachers(pool, user, viaAdminKey, sessionUser, pid, body);
+    }
     if (body.patch !== undefined) {
       return await patchNewTeacherIds(pool, user, viaAdminKey, sessionUser, scope, pid, body);
     }
@@ -579,7 +607,8 @@ async function handleGetPublicLessonVisitForm(pool, tokenRaw) {
       return json(200, {
         project: { id: ph.id, title: phDraft.title, updated_at: ph.updated_at },
         checklist: phDraft.checklist,
-        directory: { departments: [], teachers: [] },
+        // Только «Другие сотрудники» из базы; основной справочник форма берёт из основного проекта.
+        directory: phenomenonLib.phenomenonExtraDirectory(phDraft),
         allow_multiple_responses: true,
       });
     }

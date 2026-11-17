@@ -106,6 +106,22 @@ export async function saveNewTeacherIds(projectId: number, newTeacherIds: string
   return data.newTeacherIds;
 }
 
+/** Педагоги только для феноменальной формы («Другие сотрудники»): хранятся в базе, меняет группа аналитики феноменальных уроков. */
+export async function savePhenomenonTeachers(
+  projectId: number,
+  phenomenonTeachers: { id?: string; name: string }[],
+): Promise<{ id: string; name: string }[]> {
+  const res = await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}`, {
+    method: 'PUT',
+    headers: adminHeaders(),
+    body: JSON.stringify({ patch: { phenomenonTeachers } }),
+  });
+  const data = await parseJson<{ ok?: boolean; phenomenonTeachers?: { id: string; name: string }[]; error?: string; message?: string }>(res);
+  if (res.status === 404 || res.status === 403) throw new Error('Список может менять только тот, кому открыта аналитика феноменальных уроков.');
+  if (!res.ok || !Array.isArray(data.phenomenonTeachers)) throw new Error(apiErrText(data, res.statusText));
+  return data.phenomenonTeachers;
+}
+
 export async function deleteLessonVisitProject(projectId: number): Promise<void> {
   const res = await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}`, {
     method: 'DELETE',

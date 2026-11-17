@@ -1567,6 +1567,47 @@ export function phenomenonLessonRows(
 // ---------- Педагоги, срезы, расхождения ----------
 
 /** Кафедра педагога по справочнику: по коду из формы, иначе по ФИО. */
+/** Подразделение педагогов, которые есть только в феноменальной форме (совпадает с сервером). */
+export const PHENOMENON_EXTRA_DEPARTMENT = { id: 'dept_ph_other', name: 'Другие сотрудники' } as const;
+
+/** Педагоги «Другие сотрудники» из базы проекта феноменального урока. */
+export function phenomenonExtraTeachersOf(directory: LessonVisitDirectory | null | undefined): { id: string; name: string }[] {
+  return (directory?.teachers || [])
+    .filter((t) => t.departmentId === PHENOMENON_EXTRA_DEPARTMENT.id && String(t.name || '').trim())
+    .map((t) => ({ id: t.id, name: t.name }));
+}
+
+/**
+ * Справочник феноменальной формы и её аналитики: основной справочник плюс «Другие сотрудники».
+ * Основной справочник не меняется, поэтому в основную форму и охват они не попадают.
+ */
+export function withPhenomenonExtraTeachers(
+  main: LessonVisitDirectory,
+  extra: { id: string; name: string }[],
+): LessonVisitDirectory {
+  const known = new Set(main.teachers.map((t) => personKey(t.name)));
+  const add = extra.filter((t) => t.name.trim() && !known.has(personKey(t.name)));
+  if (!add.length) return main;
+  return {
+    ...main,
+    departments: [...main.departments.filter((d) => d.id !== PHENOMENON_EXTRA_DEPARTMENT.id), { ...PHENOMENON_EXTRA_DEPARTMENT }],
+    teachers: [
+      ...main.teachers,
+      ...add.map((t) => ({ id: t.id, name: t.name.trim(), departmentId: PHENOMENON_EXTRA_DEPARTMENT.id, coverage: false })),
+    ],
+  };
+}
+
+/** Справочник без «Других сотрудников» (для списка наблюдателей). */
+export function withoutPhenomenonExtraTeachers(directory: LessonVisitDirectory): LessonVisitDirectory {
+  if (!directory.departments.some((d) => d.id === PHENOMENON_EXTRA_DEPARTMENT.id)) return directory;
+  return {
+    ...directory,
+    departments: directory.departments.filter((d) => d.id !== PHENOMENON_EXTRA_DEPARTMENT.id),
+    teachers: directory.teachers.filter((t) => t.departmentId !== PHENOMENON_EXTRA_DEPARTMENT.id),
+  };
+}
+
 export function phenomenonDepartmentOf(directory: LessonVisitDirectory | null | undefined, teacherKey: string, teacherName: string): string {
   if (!directory) return '';
   const teachers = directory.teachers || [];
