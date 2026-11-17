@@ -968,6 +968,28 @@ function splitPairDay(list: PhenomenonRecord[]): PhenomenonRecord[][] {
   return groups;
 }
 
+/** Порядок педагогов урока: кого чаще указывали первым; при равенстве по алфавиту. */
+function pairOrder(list: PhenomenonRecord[]): { teacher1: string; teacher2: string } {
+  const first = new Map<string, { name: string; n: number }>();
+  for (const r of list) {
+    const k = personKey(r.teacher1);
+    first.set(k, { name: r.teacher1, n: (first.get(k)?.n || 0) + 1 });
+  }
+  const a = list[0].teacher1;
+  const b = list[0].teacher2;
+  const na = first.get(personKey(a))?.n || 0;
+  const nb = first.get(personKey(b))?.n || 0;
+  if (na > nb || (na === nb && a.localeCompare(b, 'ru') <= 0)) return { teacher1: a, teacher2: b };
+  return { teacher1: b, teacher2: a };
+}
+
+/** Балл в виде «19,3 из 22 · 88%». */
+export function phenomenonPointsText(points: number | null, max: number = PHENOMENON_MAX_SCORE): string {
+  if (points == null) return '—';
+  const p = String(round1(points)).replace('.', ',');
+  return `${p} из ${max} · ${Math.round((points / max) * 100)}%`;
+}
+
 function mostCommon<T>(values: T[]): T | undefined {
   const counts = new Map<T, number>();
   for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
@@ -999,6 +1021,11 @@ export type PhenomenonLessonSummary = {
   /** Разброс: минимальный и максимальный итог чек-листов урока. */
   minPercent: number;
   maxPercent: number;
+  /** Балл урока: среднее по чек-листам, из PHENOMENON_MAX_SCORE. Он же балл каждого педагога пары. */
+  points: number;
+  /** Педагог 1 и педагог 2 в том порядке, как их чаще указывали наблюдатели. */
+  teacher1: string;
+  teacher2: string;
 };
 
 /** Итог урока: среднее по чек-листам всех наблюдателей этого урока. */
@@ -1034,6 +1061,8 @@ export function summarizePhenomenonLessons(records: PhenomenonRecord[]): Phenome
         level: phenomenonLevel(raw),
         minPercent: Math.min(...list.map((r) => r.score.percent)),
         maxPercent: Math.max(...list.map((r) => r.score.percent)),
+        points: round1(list.reduce((sum, r) => sum + r.score.points, 0) / list.length),
+        ...pairOrder(list),
       });
     }
   }
@@ -1164,12 +1193,31 @@ export function phenomenonExcelSheets(
     ]);
   }
   const lessonRows: Array<Array<string | number>> = [
-    ['Дата', '№ урока', 'Класс', 'Педагоги', 'Наблюдателей', 'Чек-листов', 'Итог урока, %', 'Уровень', 'Минимум, %', 'Максимум, %'],
+    [
+      'Дата',
+      '№ урока',
+      'Класс',
+      'Педагог 1',
+      'Балл педагога 1',
+      'Педагог 2',
+      'Балл педагога 2',
+      `Балл урока (из ${PHENOMENON_MAX_SCORE})`,
+      'Наблюдателей',
+      'Чек-листов',
+      'Итог урока, %',
+      'Уровень',
+      'Минимум, %',
+      'Максимум, %',
+    ],
     ...lessons.map((l) => [
       formatRuDate(l.date),
       l.lessonNumber,
       l.className,
-      l.teachers.join(', '),
+      l.teacher1,
+      phenomenonPointsText(l.points),
+      l.teacher2,
+      phenomenonPointsText(l.points),
+      l.points,
       l.observers,
       l.checklists,
       l.percent,
@@ -1179,9 +1227,20 @@ export function phenomenonExcelSheets(
     ]),
   ];
   const teacherRows: Array<Array<string | number>> = [
-    ['Педагог', 'Кафедра', 'Феноменальных уроков', 'Средний итог уроков, %', 'Среднее мастерство (1-10)', 'Оценок мастерства'],
-    ...sortPhenomenonTeachers(phenomenonTeacherRows(records, directory), 'name').map((t) => [
+    [
+      'Педагог',
+      'Балл',
+      `Балл (из ${PHENOMENON_MAX_SCORE})`,
+      'Кафедра',
+      'Феноменальных уроков',
+      'Средний итог уроков, %',
+      'Среднее мастерство (1-10)',
+      'Оценок мастерства',
+    ],
+    ...sortPhenomenonTeachers(phenomenonTeacherRows(records, directory), 'points_desc').map((t) => [
       t.name,
+      phenomenonPointsText(t.points),
+      t.points ?? '',
       t.department,
       t.lessons,
       t.average ?? '',
@@ -1523,8 +1582,10 @@ export type PhenomenonTeacherRow = {
   name: string;
   department: string;
   lessons: number;
-  /** Средний итог его уроков. */
+  /** Средний итог его уроков, %. */
   average: number | null;
+  /** Балл: средний балл его уроков из PHENOMENON_MAX_SCORE. */
+  points: number | null;
   /** Среднее мастерство 1-10 и число оценок. */
   mastery: number | null;
   ratings: number;
@@ -1535,13 +1596,16 @@ export function phenomenonTeacherRows(records: PhenomenonRecord[], directory?: L
   const lessons = summarizePhenomenonLessons(records);
   const byRecord = new Map<number, PhenomenonLessonSummary>();
   for (const l of lessons) for (const id of l.recordIds) byRecord.set(id, l);
-  const acc = new Map<string, { name: string; id: string; lessons: Map<string, number>; mastery: number[] }>();
+  const acc = new Map<string, { name: string; id: string; lessons: Map<string, number>; points: Map<string, number>; mastery: number[] }>();
   const add = (name: string, id: string, r: PhenomenonRecord, m: number | null) => {
     const key = personKey(name);
     if (!key) return;
-    const row = acc.get(key) || { name, id, lessons: new Map<string, number>(), mastery: [] as number[] };
+    const row = acc.get(key) || { name, id, lessons: new Map<string, number>(), points: new Map<string, number>(), mastery: [] as number[] };
     const lesson = byRecord.get(r.id);
-    if (lesson) row.lessons.set(lesson.lessonKey, lesson.percent);
+    if (lesson) {
+      row.lessons.set(lesson.lessonKey, lesson.percent);
+      row.points.set(lesson.lessonKey, lesson.points);
+    }
     if (m != null) row.mastery.push(m);
     if (!row.id && id) row.id = id;
     acc.set(key, row);
@@ -1552,12 +1616,14 @@ export function phenomenonTeacherRows(records: PhenomenonRecord[], directory?: L
   }
   return [...acc.entries()].map(([key, v]) => {
     const pct = [...v.lessons.values()];
+    const pts = [...v.points.values()];
     return {
       key,
       name: v.name,
       department: phenomenonDepartmentOf(directory, v.id, v.name),
       lessons: v.lessons.size,
       average: pct.length ? round1(pct.reduce((s, x) => s + x, 0) / pct.length) : null,
+      points: pts.length ? round1(pts.reduce((s, x) => s + x, 0) / pts.length) : null,
       mastery: v.mastery.length ? round1(v.mastery.reduce((s, x) => s + x, 0) / v.mastery.length) : null,
       ratings: v.mastery.length,
       lessonKeys: [...v.lessons.keys()],
@@ -1565,7 +1631,7 @@ export function phenomenonTeacherRows(records: PhenomenonRecord[], directory?: L
   });
 }
 
-export type PhenomenonTeacherSort = 'name' | 'average_desc' | 'average_asc' | 'mastery_desc' | 'mastery_asc' | 'lessons_desc';
+export type PhenomenonTeacherSort = 'points_desc' | 'points_asc' | 'name' | 'average_desc' | 'average_asc' | 'mastery_desc' | 'mastery_asc' | 'lessons_desc';
 
 export function sortPhenomenonTeachers(rows: PhenomenonTeacherRow[], sort: PhenomenonTeacherSort, search = ''): PhenomenonTeacherRow[] {
   const q = personKey(search);
@@ -1573,6 +1639,10 @@ export function sortPhenomenonTeachers(rows: PhenomenonTeacherRow[], sort: Pheno
   const name = (a: PhenomenonTeacherRow, b: PhenomenonTeacherRow) => a.name.localeCompare(b.name, 'ru');
   const num = (v: number | null, dir: 1 | -1) => (v == null ? Infinity : dir * v);
   switch (sort) {
+    case 'points_desc':
+      return list.sort((a, b) => num(a.points, -1) - num(b.points, -1) || name(a, b));
+    case 'points_asc':
+      return list.sort((a, b) => num(a.points, 1) - num(b.points, 1) || name(a, b));
     case 'average_desc':
       return list.sort((a, b) => num(a.average, -1) - num(b.average, -1) || name(a, b));
     case 'average_asc':

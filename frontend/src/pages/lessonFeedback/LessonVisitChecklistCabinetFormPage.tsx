@@ -76,6 +76,7 @@ import {
   phenomenonStageSlices,
   phenomenonTeacherRows,
   sortPhenomenonTeachers,
+  phenomenonPointsText,
   PHENOMENON_KEY_INDICATORS,
   phenomenonComments,
   phenomenonDynamics,
@@ -1088,27 +1089,32 @@ function PhenomenonSummaryView({
 }
 
 function PhLessonTable({ rows, onOpen }: { rows: PhenomenonLessonSummary[]; onOpen: (lesson: PhenomenonLessonSummary) => void }) {
+  const teacherCell = (l: PhenomenonLessonSummary, name: string, label: string) => (
+    <td data-label={label}>
+      <button type="button" className="vcr-rowlink" onClick={() => onOpen(l)}>
+        {name}
+      </button>
+      <small>{phenomenonPointsText(l.points)}</small>
+    </td>
+  );
   return (
-    <Table headers={['Дата', '№ урока', 'Класс', 'Педагоги', 'Наблюдателей', 'Итог урока', 'Разброс']} stack>
+    <Table headers={['Дата', '№ урока', 'Класс', 'Педагог 1', 'Педагог 2', 'Наблюдателей', 'Итог урока', 'Разброс']} stack>
       {rows.map((l) => (
         <tr key={l.lessonKey} className="vcr-row-link" onClick={(e) => !(e.target as HTMLElement).closest('a,button') && onOpen(l)}>
           <td data-label="Дата">{formatPhenomenonDate(l.date)}</td>
           <td data-label="№ урока">{l.lessonNumber || '—'}</td>
           <td data-label="Класс">{l.className}</td>
-          <td data-label="Педагоги">
-            <button type="button" className="vcr-rowlink" onClick={() => onOpen(l)}>
-              {l.teachers.join(' и ')}
-            </button>
-          </td>
+          {teacherCell(l, l.teacher1, 'Педагог 1')}
+          {teacherCell(l, l.teacher2, 'Педагог 2')}
           <td data-label="Наблюдателей">{l.observers}</td>
           <td data-label="Итог урока">
             <span className="vcr-scorecell">
-              <span className="vcr-scorecell__value">{displayScore(l.percent)} из 100</span>
+              <span className="vcr-scorecell__value">{phenomenonPointsText(l.points)}</span>
               <Badge percent={l.percent} />
             </span>
           </td>
           <td data-label="Разброс">
-            {l.checklists > 1 ? `${displayScore(l.minPercent)}-${displayScore(l.maxPercent)}` : '—'}
+            {l.checklists > 1 ? `${displayScore(l.minPercent)}-${displayScore(l.maxPercent)}%` : '—'}
           </td>
         </tr>
       ))}
@@ -1180,7 +1186,7 @@ function PhenomenonLessonCard({ detail, onBack }: { detail: PhenomenonLessonDeta
       <header className="vcr-header">
         <div className="vcr-header__title">
           <h2>
-            {lesson.teachers.join(' и ')} · {formatPhenomenonDate(lesson.date)}
+            {lesson.teacher1} и {lesson.teacher2} · {formatPhenomenonDate(lesson.date)}
             {lesson.lessonNumber ? ` · ${lesson.lessonNumber} урок` : ''} · {lesson.className}
           </h2>
         </div>
@@ -1192,8 +1198,8 @@ function PhenomenonLessonCard({ detail, onBack }: { detail: PhenomenonLessonDeta
       </header>
       <div className="vcr-metrics">
         <div className="vcr-metric">
-          <strong>{displayScore(lesson.percent)} из 100</strong>
-          <span>Итог урока (среднее по чек-листам)</span>
+          <strong>{phenomenonPointsText(lesson.points)}</strong>
+          <span>Балл урока и каждого педагога (среднее по чек-листам)</span>
           <Badge percent={lesson.percent} />
         </div>
         <div className="vcr-metric">
@@ -1262,6 +1268,8 @@ function PhenomenonLessonCard({ detail, onBack }: { detail: PhenomenonLessonDeta
 }
 
 const PH_TEACHER_SORTS: Array<{ id: PhenomenonTeacherSort; label: string }> = [
+  { id: 'points_desc', label: 'Балл: сначала высокий' },
+  { id: 'points_asc', label: 'Балл: сначала низкий' },
   { id: 'name', label: 'По алфавиту' },
   { id: 'average_desc', label: 'Средний итог: сначала высокий' },
   { id: 'average_asc', label: 'Средний итог: сначала низкий' },
@@ -1272,7 +1280,7 @@ const PH_TEACHER_SORTS: Array<{ id: PhenomenonTeacherSort; label: string }> = [
 
 function PhenomenonTeachersView({ rows, onOpen }: { rows: PhenomenonTeacherRow[]; onOpen: (t: PhenomenonTeacherRow) => void }) {
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<PhenomenonTeacherSort>('name');
+  const [sort, setSort] = useState<PhenomenonTeacherSort>('points_desc');
   const list = sortPhenomenonTeachers(rows, sort, search);
   return (
     <section className="vcr-panel">
@@ -1294,7 +1302,7 @@ function PhenomenonTeachersView({ rows, onOpen }: { rows: PhenomenonTeacherRow[]
       </div>
       <p>Педагогов: {list.length}</p>
       {list.length ? (
-        <Table headers={['Педагог', 'Кафедра', 'Уроков', 'Средний итог уроков', 'Мастерство (1-10)', 'Оценок']} stack>
+        <Table headers={['Педагог', 'Балл', 'Кафедра', 'Уроков', 'Уровень', 'Мастерство (1-10)', 'Оценок']} stack>
           {list.map((t) => (
             <tr key={t.key} className="vcr-row-link" onClick={(e) => !(e.target as HTMLElement).closest('a,button') && onOpen(t)}>
               <td data-label="Педагог">
@@ -1302,19 +1310,13 @@ function PhenomenonTeachersView({ rows, onOpen }: { rows: PhenomenonTeacherRow[]
                   {t.name}
                 </button>
               </td>
+              <td data-label="Балл">
+                <strong>{phenomenonPointsText(t.points)}</strong>
+              </td>
               <td data-label="Кафедра">{t.department || '—'}</td>
               <td data-label="Уроков">{t.lessons}</td>
-              <td data-label="Средний итог уроков">
-                {t.average == null ? (
-                  '—'
-                ) : (
-                  <span className="vcr-scorecell">
-                    <span className="vcr-scorecell__value">{displayScore(t.average)} из 100</span>
-                    <Badge percent={t.average} />
-                  </span>
-                )}
-              </td>
-              <td data-label="Мастерство (1-10)">{t.mastery ?? '—'}</td>
+              <td data-label="Уровень">{t.average == null ? '—' : <Badge percent={t.average} />}</td>
+              <td data-label="Мастерство (1-10)">{t.mastery == null ? '—' : String(t.mastery).replace('.', ',')}</td>
               <td data-label="Оценок">{t.ratings}</td>
             </tr>
           ))}

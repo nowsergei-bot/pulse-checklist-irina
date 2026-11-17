@@ -35,6 +35,7 @@ import {
   summarizePhenomenonWeek,
   phenomenonDepartmentPairSlices,
   phenomenonComments,
+  phenomenonPointsText,
   phenomenonDynamics,
   phenomenonDiscrepancies,
   phenomenonStageOf,
@@ -411,6 +412,29 @@ describe('phenomenon checklist', () => {
       assert.deepEqual(sortPhenomenonTeachers(rows, 'name', 'социальн').map((t) => t.name), ['Педагог Первый']);
     });
 
+    it('teacher score = score of their lesson (mean of observers, out of 22), the same for both teachers of the pair', () => {
+      const lessons = summarizePhenomenonLessons(records);
+      const a = lessons.find((l) => l.className === '4АС, 4AC')!;
+      assert.equal(a.points, 19); // (22 + 16) / 2
+      assert.equal(phenomenonPointsText(a.points), '19 из 22 · 86%');
+      assert.equal(phenomenonPointsText(19.33), '19,3 из 22 · 88%');
+      assert.deepEqual([a.teacher1, a.teacher2], ['Педагог Первый', 'Педагог Второй']);
+      const rows = phenomenonTeacherRows(records, directory);
+      const first = rows.find((t) => t.name === 'Педагог Первый')!;
+      const second = rows.find((t) => t.name === 'Педагог Второй')!;
+      assert.equal(first.points, 19);
+      // Второй: урок 4АС (19) и два урока с третьим педагогом (22 и 22).
+      assert.equal(second.points, Math.round(((19 + 22 + 22) / 3) * 10) / 10);
+      assert.deepEqual(sortPhenomenonTeachers(rows, 'points_desc').map((t) => t.name), ['Педагог Третий', 'Педагог Второй', 'Педагог Первый']);
+      const sheets = phenomenonExcelSheets(records, directory);
+      const lessonHead = sheets[1].rows[0];
+      assert.deepEqual(lessonHead.slice(3, 8), ['Педагог 1', 'Балл педагога 1', 'Педагог 2', 'Балл педагога 2', 'Балл урока (из 22)']);
+      const row4 = sheets[1].rows.find((r) => r[2] === '4АС, 4AC')!;
+      assert.deepEqual(row4.slice(3, 8), ['Педагог Первый', '19 из 22 · 86%', 'Педагог Второй', '19 из 22 · 86%', 19]);
+      assert.deepEqual(sheets[2].rows[0].slice(0, 3), ['Педагог', 'Балл', 'Балл (из 22)']);
+      assert.equal(sheets[2].rows[1][0], 'Педагог Третий', 'sorted by score');
+    });
+
     it('5. slices by school stage and by the pair of departments', () => {
       assert.equal(phenomenonStageOf('4АС'), '1-4 классы');
       assert.equal(phenomenonStageOf('9D'), '5-9 классы');
@@ -450,9 +474,9 @@ describe('phenomenon checklist', () => {
       assert.deepEqual(sheets.map((s) => s.name), ['Чек-листы', 'Уроки', 'Педагоги', 'Профиль по критериям', 'Расхождения']);
       const lessons = sheets[1].rows;
       assert.equal(lessons.length, 1 + 3);
-      assert.ok(lessons.some((r) => r[2] === '4АС, 4AC' && r[5] === 2));
+      assert.ok(lessons.some((r) => r[2] === '4АС, 4AC' && r[9] === 2));
       assert.equal(sheets[2].rows.length, 1 + 3);
-      assert.ok(sheets[2].rows.some((r) => r[0] === 'Педагог Второй' && r[1] === 'Иностранные языки'));
+      assert.ok(sheets[2].rows.some((r) => r[0] === 'Педагог Второй' && r[3] === 'Иностранные языки'));
       assert.equal(sheets[4].rows.length, 1 + 2);
     });
   });
