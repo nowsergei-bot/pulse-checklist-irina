@@ -1,0 +1,10 @@
+import {useId,useState} from 'react';
+import {createPortal} from 'react-dom';
+import type {summarize,Skill} from './model';
+export function SkillChangeHint({analysis:a,skills}:{analysis:ReturnType<typeof summarize>;skills:Map<string,Skill>}){
+ const [position,setPosition]=useState<{left:number;top:number}|null>(null),id=useId();
+ const rows=a.latest.filter(e=>e.delta!==null);
+ const text=rows.map(e=>{const prev=e.history[e.history.length-2];return `${skills.get(e.skill)?.title||e.skill}: ${prev.percent}% → ${e.percent}% (${e.delta!>0?'+':''}${e.delta} п. п.). ${prev.work.title} (${prev.work.held_on.slice(0,10)}) → ${e.work.title} (${e.work.held_on.slice(0,10)})`;}).join('\n');
+ const open=(element:HTMLElement)=>{const r=element.getBoundingClientRect();setPosition({left:Math.max(12,Math.min(r.left,window.innerWidth-400)),top:r.bottom+8+Math.min(350,70+rows.length*75)>window.innerHeight?Math.max(12,r.top-Math.min(350,70+rows.length*75)):r.bottom+8});};
+ return <><button className="ps-change-hint" title={text||'Нет двух полных проверок одного навыка.'} aria-describedby={position?id:undefined} onMouseEnter={e=>open(e.currentTarget)} onMouseLeave={()=>setPosition(null)} onFocus={e=>open(e.currentTarget)} onBlur={()=>setPosition(null)} onClick={e=>position?setPosition(null):open(e.currentTarget)}>{rows.length?<><span>↑ {a.improved}</span><span>↓ {a.declined}</span><span>→ {a.comparable-a.improved-a.declined}</span></>:'Нет повторной проверки'}</button>{position&&createPortal(<div role="tooltip" id={id} className="ps-dynamics-tooltip" style={position}><strong>Динамика навыков</strong>{rows.length?rows.slice(0,4).map(e=>{const prev=e.history[e.history.length-2];return <div key={e.skill}><b>{skills.get(e.skill)?.title||e.skill}</b><span>{prev.percent}% → {e.percent}% · {e.delta!>0?'+':''}{e.delta} п. п.</span><small>{prev.work.title} → {e.work.title}</small></div>}):<p>Нужны две полные проверки одного навыка.</p>}{rows.length>4&&<small>Ещё {rows.length-4} навыков — в карточке ученика. Полный список доступен в подсказке кнопки.</small>}</div>,document.body)}</>;
+}

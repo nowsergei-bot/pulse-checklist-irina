@@ -1,0 +1,332 @@
+[
+  {
+    "id": "peterson-math-1-part-1",
+    "title": "Петерсон. Математика. 1 класс. Часть 1",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "textbook",
+    "pages": 68,
+    "bytes": 36792289,
+    "sha256": "f07d8624b5ce3a9b60f1bf08086b01bf02ae76d447ec8234f27f2f295bb26e77",
+    "filename": "peterson-math-1-part-1.pdf",
+    "downloadName": "Петерсон_1_класс_Часть_1.pdf",
+    "note": "Скан старого издания. Разные части могут относиться к разным годам выпуска. Обложки и завершающие страницы проверены.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-math-1-part-2",
+    "title": "Петерсон. Математика. 1 класс. Часть 2",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "textbook",
+    "pages": 70,
+    "bytes": 26775507,
+    "sha256": "7b00fa43f3ccf16bce37ffe807976cd2e9b18aef913e9259a3b05f0477ac3407",
+    "filename": "peterson-math-1-part-2.pdf",
+    "downloadName": "Петерсон_1_класс_Часть_2.pdf",
+    "note": "Скан старого издания. Разные части могут относиться к разным годам выпуска. Обложки и завершающие страницы проверены.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-math-1-part-3",
+    "title": "Петерсон. Математика. 1 класс. Часть 3",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "textbook",
+    "pages": 102,
+    "bytes": 35079859,
+    "sha256": "6d433119e808ff8df46cc9d3c0ce2dc646088602dd57ed32972b46c8c359f7a1",
+    "filename": "peterson-math-1-part-3.pdf",
+    "downloadName": "Петерсон_1_класс_Часть_3.pdf",
+    "note": "Скан старого издания. Разные части могут относиться к разным годам выпуска. Обложки и завершающие страницы проверены.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-method-1-4-2022",
+    "title": "Петерсон. Математика. 1–4 классы. Методическое пособие, 2022",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "kind": "method",
+    "pages": 225,
+    "bytes": 1253095,
+    "sha256": "8fd44a8ea6df4b56c60fec4049e13364a012269dc8e65ccf138a8a2c6c036f82",
+    "filename": "peterson-method-1-4-2022.pdf",
+    "downloadName": "Петерсон_1-4_Методическое_пособие_2022.pdf",
+    "note": "Скачано с официального сайта автора. Пособие для 1 класса совпадает с вашим ранее прикреплённым файлом; повтор исключён.",
+    "sourceUrl": "https://peterson.institute/upload/metodichka-1-4.pdf",
+    "sourceLabel": "Сайт издателя или автора"
+  },
+  {
+    "id": "peterson-method-1-2022",
+    "title": "Петерсон. Методические рекомендации. 1 класс, 2022",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "method",
+    "pages": 272,
+    "bytes": 12405994,
+    "sha256": "32e3ce782338b4413a0d63765b1732870bd47ad406a210ce77182944d4cf0bc4",
+    "filename": "peterson-method-1-2022.pdf",
+    "downloadName": "Петерсон_1_класс_Методические_рекомендации_2022.pdf",
+    "note": "Скачано с официального сайта автора. Пособие для 1 класса совпадает с вашим ранее прикреплённым файлом; повтор исключён.",
+    "sourceUrl": "https://peterson.institute/upload/iblock/62c/o46rc06tycwrps5dmf4r1263ekbtmahn.pdf",
+    "sourceLabel": "Сайт издателя или автора"
+  },
+  {
+    "id": "peterson-method-3-2022",
+    "title": "Петерсон. Методические рекомендации. 3 класс, 2022",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      3
+    ],
+    "kind": "method",
+    "pages": 320,
+    "bytes": 12327096,
+    "sha256": "8e303342edb538453f92fefbcb14ef744aa00636b9857fb6db7c8b498025470d",
+    "filename": "peterson-method-3-2022.pdf",
+    "downloadName": "Петерсон_3_класс_Методические_рекомендации_2022.pdf",
+    "note": "Скачано с официального сайта автора. Пособие для 1 класса совпадает с вашим ранее прикреплённым файлом; повтор исключён.",
+    "sourceUrl": "https://peterson.institute/upload/iblock/0ad/tv4hlvbv9oi1x6df1ktom7169kp4neac.pdf",
+    "sourceLabel": "Сайт издателя или автора"
+  },
+  {
+    "id": "peterson-method-4-2022",
+    "title": "Петерсон. Методические рекомендации. 4 класс, 2022",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      4
+    ],
+    "kind": "method",
+    "pages": 361,
+    "bytes": 14561448,
+    "sha256": "bead81d0baaa7aa2d9c88807b6a0adc3da140e02f826302f5502112b757c821d",
+    "filename": "peterson-method-4-2022.pdf",
+    "downloadName": "Петерсон_4_класс_Методические_рекомендации_2022.pdf",
+    "note": "Скачано с официального сайта автора. Пособие для 1 класса совпадает с вашим ранее прикреплённым файлом; повтор исключён.",
+    "sourceUrl": "https://peterson.institute/upload/iblock/421/dk6nmyg82wodxn8sn15c9kl97zybruva.pdf",
+    "sourceLabel": "Сайт издателя или автора"
+  },
+  {
+    "id": "ivanov-program-1-4-2015",
+    "title": "Иванов, Кузнецова, Евдокимова. Русский язык. 1–4 классы. Программа, планирование, контроль, 2015",
+    "author": "С. В. Иванов, М. И. Кузнецова, А. О. Евдокимова",
+    "subject": "Русский язык",
+    "grades": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "kind": "method",
+    "pages": 385,
+    "bytes": 1759448,
+    "sha256": "3066b2d1259223aa147f4dcbe2060ba8fa5ff0a181913129b930d4d89fb7a8e7",
+    "filename": "ivanov-program-1-4-2015.pdf",
+    "downloadName": "Иванов_Русский_язык_1-4_Программа_планирование_контроль_2015.pdf",
+    "note": "",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "zhurova-bukvar-letter-2022",
+    "title": "Журова, Евдокимова. Букварь. Методическое письмо, 2022",
+    "author": "Л. Е. Журова, А. О. Евдокимова",
+    "subject": "Русский язык",
+    "grades": [
+      1
+    ],
+    "kind": "letter",
+    "pages": 5,
+    "bytes": 266911,
+    "sha256": "56a18b50ee423c8ad352fdda62528edca813672d8121c5e4be726d063098f983",
+    "filename": "zhurova-bukvar-letter-2022.pdf",
+    "downloadName": "Журова_Букварь_Методическое_письмо_2022.pdf",
+    "note": "",
+    "sourceUrl": "https://s3.prosv.ru/uchitelclub/uploads/2022/07/additions/nachalnaya-shkola-xxi-veka-l-e-zhurova-a-o-evdokimova-bukvar-metodicheskoe-pismo.pdf",
+    "sourceLabel": "Сайт издателя или автора"
+  },
+  {
+    "id": "efrosinina-reading-letter-2022",
+    "title": "Ефросинина, Долгих. Литературное чтение. Методическое письмо, 2022",
+    "author": "Л. А. Ефросинина, М. В. Долгих",
+    "subject": "Литературное чтение",
+    "grades": [
+      1
+    ],
+    "kind": "letter",
+    "pages": 5,
+    "bytes": 429574,
+    "sha256": "f6a091be351df52dd3518948fc4de74c69caf7dc95d50d154b6a2648b96f4eff",
+    "filename": "efrosinina-reading-letter-2022.pdf",
+    "downloadName": "Ефросинина_Методическое_письмо_2022.pdf",
+    "note": "",
+    "sourceUrl": "https://s3.prosv.ru/uchitelclub/uploads/2022/07/additions/nachalnaya-shkola-xxi-veka-efrosinina-l-a-dolgih-m-v-literaturnoe-chtenie-1-klass-metodicheskoe-pismo.pdf",
+    "sourceLabel": "Сайт издателя или автора"
+  },
+  {
+    "id": "peterson-1-control-1",
+    "title": "Петерсон. 1 класс. К-1: Свойства предметов. Вариант 2",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "control",
+    "pages": 2,
+    "bytes": 141563,
+    "sha256": "bfd5d665fb754f8552ed15476809ca699a9c42f119d9d8ef79843ce32ddc2334",
+    "filename": "peterson-1-control-1.pdf",
+    "downloadName": "Петерсон_1_класс_К-1_Вариант_2.pdf",
+    "note": "Выделены все страницы этой работы: PDF 13, 14, печатные 15–16. Это отдельная контрольная, а не полная книга сборника. В исходном скане встречаются вписанные от руки ответы.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-1-control-2",
+    "title": "Петерсон. 1 класс. К-2: Числа 1–6. Вариант 2",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "control",
+    "pages": 2,
+    "bytes": 150201,
+    "sha256": "e6ffe7de3a42c1ad35b0197455ca49da615cac34cd69de477541e1d54c864161",
+    "filename": "peterson-1-control-2.pdf",
+    "downloadName": "Петерсон_1_класс_К-2_Вариант_2.pdf",
+    "note": "Выделены все страницы этой работы: PDF 22, 23, печатные 25–26. Это отдельная контрольная, а не полная книга сборника. В исходном скане встречаются вписанные от руки ответы.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-1-control-3",
+    "title": "Петерсон. 1 класс. К-3: Числа 7–9. Вариант 2",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "control",
+    "pages": 2,
+    "bytes": 132851,
+    "sha256": "8f3defb5ea8446b061383e0c1ad3a93a00b402ab042480f0b8c74966aaed133a",
+    "filename": "peterson-1-control-3.pdf",
+    "downloadName": "Петерсон_1_класс_К-3_Вариант_2.pdf",
+    "note": "Выделены все страницы этой работы: PDF 32, 33, печатные 35–36. Это отдельная контрольная, а не полная книга сборника. В исходном скане встречаются вписанные от руки ответы.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-1-control-4",
+    "title": "Петерсон. 1 класс. К-4: Числа 0–9 и задачи. Вариант 2",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "control",
+    "pages": 2,
+    "bytes": 138035,
+    "sha256": "c46d53e2345a268e82d76a464700134c14d30e529bfa66fce90bdb9cd127c6df",
+    "filename": "peterson-1-control-4.pdf",
+    "downloadName": "Петерсон_1_класс_К-4_Вариант_2.pdf",
+    "note": "Выделены все страницы этой работы: PDF 41, 42, печатные 45–46. Это отдельная контрольная, а не полная книга сборника. В исходном скане встречаются вписанные от руки ответы.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-1-control-5",
+    "title": "Петерсон. 1 класс. К-5: Величины и уравнения. Вариант 2",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "control",
+    "pages": 2,
+    "bytes": 140466,
+    "sha256": "6fe2f26de89abe99061dc3cfa217928189a5518517927d2d178191f95ef341fe",
+    "filename": "peterson-1-control-5.pdf",
+    "downloadName": "Петерсон_1_класс_К-5_Вариант_2.pdf",
+    "note": "Выделены все страницы этой работы: PDF 50, 51, печатные 57–58. Это отдельная контрольная, а не полная книга сборника. В исходном скане встречаются вписанные от руки ответы.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-1-control-6",
+    "title": "Петерсон. 1 класс. К-6: Десяток и круглые числа. Вариант 2",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "control",
+    "pages": 2,
+    "bytes": 128891,
+    "sha256": "485acd8ae27088f15eaecf6a7d48df8449b1243cd51130089f9f931faa7084a9",
+    "filename": "peterson-1-control-6.pdf",
+    "downloadName": "Петерсон_1_класс_К-6_Вариант_2.pdf",
+    "note": "Выделены все страницы этой работы: PDF 57, 58, печатные 65–66. Это отдельная контрольная, а не полная книга сборника. В исходном скане встречаются вписанные от руки ответы.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-1-control-transfer",
+    "title": "Петерсон. 1 класс. Переводная: Переводная работа. Вариант 2",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "control",
+    "pages": 1,
+    "bytes": 78696,
+    "sha256": "af1262364990be78a50504096929c2a14555ad40f3b96b15217d60ac6c33ce04",
+    "filename": "peterson-1-control-transfer.pdf",
+    "downloadName": "Петерсон_1_класс_Переводная_Вариант_2.pdf",
+    "note": "Выделены все страницы этой работы: PDF 67, печатные 78. Это отдельная контрольная, а не полная книга сборника. В исходном скане встречаются вписанные от руки ответы.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  },
+  {
+    "id": "peterson-1-control-final",
+    "title": "Петерсон. 1 класс. Итоговая: Итоговая работа. Вариант 2",
+    "author": "Л. Г. Петерсон",
+    "subject": "Математика",
+    "grades": [
+      1
+    ],
+    "kind": "control",
+    "pages": 2,
+    "bytes": 135525,
+    "sha256": "ca554370f71ff4570549dc8a027415be3e9a80c5e5ec7831fbd4802642fbdb67",
+    "filename": "peterson-1-control-final.pdf",
+    "downloadName": "Петерсон_1_класс_Итоговая_Вариант_2.pdf",
+    "note": "Выделены все страницы этой работы: PDF 68, 69, печатные 79–80. Это отдельная контрольная, а не полная книга сборника. В исходном скане встречаются вписанные от руки ответы.",
+    "sourceUrl": null,
+    "sourceLabel": "Предоставленные материалы"
+  }
+]
