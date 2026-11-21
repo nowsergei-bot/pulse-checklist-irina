@@ -5,3 +5,6 @@ dist/
 *.tsbuildinfo
 *.patch
 .DS_Store
+
+node_modules
+backend/functions/assets/primary-materials/

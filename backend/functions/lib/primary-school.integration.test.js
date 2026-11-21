@@ -1,6 +1,6 @@
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');
 test('PostgreSQL roundtrip, shared roster, teacher ownership, scope, percentages and revisions',{skip:!process.env.PRIMARY_TEST_PG_SOCKET},async()=>{
- const {Pool}=require('pg');const pool=new Pool({host:process.env.PRIMARY_TEST_PG_SOCKET,port:55483,database:process.env.PRIMARY_TEST_PG_DATABASE||'postgres',max:1});
+ const {Pool}=require('pg');const pool=new Pool({host:process.env.PRIMARY_TEST_PG_SOCKET,port:Number(process.env.PRIMARY_TEST_PG_PORT||55483),database:process.env.PRIMARY_TEST_PG_DATABASE||'postgres',max:1});
  const schema='primary_test_'+process.pid;
  const auth=require('./session-auth');const saved=auth.requireUser;let session={ok:true,viaAdminKey:true,user:{id:null}};auth.requireUser=async()=>session;
  delete require.cache[require.resolve('../primary-school')];const {handlePrimarySchoolRequest}=require('../primary-school');
@@ -39,6 +39,14 @@ test('PostgreSQL roundtrip, shared roster, teacher ownership, scope, percentages
   assert.equal((await call('PUT','skill-links',{source_id:firstSkill.skill.id,target_id:null,revision:2,confirmed:true})).revision,3);
   assert.equal(Number((await pool.query("SELECT count(*) FROM primary_audit WHERE action='skill_link'")).rows[0].count),2);
   assert.equal((await call('GET','bootstrap',{}, {'X-Ea-Preview':'1'})).status,403);
+  session={ok:true,user:{id:2,email:'kostyukovich@primakov.school'}};
+  for(const scope of ['all','own']){
+   process.env.PRIMARY_ANALYTICS_SCOPE=scope;
+   const me=await call('GET','me');assert.equal(me.status,200);
+   for(const flag of ['access','viewAll','canManage','canWrite','canEditSource'])assert.equal(me.capabilities[flag],true,flag);
+   const primary=await call('GET','bootstrap');assert.equal(primary.status,200);assert.equal(primary.students.length,2);
+  }
+  process.env.PRIMARY_ANALYTICS_SCOPE='all';
   session={ok:true,user:{id:2,email:'two@test.invalid'}};
   assert.equal((await call('GET','bootstrap')).students.length,2);
   assert.equal((await save(2,[{student_id:1,task_id:task,status:'measured',completion_percent:100}])).status,403);

@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "node --test lib/visit-checklist-score.test.js lib/visit-checklist-format.test.js lib/visit-checklist-analytics-access.test.js lib/lesson-visit-checklist.test.js"
+    "test": "node --test lib/visit-checklist-score.test.js lib/visit-checklist-format.test.js lib/visit-checklist-analytics-access.test.js lib/lesson-visit-checklist.test.js",
+    "test:primary": "node --test lib/primary-school.test.js lib/primary-school-ai.test.js lib/primary-skill-links.test.js lib/primary-group-insight.test.js && node --test --test-name-pattern=\"PDF range validation\" lib/primary-materials.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.741.0",

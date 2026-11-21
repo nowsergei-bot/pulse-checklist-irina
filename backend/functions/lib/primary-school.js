@@ -3,7 +3,11 @@ const baseCatalog = require('../data/primary-school-catalog.json');
 const extension = require('../data/primary-curriculum-extension.json');
 const catalog = {...baseCatalog,notice:baseCatalog.notice+' '+extension.notice,skills:[...baseCatalog.skills,...extension.skills],templates:[...baseCatalog.templates,...extension.templates],sources:[...baseCatalog.sources,...extension.sources]};
 const { matchesAllowlistedIdentity, normalizeAllowlistName } = require('./identity-allowlist');
-const { ENGLISH_VIEW_ALL_LEADERS } = require('./english-assessment-leaders');
+// Primary access stays independent of English department role changes.
+const PRIMARY_EDITORS = [
+  { full_names:['Костюкович Ирина Сергеевна'], emails:['kostyukovich@primakov.school','kostukovich@primakov.school'] },
+  { full_names:['Новожилов Сергей Валерьевич'], emails:['novozhilov@primakov.school'] },
+];
 
 const LEADER_NAMES = ['Басовский Виталий Валерьевич','Зенькович Наталья Владимировна','Воробьева Лидия Анатольевна','Хорошилов Алексей Александрович','Костюкович Ирина Сергеевна','Новожилов Сергей Валерьевич','Томонова Анна Викторовна','Шилина Ольга Николаевна'];
 const STATUSES = ['measured','not_assessed','absent'];
@@ -15,12 +19,13 @@ function isPrimaryTeacher(s) {
 function capabilities(user, staff, mode = 'all', classIds = []) {
   // Only server-owned staff records bound to the authenticated email supply names.
   const names = staff.map(s => normalizeAllowlistName(s.full_name));
-  const named = LEADER_NAMES.some(n => names.includes(normalizeAllowlistName(n))) ||
-    (ENGLISH_VIEW_ALL_LEADERS || []).filter(p => LEADER_NAMES.includes(p.display_name))
-      .some(p => matchesAllowlistedIdentity({email:user?.email},null,{emails:p.emails}));
+  const canEditSource = PRIMARY_EDITORS.some(person =>
+    matchesAllowlistedIdentity({email:user?.email},null,{emails:person.emails}) ||
+    person.full_names.some(name => names.includes(normalizeAllowlistName(name))));
+  const named = LEADER_NAMES.some(n => names.includes(normalizeAllowlistName(n))) || canEditSource;
   const teacher = staff.some(isPrimaryTeacher);
   return { access:named || teacher, viewAll:named || (teacher && mode === 'all'),
-    canManage:named, canWrite:named || teacher, mode:mode === 'own' ? 'own':'all', classIds,
+    canManage:named, canWrite:named || teacher, canEditSource, mode:mode === 'own' ? 'own':'all', classIds,
     staffIds:staff.map(s=>Number(s.id)), teacherStaffId:staff.find(isPrimaryTeacher)?.id || null };
 }
 function fail(message) { const e=new Error(message); e.status=400; throw e; }

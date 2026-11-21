@@ -52,3 +52,18 @@ test('Russian source tables preserve task counts, grades and separately assessed
  const partial=catalog.templates.find(t=>t.id==='ru1_literacy_1_v2');
  assert.equal(partial.tasks.length,2);assert.match(partial.notice,/неполная/);
 });
+
+test('Kostyukovich has full primary access and an editor link under either scope',()=>{
+ for(const mode of ['all','own']) {
+  for(const email of ['kostyukovich@primakov.school','kostukovich@primakov.school',' KOSTYUKOVICH@PRIMAKOV.SCHOOL ']) {
+   const c=capabilities({email},[],mode);
+   for(const key of ['access','viewAll','canManage','canWrite','canEditSource'])assert.equal(c[key],true,key);
+  }
+  const bound=capabilities({email:'verified@test.invalid'},[{id:99,full_name:'Костюкович Ирина Сергеевна',department:'Английский язык'}],mode);
+  assert.equal(bound.canEditSource,true);assert.equal(bound.viewAll,true);
+ }
+ assert.equal(capabilities({display_name:'Костюкович Ирина Сергеевна'},[]).access,false);
+ assert.equal(capabilities({email:'kostyukovich@outside.invalid'},[]).canEditSource,false);
+ assert.equal(capabilities({},[teacher]).canEditSource,false);
+ assert.equal(capabilities({},[{full_name:'Зенькович Наталья Владимировна'}]).canEditSource,false);
+});

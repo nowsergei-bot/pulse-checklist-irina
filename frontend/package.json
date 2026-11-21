@@ -7,7 +7,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "test": "tsx --test src/lib/lessonVisitChecklist/visitChecklistReport.test.ts src/lib/lessonVisitChecklist/visitChecklistCompare.test.ts src/lib/lessonVisitChecklist/visitChecklistFormat.test.ts",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "test:primary": "node --experimental-strip-types --test src/pages/primarySchool/*.test.ts"
   },
   "dependencies": {
     "@capacitor/core": "^7.0.0",
