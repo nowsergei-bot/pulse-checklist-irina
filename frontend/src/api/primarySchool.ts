@@ -40,3 +40,5 @@ export type PrimaryGroupInsight=Omit<PrimaryInsight,'evidence'> & {conclusion?:I
 export const primaryGroupInsight=(body:{entity:string;year_id:number;class_ids:number[];grade?:string;subject?:string;teacher_id?:string;from?:string;to?:string;work_id?:string;skill_id?:string})=>request<PrimaryGroupInsight>('insights','POST',body);
 export const primaryAddStudent=(body:{year_id:number;class_id:number;full_name:string;confirmed:boolean})=>request<{student:import('../pages/primarySchool/model').Student}>('students','POST',body);
 export const primaryMoveStudent=(id:number,body:{year_id:number;class_id:number;from_class_id:number;confirmed:boolean})=>request<{student:import('../pages/primarySchool/model').Student}>(`students/${id}/class`,'PUT',body);
+
+export const primaryArchiveStudent=(id:number,body:{year_id:number;from_class_id:number;full_name:string;confirmed:boolean})=>request<{archived:boolean;student_id:number}>(`students/${id}/archive`,'POST',body);

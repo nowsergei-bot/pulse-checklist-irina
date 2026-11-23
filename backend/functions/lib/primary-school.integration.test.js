@@ -73,5 +73,18 @@ test('PostgreSQL roundtrip, shared roster, teacher ownership, scope, percentages
   const moved=await call('PUT',`students/2/class`,{year_id:1,from_class_id:2,class_id:1,confirmed:true});assert.equal(moved.status,200);assert.equal(moved.student.public_id,stableId);assert.equal(moved.student.class_id,1);
   const history=(await pool.query('SELECT roster_json FROM primary_works WHERE id=$1',[ownWork.work.id])).rows[0].roster_json;assert.equal(history.find(s=>s.id===2).class_id,2);
 
+  const archiveBody={year_id:1,from_class_id:1,full_name:'Тест Б',confirmed:true};
+  assert.equal((await call('POST','students/2/archive',archiveBody)).status,403);
+  session={ok:true,user:{id:2,email:'kostyukovich@primakov.school'}};
+  assert.equal((await call('POST','students/2/archive',{...archiveBody,confirmed:false})).status,400);
+  assert.equal((await call('POST','students/2/archive',{...archiveBody,full_name:'Другая запись'})).status,409);
+  assert.equal((await call('POST','students/2/archive',{...archiveBody,from_class_id:2})).status,409);
+  assert.equal((await call('POST','students/2/archive',archiveBody)).status,200);
+  assert.equal((await call('POST','students/2/archive',archiveBody)).status,404);
+  const afterArchive=await call('GET','bootstrap');assert.ok(!afterArchive.students.some(s=>s.id===2));assert.ok(afterArchive.students.some(s=>s.id===1));
+  assert.equal((await pool.query('SELECT public_id FROM ea_students WHERE id=2')).rows[0].public_id,stableId);
+  assert.ok((await pool.query('SELECT roster_json FROM primary_works WHERE id=$1',[ownWork.work.id])).rows[0].roster_json.some(s=>s.id===2));
+  assert.equal(Number((await pool.query("SELECT count(*) FROM primary_audit WHERE action='student_archived'")).rows[0].count),1);
+
  }finally{auth.requireUser=saved;if(oldScope===undefined)delete process.env.PRIMARY_ANALYTICS_SCOPE;else process.env.PRIMARY_ANALYTICS_SCOPE=oldScope;await pool.query(`DROP SCHEMA ${schema} CASCADE`);await pool.end();}
 });

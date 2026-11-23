@@ -7,7 +7,7 @@ const {hasGigaChatCreds}=require('./lib/llm-chat');
 const {readSkillCatalog,changeSkillLink,validateManualSkill}=require('./lib/primary-skill-links');
 const {randomUUID}=require('node:crypto');
 const {groupEvidence,generateGroupInsight}=require('./lib/primary-group-insight');
-const {editPrimaryRoster}=require('./lib/primary-roster');
+const {editPrimaryRoster,archivePrimaryStudent}=require('./lib/primary-roster');
 const {materialList,materialFile}=require('./lib/primary-materials');
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const denied=()=>json(403,{error:'forbidden',message:'Раздел доступен администрации и учителям начальной школы.'});
@@ -30,6 +30,12 @@ async function directory(pool,caps,yearId) {
   const teacherClasses=(await pool.query('SELECT staff_id,class_id FROM primary_teacher_classes WHERE class_id=ANY($1::int[])',[classes.map(c=>c.id)])).rows;
   return {years,year,classes,students,teachers,teacher_classes:teacherClasses};
 }
+async function hideArchivedStudents(pool,works){
+ const ids=[...new Set(works.flatMap(w=>w.roster_json.map(s=>Number(s.id))))];
+ if(!ids.length)return works;
+ const archived=new Set((await pool.query('SELECT id FROM ea_students WHERE id=ANY($1::int[]) AND archived_at IS NOT NULL',[ids])).rows.map(s=>Number(s.id)));
+ return works.map(w=>({...w,roster_json:w.roster_json.filter(s=>!archived.has(Number(s.id)))}));
+}
 async function handlePrimarySchoolRequest(pool,event,method,segs) {
   const auth=await requireUser(pool,event);if(!auth.ok)return json(auth.code||401,{error:auth.error||'Unauthorized'});
   // A preview must never silently inherit the signed-in operator's full roster.
@@ -44,18 +50,24 @@ async function handlePrimarySchoolRequest(pool,event,method,segs) {
       if(id&&extra==='file'&&segs.length===5)return await materialFile(event,method,id);
       return json(404,{message:'Материал не найден.'});
     }
+    if(method==='POST'&&action==='students'&&/^\d+$/.test(id||'')&&extra==='archive'&&segs.length===5){
+      const b=parseBody(event),dir=await directory(pool,caps,b.year_id);
+      return await archivePrimaryStudent(pool,{caps,user,dir,id,body:b});
+    }
     if(action==='students'&&(method==='POST'&&!id||method==='PUT'&&/^\d+$/.test(id||'')&&extra==='class')){
       const b=parseBody(event),dir=await directory(pool,caps,b.year_id);
       return await editPrimaryRoster(pool,{caps,user,dir,id,body:b});
     }
     if(method==='GET'&&action==='bootstrap') {
       const dir=await directory(pool,caps,query.year_id);
-      const works=dir.year?(await pool.query(`SELECT w.*,s.full_name AS teacher_name FROM primary_works w JOIN job_description_staff s ON s.id=w.teacher_staff_id WHERE w.academic_year_id=$1 AND ($2::boolean OR w.class_ids <@ $3::int[]) ORDER BY held_on DESC,created_at DESC`,[dir.year.id,caps.viewAll,caps.classIds])).rows:[];
+      const savedWorks=dir.year?(await pool.query(`SELECT w.*,s.full_name AS teacher_name FROM primary_works w JOIN job_description_staff s ON s.id=w.teacher_staff_id WHERE w.academic_year_id=$1 AND ($2::boolean OR w.class_ids <@ $3::int[]) ORDER BY held_on DESC,created_at DESC`,[dir.year.id,caps.viewAll,caps.classIds])).rows:[];
+      const works=await hideArchivedStudents(pool,savedWorks);
       const settings=(await pool.query('SELECT red_below,green_from,skill_links,skill_links_revision FROM primary_settings WHERE id=1')).rows[0]||{red_below:50,green_from:75};
       const skillCatalog=await readSkillCatalog(pool);
       const ownTemplates=(await pool.query('SELECT * FROM primary_templates WHERE created_by=$1 OR $2::boolean ORDER BY updated_at DESC',[user.id,caps.canManage])).rows.map(t=>({id:t.id,title:t.title,subject:t.subject,grade:t.grade,kind:'control',variant:'',tasks:t.spec_json.tasks,skills:t.spec_json.skills,source:{file:t.spec_json.source_files?.[0]?.file||'Своя спецификация',pdf_pages:t.spec_json.source_files?.map(s=>s?.pdf_page).filter(Boolean)||[]},notice:'Авторская спецификация. Перед новой работой сверьте задания и критерии.',origin:'teacher',revision:t.revision,can_edit:caps.canManage||Number(t.created_by)===Number(user.id)}));
       const observations=works.length?(await pool.query('SELECT work_id,student_id,task_id,skill_id,status,completion_percent,note FROM primary_observations WHERE work_id=ANY($1::uuid[])',[works.map(w=>w.id)])).rows:[];
-      return json(200,{...dir,capabilities:caps,catalog:{...catalog,skills:skillCatalog,templates:[...ownTemplates,...catalog.templates]},skill_links:settings.skill_links||{},skill_links_revision:settings.skill_links_revision||1,works,observations:observations.map(o=>({...o,completion_percent:o.completion_percent==null?null:Number(o.completion_percent)})),ai:{provider:'gigachat',configured:hasGigaChatCreds()},traffic_thresholds:{redBelow:Number(settings.red_below),greenFrom:Number(settings.green_from)},roster_source:'english-assessment',scope_notice:caps.viewAll?'Полный обзор начальной школы':'Только назначенные классы'});
+      const activeRoster=new Set(works.flatMap(w=>w.roster_json.map(s=>Number(s.id))));
+      return json(200,{...dir,capabilities:caps,catalog:{...catalog,skills:skillCatalog,templates:[...ownTemplates,...catalog.templates]},skill_links:settings.skill_links||{},skill_links_revision:settings.skill_links_revision||1,works,observations:observations.filter(o=>activeRoster.has(Number(o.student_id))).map(o=>({...o,completion_percent:o.completion_percent==null?null:Number(o.completion_percent)})),ai:{provider:'gigachat',configured:hasGigaChatCreds()},traffic_thresholds:{redBelow:Number(settings.red_below),greenFrom:Number(settings.green_from)},roster_source:'english-assessment',scope_notice:caps.viewAll?'Полный обзор начальной школы':'Только назначенные классы'});
     }
     if(method==='POST'&&action==='skills'){
       if(!caps.canWrite)return denied();
@@ -128,7 +140,7 @@ async function handlePrimarySchoolRequest(pool,event,method,segs) {
       if(classIds.some(id=>!dir.classes.some(c=>Number(c.id)===id)))return denied();
       if(b.grade&&![1,2,3,4].includes(Number(b.grade))||b.work_id&&!UUID.test(b.work_id))return json(400,{message:'Проверьте выбранную параллель или работу.'});
       const raw=dir.year&&classIds.length?(await pool.query(`SELECT * FROM primary_works WHERE academic_year_id=$1 AND ($2::boolean OR class_ids <@ $3::int[]) AND class_ids && $4::int[] ORDER BY held_on,created_at,id`,[dir.year.id,caps.viewAll,caps.classIds,classIds])).rows:[];
-      const works=raw.filter(w=>(!b.grade||Number(w.grade)===Number(b.grade))&&(!b.subject||w.subject===b.subject)&&(!b.teacher_id||Number(w.teacher_staff_id)===Number(b.teacher_id))&&(!b.work_id||w.id===b.work_id)&&(!b.from||String(w.held_on instanceof Date?w.held_on.toISOString():w.held_on).slice(0,10)>=b.from)&&(!b.to||String(w.held_on instanceof Date?w.held_on.toISOString():w.held_on).slice(0,10)<=b.to)).map(w=>({...w,roster_json:w.roster_json.filter(s=>classIds.includes(Number(s.class_id)))}));
+      const works=(await hideArchivedStudents(pool,raw)).filter(w=>(!b.grade||Number(w.grade)===Number(b.grade))&&(!b.subject||w.subject===b.subject)&&(!b.teacher_id||Number(w.teacher_staff_id)===Number(b.teacher_id))&&(!b.work_id||w.id===b.work_id)&&(!b.from||String(w.held_on instanceof Date?w.held_on.toISOString():w.held_on).slice(0,10)>=b.from)&&(!b.to||String(w.held_on instanceof Date?w.held_on.toISOString():w.held_on).slice(0,10)<=b.to)).map(w=>({...w,roster_json:w.roster_json.filter(s=>classIds.includes(Number(s.class_id)))}));
       const observations=works.length?(await pool.query('SELECT * FROM primary_observations WHERE work_id=ANY($1::uuid[])',[works.map(w=>w.id)])).rows:[];
       const links=(await pool.query('SELECT skill_links FROM primary_settings WHERE id=1')).rows[0]?.skill_links||{};
       const packet=groupEvidence(works,observations,links,await readSkillCatalog(pool),{entity:b.entity,skill_id:b.skill_id||null});

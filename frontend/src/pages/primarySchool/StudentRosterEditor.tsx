@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {primaryAddStudent,primaryMoveStudent} from '../../api/primarySchool';
+import {primaryAddStudent,primaryMoveStudent,primaryArchiveStudent} from '../../api/primarySchool';
 import type {Bootstrap,Student} from './model';
 export function StudentRosterEditor({data,allClasses,action,preview,onClose,onChanged}:{data:Bootstrap;allClasses:Bootstrap['classes'];action:'new'|number;preview:boolean;onClose:()=>void;onChanged:(student:Student)=>void}){
  const student=action==='new'?null:data.students.find(s=>s.id===action);
@@ -18,4 +18,10 @@ export function StudentRosterEditor({data,allClasses,action,preview,onClose,onCh
   <label className="ps-link-confirm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Подтверждаю {student?'перенос':'добавление'} ученика в выбранный класс.</label>
   {error&&<p role="alert" className="ps-error">{error}</p>}<div className="ps-inline-actions"><button className="ps-button" disabled={busy} onClick={onClose}>Отмена</button><button className="ps-button primary" disabled={busy||!classId||!confirmed||(!student&&!name.trim())} onClick={save}>{busy?'Сохраняю…':student?'Перенести ученика':'Добавить ученика'}</button></div>
  </section></div>;
+}
+
+export function StudentArchiveDialog({student,yearId,preview,onClose,onRemoved}:{student:Student;yearId:number;preview:boolean;onClose:()=>void;onRemoved:()=>void}){
+ const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ async function remove(){setBusy(true);setError('');try{if(!preview)await primaryArchiveStudent(student.id,{year_id:yearId,from_class_id:student.class_id,full_name:student.full_name,confirmed});onRemoved();}catch(e){setError(e instanceof Error?e.message:'Не удалось удалить запись.');}finally{setBusy(false);}}
+ return <div className="ps-roster-backdrop"><section className="ps-roster-modal" role="dialog" aria-modal="true" aria-labelledby="primary-archive-title"><h2 id="primary-archive-title">Удалить ученика?</h2><p><strong>{student.full_name}</strong><br/>Класс: {student.class_title}</p><p>Запись исчезнет из активного списка начальной школы и английской аналитики. Сохранённые работы и результаты останутся в истории. Это действие не объединяет результаты двух карточек.</p><label className="ps-link-confirm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Я проверила имя и подтверждаю удаление этой записи.</label>{error&&<p role="alert" className="ps-error">{error}</p>}<div className="ps-inline-actions"><button className="ps-button" disabled={busy} onClick={onClose}>Отмена</button><button className="ps-button primary" disabled={busy||!confirmed} onClick={remove}>{busy?'Удаляю…':'Удалить ученика'}</button></div></section></div>;
 }

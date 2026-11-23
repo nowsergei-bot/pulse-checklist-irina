@@ -29,4 +29,18 @@ async function editPrimaryRoster(pool,{caps,user,dir,id,body:b}){
   await client.query('COMMIT');return json(id?200:201,{student:{...student,class_title:target.title,parallel:target.parallel}});
  }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
 }
-module.exports={editPrimaryRoster};
+async function archivePrimaryStudent(pool,{caps,user,dir,id,body:b}){
+ if(!caps.canManage)return json(403,{message:'Удалять записи учеников могут только руководители раздела.'});
+ if(b.confirmed!==true)return json(400,{message:'Подтвердите удаление ученика из активного списка.'});
+ const client=await pool.connect();
+ try{
+  await client.query('BEGIN');
+  const old=(await client.query('SELECT * FROM ea_students WHERE id=$1 AND archived_at IS NULL FOR UPDATE',[id])).rows[0];
+  if(!old||!dir.classes.some(c=>Number(c.id)===Number(old.class_id))){await client.query('ROLLBACK');return json(404,{message:'Ученик не найден в доступных классах.'});}
+  if(b.full_name!==old.full_name||Number(b.from_class_id)!==Number(old.class_id)){await client.query('ROLLBACK');return json(409,{message:'Запись ученика изменилась. Обновите список и проверьте имя перед удалением.'});}
+  await client.query('UPDATE ea_students SET archived_at=now(),updated_at=now() WHERE id=$1',[id]);
+  await client.query("INSERT INTO primary_audit(actor_id,action,payload) VALUES($1,'student_archived',$2::jsonb)",[user.id,JSON.stringify({student_id:old.id,full_name:old.full_name,class_id:old.class_id,academic_year_id:dir.year.id})]);
+  await client.query('COMMIT');return json(200,{archived:true,student_id:old.id});
+ }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+}
+module.exports={editPrimaryRoster,archivePrimaryStudent};
