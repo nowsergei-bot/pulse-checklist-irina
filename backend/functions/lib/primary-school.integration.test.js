@@ -86,5 +86,41 @@ test('PostgreSQL roundtrip, shared roster, teacher ownership, scope, percentages
   assert.ok((await pool.query('SELECT roster_json FROM primary_works WHERE id=$1',[ownWork.work.id])).rows[0].roster_json.some(s=>s.id===2));
   assert.equal(Number((await pool.query("SELECT count(*) FROM primary_audit WHERE action='student_archived'")).rows[0].count),1);
 
+
+  // Excluding a scored task preserves source measurements and changes only this work.
+  const exclusionSpec={...spec,tasks:spec.tasks.slice(0,2).map(t=>({...t,optional:false}))};
+  const candidate=await call('POST','works',{...body,title:'Тест исключения',spec:exclusionSpec});assert.equal(candidate.status,201);
+  const wid=candidate.work.id,keep=exclusionSpec.tasks[0].id,remove=exclusionSpec.tasks[1].id;
+  const scoreRows=[{student_id:1,task_id:keep,status:'measured',completion_percent:100},{student_id:1,task_id:remove,status:'measured',completion_percent:0,note:'Сохранить в истории'}];
+  assert.equal((await call('PUT',`works/${wid}/observations`,{revision:1,rows:scoreRows})).revision,2);
+  const originalRows=(await pool.query('SELECT * FROM primary_observations WHERE work_id=$1 ORDER BY task_id',[wid])).rows;
+  const exclude=(patch={})=>call('POST',`works/${wid}/exclude-task`,{revision:2,task_id:remove,confirmed:true,...patch});
+  session={ok:true,user:{id:2,email:'two@test.invalid'}};
+  assert.equal((await exclude()).status,403);
+  process.env.PRIMARY_ANALYTICS_SCOPE='own';assert.equal((await exclude()).status,404);
+  process.env.PRIMARY_ANALYTICS_SCOPE='all';session={ok:true,user:{id:2,email:'one@test.invalid'}};
+  assert.equal((await exclude({confirmed:false})).status,400);
+  assert.equal((await exclude({task_id:'not-a-task'})).status,404);
+  assert.equal((await exclude({revision:1})).status,409);
+  const excluded=await exclude();assert.equal(excluded.status,200);assert.equal(excluded.revision,3);
+  assert.deepEqual(excluded.spec.tasks.map(t=>t.id),[keep]);
+  assert.deepEqual(excluded.spec.excluded_tasks[0].task,candidate.work.spec_json.tasks[1]);
+  assert.ok(Number.isFinite(Date.parse(excluded.spec.excluded_tasks[0].excluded_at)));
+  assert.deepEqual((await pool.query('SELECT * FROM primary_observations WHERE work_id=$1 ORDER BY task_id',[wid])).rows,originalRows);
+  const audit=(await pool.query("SELECT * FROM primary_audit WHERE work_id=$1 AND action='task_excluded'",[wid])).rows;
+  assert.equal(audit.length,1);assert.equal(audit[0].payload.before.tasks.length,2);assert.equal(audit[0].payload.after.tasks.length,1);assert.equal(Number(audit[0].actor_id),2);
+  assert.equal((await exclude()).status,409);
+  assert.equal((await exclude({revision:3})).status,404);
+  assert.equal((await exclude({revision:3,task_id:keep})).status,400);
+  assert.equal((await call('PUT',`works/${wid}/observations`,{revision:2,rows:scoreRows})).status,409);
+  assert.equal((await call('PUT',`works/${wid}/observations`,{revision:3,rows:[scoreRows[1]]})).status,400);
+  const updated=await call('GET','bootstrap'),revised=updated.works.find(w=>w.id===wid);
+  const scores=updated.observations.filter(o=>o.work_id===wid);assert.equal(scores.length,2);
+  const {studentEvidence}=require('./primary-school-ai'),{groupEvidence}=require('./primary-group-insight');
+  assert.equal(studentEvidence([revised],scores,1).summary.mean,100);
+  assert.equal(groupEvidence([revised],scores,{},revised.spec_json.skills).evidence[0].mean_percent,100);
+  assert.deepEqual((await pool.query('SELECT spec_json FROM primary_works WHERE id=$1',[id])).rows[0].spec_json.tasks,created.work.spec_json.tasks);
+  assert.equal((await call('PUT',`works/${wid}/observations`,{revision:3,rows:[{...scoreRows[0],completion_percent:75}]})).revision,4);
+
  }finally{auth.requireUser=saved;if(oldScope===undefined)delete process.env.PRIMARY_ANALYTICS_SCOPE;else process.env.PRIMARY_ANALYTICS_SCOPE=oldScope;await pool.query(`DROP SCHEMA ${schema} CASCADE`);await pool.end();}
 });

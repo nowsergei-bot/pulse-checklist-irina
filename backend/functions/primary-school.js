@@ -166,6 +166,26 @@ async function handlePrimarySchoolRequest(pool,event,method,segs) {
       const result=await pool.query(`INSERT INTO primary_works(title,subject,grade,held_on,kind,teacher_staff_id,academic_year_id,class_ids,spec_json,roster_json,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11) RETURNING *`,[String(b.title).trim(),b.subject,grade,b.held_on,b.kind,teacher,dir.year.id,classIds,JSON.stringify(spec),JSON.stringify(roster),user.id]);
       return json(201,{work:result.rows[0]});
     }
+    if(method==='POST'&&action==='works'&&UUID.test(id||'')&&extra==='exclude-task'&&segs.length===5) {
+      const b=parseBody(event),client=await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const w=(await client.query('SELECT * FROM primary_works WHERE id=$1 FOR UPDATE',[id])).rows[0];
+        if(!w||(!caps.viewAll&&!w.class_ids.every(c=>caps.classIds.includes(Number(c))))){await client.query('ROLLBACK');return json(404,{message:'Работа не найдена.'});}
+        if(!caps.canManage&&!caps.staffIds.includes(Number(w.teacher_staff_id))){await client.query('ROLLBACK');return denied();}
+        if(Number(b.revision)!==Number(w.revision)){await client.query('ROLLBACK');return json(409,{message:'Работа уже изменена. Обновите страницу перед исключением задания.'});}
+        if(b.confirmed!==true){await client.query('ROLLBACK');return json(400,{message:'Подтвердите исключение задания для всех учеников этой работы.'});}
+        const task=w.spec_json.tasks.find(t=>t.id===b.task_id);
+        if(!task){await client.query('ROLLBACK');return json(404,{message:'Задание не найдено или уже исключено.'});}
+        if(w.spec_json.tasks.length<=1){await client.query('ROLLBACK');return json(400,{message:'В работе должно остаться хотя бы одно задание.'});}
+        const excluded={task,excluded_at:new Date().toISOString()};
+        const spec={...w.spec_json,tasks:w.spec_json.tasks.filter(t=>t.id!==task.id),excluded_tasks:[...(w.spec_json.excluded_tasks||[]),excluded]};
+        // Retain every original observation; active specification controls all calculations.
+        await client.query('UPDATE primary_works SET spec_json=$2::jsonb,revision=revision+1 WHERE id=$1',[id,JSON.stringify(spec)]);
+        await client.query("INSERT INTO primary_audit(work_id,actor_id,action,payload) VALUES($1,$2,'task_excluded',$3::jsonb)",[id,user.id,JSON.stringify({before:w.spec_json,after:spec,revision:Number(w.revision)+1})]);
+        await client.query('COMMIT');return json(200,{spec,revision:Number(w.revision)+1});
+      } catch(e) {await client.query('ROLLBACK');throw e;} finally{client.release();}
+    }
     if(method==='PUT'&&action==='works'&&UUID.test(id||'')&&extra==='observations') {
       const b=parseBody(event),client=await pool.connect();
       try {

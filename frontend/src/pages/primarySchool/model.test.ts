@@ -11,3 +11,14 @@ test('all scope filters constrain evidence; unassigned children do not get unrel
 test('fractional results never round into false full mastery or zero',()=>{
  for(const value of [99.99,0.01]){const ws=[work('a','2026-09-01'),work('b','2026-10-01')],rows=ws.flatMap(w=>[obs(w.id,'1',value),obs(w.id,'2',value===99.99?100:0)]);const a=summarize(ws,rows);assert.ok(a.percent!>0&&a.percent!<100);assert.equal(a.stable,0);assert.equal(a.independent,0);assert.equal(a.notYet,0);}
 });
+
+test('excluded scored tasks stay in history but leave percentages, coverage and dynamics',()=>{
+ const before=work('a','2026-09-01'),current=work('b','2026-10-01');
+ const rows=[obs('a','1',50),obs('a','2',50),obs('b','1',100),obs('b','2',0)];
+ assert.equal(summarize([before,current],rows).percent,50);
+ const removed=current.spec_json.tasks.find(t=>t.id==='2')!;
+ current.spec_json={...current.spec_json,tasks:current.spec_json.tasks.filter(t=>t.id!=='2'),excluded_tasks:[{task:removed,excluded_at:'2026-11-24T00:00:00Z'}]};
+ const a=summarize([before,current],rows);
+ assert.equal(a.percent,100);assert.equal(a.plannedTasks,3);assert.equal(a.checkedTasks,3);assert.equal(a.coverage,100);assert.equal(a.delta,50);assert.equal(a.skills[0].percent,100);assert.equal(a.timeline[1].percent,100);
+ assert.equal(rows.length,4);assert.equal(rows[3].completion_percent,0);assert.equal(before.spec_json.tasks.length,3);
+});

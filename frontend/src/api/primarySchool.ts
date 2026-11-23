@@ -42,3 +42,5 @@ export const primaryAddStudent=(body:{year_id:number;class_id:number;full_name:s
 export const primaryMoveStudent=(id:number,body:{year_id:number;class_id:number;from_class_id:number;confirmed:boolean})=>request<{student:import('../pages/primarySchool/model').Student}>(`students/${id}/class`,'PUT',body);
 
 export const primaryArchiveStudent=(id:number,body:{year_id:number;from_class_id:number;full_name:string;confirmed:boolean})=>request<{archived:boolean;student_id:number}>(`students/${id}/archive`,'POST',body);
+
+export const primaryExcludeTask=(id:string,revision:number,taskId:string)=>request<{spec:Spec;revision:number}>(`works/${id}/exclude-task`,'POST',{revision,task_id:taskId,confirmed:true});
