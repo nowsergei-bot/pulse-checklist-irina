@@ -87,6 +87,64 @@ const row = (
 });
 const now = new Date("2026-09-23T12:00:00Z");
 
+test("teacher moved to another department: 4.2 by department on the lesson date, lists by the new one", () => {
+  const dir: LessonVisitDirectory = {
+    departments: [
+      { id: "p", name: "Кафедра начального образования" },
+      { id: "m", name: "Кафедра математики и информатики" },
+    ],
+    teachers: [
+      {
+        id: "t1",
+        name: "Учитель Переведённый Тестович",
+        departmentId: "m",
+        departmentHistory: [{ departmentId: "p", until: "2026-11-24" }],
+      },
+      { id: "t2", name: "Наблюдатель Начальный Тестович", departmentId: "p" },
+      { id: "t3", name: "Наблюдатель Математик Тестович", departmentId: "m" },
+      { id: "t4", name: "Учитель Начальный Тестович", departmentId: "p" },
+    ],
+  };
+  const answers = maxAnswersV41({});
+  const visit = (id: number, teacher: string, date: string, visitor: string) => ({
+    id,
+    created_at: date,
+    general: { teacher_id: teacher, visit_date: date, subject: "Алгебра", class_name: "3А", visitor_name: visitor },
+    answers,
+  });
+  const report = buildLessonReport(
+    [
+      visit(1, "t1", "2026-11-10", "Наблюдатель Начальный Тестович"),
+      visit(2, "t1", "2026-11-11", "Наблюдатель Математик Тестович"),
+      visit(3, "t1", "2026-11-25", "Наблюдатель Начальный Тестович"),
+      visit(4, "t1", "2026-11-26", "Наблюдатель Математик Тестович"),
+      visit(5, "t4", "2026-11-12", "Учитель Переведённый Тестович"),
+      visit(6, "t4", "2026-11-27", "Учитель Переведённый Тестович"),
+    ],
+    formV41,
+    dir,
+    new Date("2026-11-28T12:00:00Z"),
+  );
+  const v42 = (id: number) => report.visits.find((v) => v.id === id)!.score.items.find((i) => i.code === "4.2")!;
+  // До перевода: как раньше (своя кафедра начального образования).
+  assert.equal(v42(1).value, 10);
+  assert.equal(v42(2).na, true);
+  assert.equal(v42(5).value, 10);
+  // После перевода: по кафедре математики.
+  assert.equal(v42(3).na, true);
+  assert.equal(v42(4).value, 10);
+  assert.equal(v42(6).na, true);
+  // В списках учитель целиком на новой кафедре, со всеми уроками.
+  for (const id of [1, 2, 3, 4]) {
+    assert.equal(report.visits.find((v) => v.id === id)!.department, "Кафедра математики и информатики");
+  }
+  assert.equal(departmentIdOn(dir.teachers[0], ""), "p");
+  assert.equal(departmentIdOn(dir.teachers[0], "2026-11-24"), "m");
+  assert.equal(departmentIdOn(dir.teachers[3], "2026-11-01"), "p");
+});
+
+
+
 test("legacy teacher names in teacher_id remain distinct without rewriting sources", () => {
   const sources = [
     [199, "2026-09-18", "Жукова Анна Игоревна"],
@@ -1396,62 +1454,6 @@ test("summary coverage uses the form roster of 166, not a stale project snapshot
   for (const t of retired) assert.equal(missing.has(t.name), false);
   // Старые чек-листы на убранных учителей видны с их ФИО.
   assert.deepEqual(report.visits.map((v) => v.teacher).sort(), retired.slice(0, 2).map((t) => t.name).sort());
-});
-
-test("teacher moved to another department: 4.2 by department on the lesson date, lists by the new one", () => {
-  const dir: LessonVisitDirectory = {
-    departments: [
-      { id: "p", name: "Кафедра начального образования" },
-      { id: "m", name: "Кафедра математики и информатики" },
-    ],
-    teachers: [
-      {
-        id: "t1",
-        name: "Учитель Переведённый Тестович",
-        departmentId: "m",
-        departmentHistory: [{ departmentId: "p", until: "2026-11-24" }],
-      },
-      { id: "t2", name: "Наблюдатель Начальный Тестович", departmentId: "p" },
-      { id: "t3", name: "Наблюдатель Математик Тестович", departmentId: "m" },
-      { id: "t4", name: "Учитель Начальный Тестович", departmentId: "p" },
-    ],
-  };
-  const answers = maxAnswersV41({});
-  const visit = (id: number, teacher: string, date: string, visitor: string) => ({
-    id,
-    created_at: date,
-    general: { teacher_id: teacher, visit_date: date, subject: "Алгебра", class_name: "3А", visitor_name: visitor },
-    answers,
-  });
-  const report = buildLessonReport(
-    [
-      visit(1, "t1", "2026-11-10", "Наблюдатель Начальный Тестович"),
-      visit(2, "t1", "2026-11-11", "Наблюдатель Математик Тестович"),
-      visit(3, "t1", "2026-11-25", "Наблюдатель Начальный Тестович"),
-      visit(4, "t1", "2026-11-26", "Наблюдатель Математик Тестович"),
-      visit(5, "t4", "2026-11-12", "Учитель Переведённый Тестович"),
-      visit(6, "t4", "2026-11-27", "Учитель Переведённый Тестович"),
-    ],
-    formV41,
-    dir,
-    new Date("2026-11-28T12:00:00Z"),
-  );
-  const v42 = (id: number) => report.visits.find((v) => v.id === id)!.score.items.find((i) => i.code === "4.2")!;
-  // До перевода: как раньше (своя кафедра начального образования).
-  assert.equal(v42(1).value, 10);
-  assert.equal(v42(2).na, true);
-  assert.equal(v42(5).value, 10);
-  // После перевода: по кафедре математики.
-  assert.equal(v42(3).na, true);
-  assert.equal(v42(4).value, 10);
-  assert.equal(v42(6).na, true);
-  // В списках учитель целиком на новой кафедре, со всеми уроками.
-  for (const id of [1, 2, 3, 4]) {
-    assert.equal(report.visits.find((v) => v.id === id)!.department, "Кафедра математики и информатики");
-  }
-  assert.equal(departmentIdOn(dir.teachers[0], ""), "p");
-  assert.equal(departmentIdOn(dir.teachers[0], "2026-11-24"), "m");
-  assert.equal(departmentIdOn(dir.teachers[3], "2026-11-01"), "p");
 });
 
 
