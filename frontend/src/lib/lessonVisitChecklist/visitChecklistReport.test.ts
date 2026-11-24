@@ -1398,42 +1398,6 @@ test("summary coverage uses the form roster of 166, not a stale project snapshot
   assert.deepEqual(report.visits.map((v) => v.teacher).sort(), retired.slice(0, 2).map((t) => t.name).sort());
 });
 
-test("old checklists on merged records count as one teacher in coverage", () => {
-  const dir: LessonVisitDirectory = {
-    departments: [{ id: "d", name: "Математика" }],
-    teachers: [
-      { id: "a", name: "Учитель Первый Тестович", departmentId: "d" },
-      { id: "b", name: "Учитель Второй Тестович", departmentId: "d" },
-    ],
-    retiredTeachers: [{ id: "gone", name: "Учитель Ушедший Тестович", departmentId: "d" }],
-    teacherAliases: [{ key: teacherAliasKey("First Teacher"), teacherId: "a" }],
-  };
-  const make = (id: number, general: Record<string, string>): LessonVisitResponseRow => ({
-    id,
-    created_at: "2026-09-15",
-    general: { visit_date: "2026-09-15", subject: "Математика", class_name: "5А", visit_format: "Наблюдение", ...general },
-    answers: { "10.1": "высокий" },
-  });
-  const rows = [
-    make(1, { teacher_id: "a" }),
-    make(2, { teacher_id: "First  Teacher" }),
-    make(3, { teacher_id: "", teacher_name: "first teacher" }),
-    make(4, { teacher_id: "gone" }),
-  ];
-  const report = buildLessonReport(rows, seed, dir, now);
-  const first = report.teachers.filter((t) => t.name === "Учитель Первый Тестович");
-  assert.equal(first.length, 1);
-  assert.equal(first[0].visits.length, 3);
-  const coverage = visitCoverage(report.teachers, dir, {});
-  assert.equal(coverage.total, 2);
-  assert.equal(coverage.visited, 1);
-  assert.deepEqual(coverage.notVisited.map((r) => r.name), ["Учитель Второй Тестович"]);
-  assert.equal(report.visits.find((v) => v.id === 4)?.teacher, "Учитель Ушедший Тестович");
-  // Повторная обработка (сервер уже применил) ничего не меняет.
-  const once = applyTeacherAliases({ teacher_id: "gone" }, dir);
-  assert.deepEqual(applyTeacherAliases(once, dir), once);
-});
-
 test("teacher moved to another department: 4.2 by department on the lesson date, lists by the new one", () => {
   const dir: LessonVisitDirectory = {
     departments: [
@@ -1489,3 +1453,41 @@ test("teacher moved to another department: 4.2 by department on the lesson date,
   assert.equal(departmentIdOn(dir.teachers[0], "2026-11-24"), "m");
   assert.equal(departmentIdOn(dir.teachers[3], "2026-11-01"), "p");
 });
+
+
+test("old checklists on merged records count as one teacher in coverage", () => {
+  const dir: LessonVisitDirectory = {
+    departments: [{ id: "d", name: "Математика" }],
+    teachers: [
+      { id: "a", name: "Учитель Первый Тестович", departmentId: "d" },
+      { id: "b", name: "Учитель Второй Тестович", departmentId: "d" },
+    ],
+    retiredTeachers: [{ id: "gone", name: "Учитель Ушедший Тестович", departmentId: "d" }],
+    teacherAliases: [{ key: teacherAliasKey("First Teacher"), teacherId: "a" }],
+  };
+  const make = (id: number, general: Record<string, string>): LessonVisitResponseRow => ({
+    id,
+    created_at: "2026-09-15",
+    general: { visit_date: "2026-09-15", subject: "Математика", class_name: "5А", visit_format: "Наблюдение", ...general },
+    answers: { "10.1": "высокий" },
+  });
+  const rows = [
+    make(1, { teacher_id: "a" }),
+    make(2, { teacher_id: "First  Teacher" }),
+    make(3, { teacher_id: "", teacher_name: "first teacher" }),
+    make(4, { teacher_id: "gone" }),
+  ];
+  const report = buildLessonReport(rows, seed, dir, now);
+  const first = report.teachers.filter((t) => t.name === "Учитель Первый Тестович");
+  assert.equal(first.length, 1);
+  assert.equal(first[0].visits.length, 3);
+  const coverage = visitCoverage(report.teachers, dir, {});
+  assert.equal(coverage.total, 2);
+  assert.equal(coverage.visited, 1);
+  assert.deepEqual(coverage.notVisited.map((r) => r.name), ["Учитель Второй Тестович"]);
+  assert.equal(report.visits.find((v) => v.id === 4)?.teacher, "Учитель Ушедший Тестович");
+  // Повторная обработка (сервер уже применил) ничего не меняет.
+  const once = applyTeacherAliases({ teacher_id: "gone" }, dir);
+  assert.deepEqual(applyTeacherAliases(once, dir), once);
+});
+
