@@ -1492,4 +1492,3 @@ test("old checklists on merged records count as one teacher in coverage", () => 
   const once = applyTeacherAliases({ teacher_id: "gone" }, dir);
   assert.deepEqual(applyTeacherAliases(once, dir), once);
 });
-
