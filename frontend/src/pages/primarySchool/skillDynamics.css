@@ -99,3 +99,9 @@
 .ps-trajectory-scroll{max-height:none!important}.ps-trajectory-scroll svg{display:block;max-width:none}.ps-trajectory-row{padding:18px 0;border-bottom:1px solid #dce5ed}.ps-trajectory-row-heading{position:sticky;left:0;width:calc(min(100vw - 100px, 750px));padding:0 12px;white-space:normal}.ps-trajectory-row-heading strong{display:block;font-size:14px}.ps-trajectory-row-heading small{display:block;margin:7px 0;color:#6b8194;font-size:11px}.ps-trajectory-row-heading i,.ps-skill-legend i{display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;margin-right:8px}
 .ps-skill-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin:18px 0}.ps-skill-legend button{display:flex;align-items:baseline;text-align:left;padding:10px;border:1px solid #dce5ed;border-radius:8px;background:white;color:#29465e;font:inherit;font-size:12px;cursor:pointer}.ps-skill-legend button[aria-pressed=false]{opacity:.45}.ps-skill-legend small{display:block;color:#718498;margin-top:5px;font-size:10px}.ps-skill-point{cursor:pointer}.ps-skill-point:focus{outline:none}.ps-skill-point:focus circle:last-of-type{stroke:#152f45;stroke-width:3}
 .ps-all-works-key{display:flex;gap:10px;padding:14px}.ps-all-works-key button{flex:1;min-width:0;padding:12px;border:0;background:#f0f5f8;color:#345673;border-radius:8px;text-align:left;cursor:pointer;font:inherit;font-size:11px;overflow-wrap:anywhere}.ps-all-works-key b,.ps-all-works-key span{display:block;margin:4px 0}
+
+/* The full axis must remain visible: a late single check must never look empty. */
+.ps-all-trajectories,.ps-trajectory-charts{min-width:0;max-width:100%}
+.ps-trajectory-charts svg{display:block;width:100%;max-width:100%}
+.ps-trajectory-charts .ps-trajectory-row-heading{position:static;width:100%;overflow-wrap:anywhere}
+.ps-trajectory-charts .ps-all-works-key{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));padding:14px 0}

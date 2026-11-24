@@ -44,3 +44,19 @@ test('all skill lines share the work axis, preserve missing checks and resolved 
  assert.equal(chart.series.length,2);assert.deepEqual(chart.series[0].points.map(p=>p.percent),[0,75,null]);assert.deepEqual(chart.series[1].points.map(p=>p.percent),[null,null,50]);
  d.works[1].subject='Русский язык';assert.equal(allSkillTrajectories(analyze(d)).series.length,3);
 });
+
+test('every child keeps every measured skill point, including a lone last-work result and zero',()=>{
+ const works=Array.from({length:9},(_,i)=>({...work(String(i),`skill-${i}`),held_on:`2026-11-${String(i+1).padStart(2,'0')}`}));
+ const observations=works.flatMap((w,i)=>[obs(w.id,1,i%2?0:100),obs(w.id,2,i%2?100:0)]);
+ const d=data(works,observations);
+ for(const studentId of ['1','2']){
+  const chart=allSkillTrajectories(analyze(d,{...EMPTY_FILTERS,studentId}));
+  assert.equal(chart.series.length,9);
+  for(const series of chart.series){
+   const measured=series.points.filter(p=>p.percent!==null);assert.equal(measured.length,1);
+   const source=observations.find(o=>o.work_id===measured[0].work.id&&o.student_id===Number(studentId))!;
+   assert.equal(measured[0].percent,source.completion_percent);assert.equal(measured[0].count,1);
+   assert.equal(series.points.filter(p=>p.percent===null).length,8);
+  }
+ }
+});
