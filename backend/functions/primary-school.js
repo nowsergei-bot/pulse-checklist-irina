@@ -60,7 +60,7 @@ async function handlePrimarySchoolRequest(pool,event,method,segs) {
     }
     if(method==='GET'&&action==='bootstrap') {
       const dir=await directory(pool,caps,query.year_id);
-      const savedWorks=dir.year?(await pool.query(`SELECT w.*,s.full_name AS teacher_name FROM primary_works w JOIN job_description_staff s ON s.id=w.teacher_staff_id WHERE w.academic_year_id=$1 AND ($2::boolean OR w.class_ids <@ $3::int[]) ORDER BY held_on DESC,created_at DESC`,[dir.year.id,caps.viewAll,caps.classIds])).rows:[];
+      const savedWorks=dir.year?(await pool.query(`SELECT w.*,s.full_name AS teacher_name FROM primary_works w JOIN job_description_staff s ON s.id=w.teacher_staff_id WHERE w.academic_year_id=$1 AND w.spec_json->>'archived_at' IS NULL AND ($2::boolean OR w.class_ids <@ $3::int[]) ORDER BY held_on DESC,created_at DESC`,[dir.year.id,caps.viewAll,caps.classIds])).rows:[];
       const works=await hideArchivedStudents(pool,savedWorks);
       const settings=(await pool.query('SELECT red_below,green_from,skill_links,skill_links_revision FROM primary_settings WHERE id=1')).rows[0]||{red_below:50,green_from:75};
       const skillCatalog=await readSkillCatalog(pool);
@@ -122,7 +122,7 @@ async function handlePrimarySchoolRequest(pool,event,method,segs) {
     if(method==='POST'&&action==='students'&&/^\d+$/.test(id||'')&&extra==='insight') {
       const b=parseBody(event),dir=await directory(pool,caps,b.year_id);
       if(!dir.students.some(s=>Number(s.id)===Number(id)))return json(404,{message:'Ребёнок не найден в доступных классах.'});
-      const works=(await pool.query(`SELECT * FROM primary_works WHERE academic_year_id=$1 AND ($2::boolean OR class_ids <@ $3::int[]) ORDER BY held_on,created_at,id`,[dir.year.id,caps.viewAll,caps.classIds])).rows.filter(w=>(!b.subject||w.subject===b.subject)&&(!b.from||(w.held_on instanceof Date?w.held_on.toISOString():String(w.held_on)).slice(0,10)>=b.from)&&(!b.to||(w.held_on instanceof Date?w.held_on.toISOString():String(w.held_on)).slice(0,10)<=b.to)&&(!b.teacher_id||Number(w.teacher_staff_id)===Number(b.teacher_id))&&(!b.class_id||w.class_ids.map(Number).includes(Number(b.class_id))));
+      const works=(await pool.query(`SELECT * FROM primary_works WHERE academic_year_id=$1 AND spec_json->>'archived_at' IS NULL AND ($2::boolean OR class_ids <@ $3::int[]) ORDER BY held_on,created_at,id`,[dir.year.id,caps.viewAll,caps.classIds])).rows.filter(w=>(!b.subject||w.subject===b.subject)&&(!b.from||(w.held_on instanceof Date?w.held_on.toISOString():String(w.held_on)).slice(0,10)>=b.from)&&(!b.to||(w.held_on instanceof Date?w.held_on.toISOString():String(w.held_on)).slice(0,10)<=b.to)&&(!b.teacher_id||Number(w.teacher_staff_id)===Number(b.teacher_id))&&(!b.class_id||w.class_ids.map(Number).includes(Number(b.class_id))));
       const rows=works.length?(await pool.query('SELECT * FROM primary_observations WHERE student_id=$1 AND work_id=ANY($2::uuid[])',[id,works.map(w=>w.id)])).rows:[];
       const links=(await pool.query('SELECT skill_links FROM primary_settings WHERE id=1')).rows[0]?.skill_links||{};
       const packet=studentEvidence(works,rows,Number(id),links,await readSkillCatalog(pool));
@@ -139,7 +139,7 @@ async function handlePrimarySchoolRequest(pool,event,method,segs) {
       const classIds=Array.isArray(b.class_ids)?[...new Set(b.class_ids.map(Number))]:dir.classes.map(c=>Number(c.id));
       if(classIds.some(id=>!dir.classes.some(c=>Number(c.id)===id)))return denied();
       if(b.grade&&![1,2,3,4].includes(Number(b.grade))||b.work_id&&!UUID.test(b.work_id))return json(400,{message:'Проверьте выбранную параллель или работу.'});
-      const raw=dir.year&&classIds.length?(await pool.query(`SELECT * FROM primary_works WHERE academic_year_id=$1 AND ($2::boolean OR class_ids <@ $3::int[]) AND class_ids && $4::int[] ORDER BY held_on,created_at,id`,[dir.year.id,caps.viewAll,caps.classIds,classIds])).rows:[];
+      const raw=dir.year&&classIds.length?(await pool.query(`SELECT * FROM primary_works WHERE academic_year_id=$1 AND spec_json->>'archived_at' IS NULL AND ($2::boolean OR class_ids <@ $3::int[]) AND class_ids && $4::int[] ORDER BY held_on,created_at,id`,[dir.year.id,caps.viewAll,caps.classIds,classIds])).rows:[];
       const works=(await hideArchivedStudents(pool,raw)).filter(w=>(!b.grade||Number(w.grade)===Number(b.grade))&&(!b.subject||w.subject===b.subject)&&(!b.teacher_id||Number(w.teacher_staff_id)===Number(b.teacher_id))&&(!b.work_id||w.id===b.work_id)&&(!b.from||String(w.held_on instanceof Date?w.held_on.toISOString():w.held_on).slice(0,10)>=b.from)&&(!b.to||String(w.held_on instanceof Date?w.held_on.toISOString():w.held_on).slice(0,10)<=b.to)).map(w=>({...w,roster_json:w.roster_json.filter(s=>classIds.includes(Number(s.class_id)))}));
       const observations=works.length?(await pool.query('SELECT * FROM primary_observations WHERE work_id=ANY($1::uuid[])',[works.map(w=>w.id)])).rows:[];
       const links=(await pool.query('SELECT skill_links FROM primary_settings WHERE id=1')).rows[0]?.skill_links||{};
@@ -166,12 +166,28 @@ async function handlePrimarySchoolRequest(pool,event,method,segs) {
       const result=await pool.query(`INSERT INTO primary_works(title,subject,grade,held_on,kind,teacher_staff_id,academic_year_id,class_ids,spec_json,roster_json,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11) RETURNING *`,[String(b.title).trim(),b.subject,grade,b.held_on,b.kind,teacher,dir.year.id,classIds,JSON.stringify(spec),JSON.stringify(roster),user.id]);
       return json(201,{work:result.rows[0]});
     }
+    if(method==='POST'&&action==='works'&&UUID.test(id||'')&&extra==='archive'&&segs.length===5) {
+      const b=parseBody(event),client=await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const w=(await client.query('SELECT * FROM primary_works WHERE id=$1 FOR UPDATE',[id])).rows[0];
+        if(!w||w.spec_json.archived_at||(!caps.viewAll&&!w.class_ids.every(c=>caps.classIds.includes(Number(c))))){await client.query('ROLLBACK');return json(404,{message:'Работа не найдена или уже удалена.'});}
+        if(!caps.canManage&&!caps.staffIds.includes(Number(w.teacher_staff_id))){await client.query('ROLLBACK');return denied();}
+        if(Number(b.revision)!==Number(w.revision)||b.title!==w.title){await client.query('ROLLBACK');return json(409,{message:'Работа уже изменена. Обновите страницу и проверьте её перед удалением.'});}
+        if(b.confirmed!==true){await client.query('ROLLBACK');return json(400,{message:'Подтвердите удаление всей работы.'});}
+        const archived_at=new Date().toISOString(),revision=Number(w.revision)+1;
+        // Soft deletion retains the original specification, roster and every score.
+        await client.query('UPDATE primary_works SET spec_json=$2::jsonb,revision=$3 WHERE id=$1',[id,JSON.stringify({...w.spec_json,archived_at}),revision]);
+        await client.query("INSERT INTO primary_audit(work_id,actor_id,action,payload) VALUES($1,$2,'work_archived',$3::jsonb)",[id,user.id,JSON.stringify({title:w.title,archived_at,revision_before:w.revision,revision_after:revision})]);
+        await client.query('COMMIT');return json(200,{archived:true,work_id:id,revision});
+      } catch(e) {await client.query('ROLLBACK');throw e;} finally{client.release();}
+    }
     if(method==='POST'&&action==='works'&&UUID.test(id||'')&&extra==='exclude-task'&&segs.length===5) {
       const b=parseBody(event),client=await pool.connect();
       try {
         await client.query('BEGIN');
         const w=(await client.query('SELECT * FROM primary_works WHERE id=$1 FOR UPDATE',[id])).rows[0];
-        if(!w||(!caps.viewAll&&!w.class_ids.every(c=>caps.classIds.includes(Number(c))))){await client.query('ROLLBACK');return json(404,{message:'Работа не найдена.'});}
+        if(!w||w.spec_json.archived_at||(!caps.viewAll&&!w.class_ids.every(c=>caps.classIds.includes(Number(c))))){await client.query('ROLLBACK');return json(404,{message:'Работа не найдена.'});}
         if(!caps.canManage&&!caps.staffIds.includes(Number(w.teacher_staff_id))){await client.query('ROLLBACK');return denied();}
         if(Number(b.revision)!==Number(w.revision)){await client.query('ROLLBACK');return json(409,{message:'Работа уже изменена. Обновите страницу перед исключением задания.'});}
         if(b.confirmed!==true){await client.query('ROLLBACK');return json(400,{message:'Подтвердите исключение задания для всех учеников этой работы.'});}
@@ -191,7 +207,7 @@ async function handlePrimarySchoolRequest(pool,event,method,segs) {
       try {
         await client.query('BEGIN');
         const w=(await client.query('SELECT * FROM primary_works WHERE id=$1 FOR UPDATE',[id])).rows[0];
-        if(!w||(!caps.viewAll&&!w.class_ids.every(c=>caps.classIds.includes(Number(c))))){await client.query('ROLLBACK');return json(404,{message:'Работа не найдена.'});}
+        if(!w||w.spec_json.archived_at||(!caps.viewAll&&!w.class_ids.every(c=>caps.classIds.includes(Number(c))))){await client.query('ROLLBACK');return json(404,{message:'Работа не найдена.'});}
         if(!caps.canManage&&!caps.staffIds.includes(Number(w.teacher_staff_id))){await client.query('ROLLBACK');return denied();}
         if(Number(b.revision)!==Number(w.revision)){await client.query('ROLLBACK');return json(409,{message:'Коллега уже изменил результаты. Обновите работу перед сохранением.'});}
         const rows=validateRows(w,b.rows);

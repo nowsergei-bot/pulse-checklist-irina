@@ -19,3 +19,7 @@
 .ps-excluded-tasks>summary{cursor:pointer;font-weight:700}
 .ps-excluded-tasks section+section{border-top:1px solid #dce3e9;margin-top:20px;padding-top:12px}
 .ps-read-spec .ps-button{margin-top:12px}
+.ps-work-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}
+.ps-work-delete{color:#9b3038!important;border-color:#e5bec2!important;background:#fff!important}
+.ps-work-delete-details{display:grid;grid-template-columns:auto 1fr;gap:8px 20px;white-space:normal}
+.ps-work-delete-details dt{color:#687887}.ps-work-delete-details dd{margin:0;overflow-wrap:anywhere}

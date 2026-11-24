@@ -122,5 +122,41 @@ test('PostgreSQL roundtrip, shared roster, teacher ownership, scope, percentages
   assert.deepEqual((await pool.query('SELECT spec_json FROM primary_works WHERE id=$1',[id])).rows[0].spec_json.tasks,created.work.spec_json.tasks);
   assert.equal((await call('PUT',`works/${wid}/observations`,{revision:3,rows:[{...scoreRows[0],completion_percent:75}]})).revision,4);
 
+
+  // Whole-work deletion keeps its original records and cannot affect a namesake.
+  session={ok:true,user:{id:2,email:'kostyukovich@primakov.school'}};
+  const duplicateBody={...body,title:'Две одноимённые работы',held_on:'2026-11-24'};
+  const firstDuplicate=await call('POST','works',duplicateBody),secondDuplicate=await call('POST','works',duplicateBody);
+  assert.equal(firstDuplicate.status,201);assert.equal(secondDuplicate.status,201);
+  const deletedId=firstDuplicate.work.id,retainedId=secondDuplicate.work.id;
+  assert.equal((await call('PUT',`works/${deletedId}/observations`,{revision:1,rows:[{student_id:1,task_id:task,status:'measured',completion_percent:25,note:'Не терять'}]})).revision,2);
+  const beforeDelete=(await pool.query('SELECT * FROM primary_works WHERE id=$1',[deletedId])).rows[0];
+  const retainedBefore=(await pool.query('SELECT * FROM primary_works WHERE id=$1',[retainedId])).rows[0];
+  const observationsBefore=(await pool.query('SELECT * FROM primary_observations WHERE work_id=$1',[deletedId])).rows;
+  const removeWork=(patch={})=>call('POST',`works/${deletedId}/archive`,{revision:2,title:duplicateBody.title,confirmed:true,...patch});
+  session={ok:true,user:{id:2,email:'two@test.invalid'}};
+  assert.equal((await removeWork()).status,403);
+  process.env.PRIMARY_ANALYTICS_SCOPE='own';assert.equal((await removeWork()).status,404);
+  process.env.PRIMARY_ANALYTICS_SCOPE='all';session={ok:true,user:{id:2,email:'one@test.invalid'}};
+  assert.equal((await removeWork({confirmed:false})).status,400);
+  assert.equal((await removeWork({revision:1})).status,409);
+  assert.equal((await removeWork({title:'Другая работа'})).status,409);
+  const removed=await removeWork();assert.equal(removed.status,200);assert.equal(removed.archived,true);assert.equal(removed.work_id,deletedId);assert.equal(removed.revision,3);
+  const stored=(await pool.query('SELECT * FROM primary_works WHERE id=$1',[deletedId])).rows[0];
+  assert.ok(Number.isFinite(Date.parse(stored.spec_json.archived_at)));
+  const {archived_at,...originalSpec}=stored.spec_json;assert.deepEqual(originalSpec,beforeDelete.spec_json);assert.deepEqual(stored.roster_json,beforeDelete.roster_json);
+  assert.deepEqual((await pool.query('SELECT * FROM primary_observations WHERE work_id=$1',[deletedId])).rows,observationsBefore);
+  assert.deepEqual((await pool.query('SELECT * FROM primary_works WHERE id=$1',[retainedId])).rows[0],retainedBefore);
+  const afterDelete=await call('GET','bootstrap');assert.ok(!afterDelete.works.some(w=>w.id===deletedId));assert.ok(afterDelete.works.some(w=>w.id===retainedId));assert.ok(!afterDelete.observations.some(o=>o.work_id===deletedId));
+  assert.equal((await removeWork({revision:3})).status,404);
+  assert.equal((await call('PUT',`works/${deletedId}/observations`,{revision:3,rows:[],comment:'Позднее сохранение'})).status,404);
+  assert.equal((await call('POST',`works/${deletedId}/exclude-task`,{revision:3,task_id:task,confirmed:true})).status,404);
+  assert.equal((await call('POST','students/1/insight',{year_id:1,from:'2026-11-24',to:'2026-11-24'})).status,'no_data');
+  assert.equal((await call('POST','insights',{entity:'work',year_id:1,class_ids:[1],work_id:deletedId})).status,'no_data');
+  assert.equal((await call('POST','insights',{entity:'overview',year_id:1,class_ids:[1],from:'2026-11-24',to:'2026-11-24'})).status,'no_data');
+  assert.equal(Number((await pool.query("SELECT count(*) FROM primary_audit WHERE work_id=$1 AND action='work_archived'",[deletedId])).rows[0].count),1);
+  session={ok:true,user:{id:2,email:'kostyukovich@primakov.school'}};
+  assert.equal((await call('POST',`works/${retainedId}/archive`,{revision:1,title:duplicateBody.title,confirmed:true})).status,200);
+
  }finally{auth.requireUser=saved;if(oldScope===undefined)delete process.env.PRIMARY_ANALYTICS_SCOPE;else process.env.PRIMARY_ANALYTICS_SCOPE=oldScope;await pool.query(`DROP SCHEMA ${schema} CASCADE`);await pool.end();}
 });

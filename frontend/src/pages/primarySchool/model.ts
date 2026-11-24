@@ -46,3 +46,5 @@ export function summarize(works:Work[],observations:Observation[],f:Filters=EMPT
  const comparable=latest.filter(e=>e.delta!==null);
  return {works:selected,latest,skills,timeline,expected:expected.size,checked:latest.length,plannedTasks,checkedTasks,absentTasks,unfilledTasks:plannedTasks-checkedTasks-absentTasks,independent:count('independent'),supported:count('supported'),notYet:count('not_yet'),stable:latest.filter(e=>e.stable).length,improved:latest.filter(e=>e.improved).length,declined:latest.filter(e=>e.declined).length,percent:mean(latest.map(e=>e.percent)),coverage:plannedTasks?Math.round(100*checkedTasks/plannedTasks):null,comparable:comparable.length,delta:mean(comparable.map(e=>e.delta!)),assessedStudents:new Set(latest.map(e=>e.student.id)).size,attentionStudents:new Set(latest.filter(e=>e.percent<100).map(e=>e.student.id)).size};
 }
+
+export function withoutWork(data:Bootstrap,id:string):Bootstrap {return {...data,works:data.works.filter(w=>w.id!==id),observations:data.observations.filter(o=>o.work_id!==id)};}

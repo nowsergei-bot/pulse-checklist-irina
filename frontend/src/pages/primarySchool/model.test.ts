@@ -22,3 +22,13 @@ test('excluded scored tasks stay in history but leave percentages, coverage and 
  assert.equal(a.percent,100);assert.equal(a.plannedTasks,3);assert.equal(a.checkedTasks,3);assert.equal(a.coverage,100);assert.equal(a.delta,50);assert.equal(a.skills[0].percent,100);assert.equal(a.timeline[1].percent,100);
  assert.equal(rows.length,4);assert.equal(rows[3].completion_percent,0);assert.equal(before.spec_json.tasks.length,3);
 });
+
+test('deleting one work immediately removes its scores and recalculates without changing its namesake',async()=>{
+ const {withoutWork}=await import('./model.ts');
+ const first=work('a','2026-09-01'),duplicate=work('b','2026-10-01');first.title=duplicate.title='Одинаковое название';
+ const data={works:[first,duplicate],observations:[obs('a','1',100),obs('a','2',100),obs('b','1',0),obs('b','2',0)]} as import('./model.ts').Bootstrap;
+ const next=withoutWork(data,'b');
+ assert.deepEqual(next.works,[first]);assert.equal(next.observations.length,2);assert.equal(summarize(next.works,next.observations).percent,100);assert.equal(summarize(next.works,next.observations).timeline.length,1);
+ assert.equal(data.works.length,2);assert.equal(data.observations.length,4);
+ assert.equal(summarize(withoutWork(next,'a').works,[]).percent,null);
+});
