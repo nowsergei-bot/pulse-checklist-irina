@@ -12,6 +12,7 @@ import type {
   LessonVisitChecklistConfig,
   LessonVisitDirectory,
   LessonVisitResponseRow,
+  LessonVisitTeacher,
 } from "./types";
 
 /** SHA-256 (hex) для ключей teacherAliases, синхронно: отчёт строится без await. */
@@ -542,6 +543,19 @@ export type ReportTeacher = {
   department: string;
   visits: ReportVisit[];
 };
+/**
+ * Кафедра записи справочника на дату урока (ГГГГ-ММ-ДД): по departmentHistory, если урок раньше перевода.
+ * Урок без даты относится к старым данным и берёт самую раннюю кафедру из истории.
+ */
+export function departmentIdOn(teacher: LessonVisitTeacher, date: string): string {
+  const history = [...(teacher.departmentHistory || [])]
+    .filter((h) => h && h.departmentId && /^\d{4}-\d{2}-\d{2}$/.test(h.until || ""))
+    .sort((a, b) => a.until.localeCompare(b.until));
+  if (!history.length) return teacher.departmentId || "";
+  if (!date) return history[0].departmentId;
+  const past = history.find((h) => date < h.until);
+  return past ? past.departmentId : teacher.departmentId || "";
+}
 export function buildLessonReport(
   rows: LessonVisitResponseRow[],
   checklist: LessonVisitChecklistConfig,
@@ -563,18 +577,20 @@ export function buildLessonReport(
         visits: [],
       });
   }
-  const departmentIdsByPerson = new Map<string, Set<string>>();
+  const recordsByPerson = new Map<string, LessonVisitTeacher[]>();
   // Убранные из списка учителей остаются наблюдателями старых чек-листов.
   for (const teacher of [...directory.teachers, ...(directory.retiredTeachers || [])]) {
     const key = reportPersonKey(teacher.name);
     if (!key) continue;
-    if (!departmentIdsByPerson.has(key)) departmentIdsByPerson.set(key, new Set());
-    departmentIdsByPerson.get(key)!.add(teacher.departmentId || "");
+    if (!recordsByPerson.has(key)) recordsByPerson.set(key, []);
+    recordsByPerson.get(key)!.push(teacher);
   }
-  /** Кафедра наблюдателя, только если ФИО однозначно найдено в справочнике и кафедра одна. */
-  const observerDepartment = (name: string): string | null => {
-    const ids = departmentIdsByPerson.get(reportPersonKey(name));
-    if (!ids || ids.size !== 1) return null;
+  /** Кафедра наблюдателя на дату урока, только если ФИО однозначно найдено в справочнике и кафедра одна. */
+  const observerDepartment = (name: string, date: string): string | null => {
+    const records = recordsByPerson.get(reportPersonKey(name));
+    if (!records) return null;
+    const ids = new Set(records.map((t) => departmentIdOn(t, date)));
+    if (ids.size !== 1) return null;
     return departmentName([...ids][0]) || null;
   };
   const visits: ReportVisit[] = rows.map((row) => {
@@ -625,12 +641,16 @@ export function buildLessonReport(
     const self =
       /само[\s-]?анализ|самооценка|^self(?:$|[ -])|^samoanaliz$/i.test(format);
     const visitor = get("visitor_name", "visitor", "observer");
+    // Пункты по кафедре считаются по кафедре на дату урока (после перевода старые чек-листы не меняются).
+    const departmentOnDate = teacherRow
+      ? departmentName(departmentIdOn(teacherRow, date)) || department
+      : department;
     const score = directLessonScore(checklist, row.answers, {
       date,
       subject,
       className,
-      teacherDepartment: department === "Кафедра не указана" ? "" : department,
-      observerDepartment: visitor ? observerDepartment(visitor) : null,
+      teacherDepartment: departmentOnDate === "Кафедра не указана" ? "" : departmentOnDate,
+      observerDepartment: visitor ? observerDepartment(visitor, date) : null,
     });
     const pairKey =
       teacher !== "Педагог не указан" && date && subject && className

@@ -45,6 +45,11 @@ export interface LessonVisitTeacher {
   departmentId: string;
   /** false: человек есть в форме, но не входит в охват «Посещено учителей». */
   coverage?: boolean;
+  /**
+   * Прежние кафедры: посещения с датой раньше until (ГГГГ-ММ-ДД) считаются по departmentId записи истории.
+   * Нужно, чтобы после перевода учителя пункты по кафедре (4.2 и др.) в старых чек-листах не пересчитывались.
+   */
+  departmentHistory?: { departmentId: string; until: string }[];
 }
 
 export interface LessonVisitDirectory {

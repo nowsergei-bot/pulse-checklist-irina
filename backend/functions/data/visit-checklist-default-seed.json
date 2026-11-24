@@ -1440,7 +1440,13 @@
       {
         "id": "teacher_152",
         "name": "Собянина (Волощенко) Анна Владиславовна",
-        "departmentId": "dept_7"
+        "departmentId": "dept_2",
+        "departmentHistory": [
+          {
+            "departmentId": "dept_7",
+            "until": "2026-11-24"
+          }
+        ]
       },
       {
         "id": "teacher_117",
