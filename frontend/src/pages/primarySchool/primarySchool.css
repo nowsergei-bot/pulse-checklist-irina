@@ -23,3 +23,7 @@
 .ps-work-delete{color:#9b3038!important;border-color:#e5bec2!important;background:#fff!important}
 .ps-work-delete-details{display:grid;grid-template-columns:auto 1fr;gap:8px 20px;white-space:normal}
 .ps-work-delete-details dt{color:#687887}.ps-work-delete-details dd{margin:0;overflow-wrap:anywhere}
+
+/* Keep every preset inside its cell, including the final column. */
+.ps-entry-page .ps-percent-cell .ps-percent-presets,.ps-percent-cell .ps-percent-presets{display:flex;position:static;min-width:0;width:100%;flex-wrap:wrap;gap:3px;padding:0;margin-bottom:6px;border:0;box-shadow:none;background:transparent}
+.ps-percent-cell .ps-percent-presets button{flex:1 0 27px;min-width:27px;min-height:30px;padding:4px 2px}
