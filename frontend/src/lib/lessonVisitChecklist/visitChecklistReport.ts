@@ -9,11 +9,17 @@ import {
 import rubric from "./pulseV6Rubric.json" with { type: "json" };
 import rubricV41 from "./pulseV41Rubric.json" with { type: "json" };
 import type {
+  LessonVisitAnswerValue,
   LessonVisitChecklistConfig,
   LessonVisitDirectory,
+  LessonVisitResponseEditEntry,
   LessonVisitResponseRow,
   LessonVisitTeacher,
 } from "./types";
+import {
+  getOtherOptionLabel,
+  prepareLessonVisitAnswersForSubmit,
+} from "./otherOption";
 
 /** SHA-256 (hex) для ключей teacherAliases, синхронно: отчёт строится без await. */
 function sha256Hex(text: string): string {
@@ -536,6 +542,8 @@ export type ReportVisit = {
   feedback: string;
   practice: string;
   pairKey: string | null;
+  /** Чек-лист исправлен после отправки: дата и время последней правки (ISO). */
+  editedAt?: string;
 };
 export type ReportTeacher = {
   key: string;
@@ -686,6 +694,7 @@ export function buildLessonReport(
         value("10.3") ||
         (score.items[0]?.version === RUBRIC_V41_VERSION ? value("10.2") : ""),
       pairKey,
+      ...(row.edit?.edited_at ? { editedAt: row.edit.edited_at } : {}),
     };
   });
   const year = visits.filter(
@@ -964,4 +973,176 @@ export function withSelfAnalysisLinks(
       visits: t.visits.map((v) => byId.get(v.id)!),
     })),
   };
+}
+
+// ---------- Правка отправленного чек-листа (ТЗ 26.11.2026) ----------
+
+const answerList = (v: LessonVisitAnswerValue | null | undefined): string[] =>
+  Array.isArray(v) ? v.map(String) : v == null || v === "" ? [] : [String(v)];
+
+/** Дата посещения ответа (ГГГГ-ММ-ДД) или пусто. */
+export function responseVisitDate(row: LessonVisitResponseRow): string {
+  const g = row.general || {};
+  const raw = String(g.visit_date || g.date || "").slice(0, 10);
+  return validLessonDate(raw) ? raw : "";
+}
+
+/**
+ * Форма правки: те же разделы и вопросы, что у наблюдателя.
+ * Версия правил берётся по дате посещения и исходным ответам: у старых чек-листов (до 09.11)
+ * варианты и коды пунктов по прежним правилам, плюс «Что я возьму с собой» (10.3).
+ * Текущий ответ всегда есть среди вариантов, даже если формулировка формы с тех пор изменилась.
+ */
+export function responseEditChecklist(
+  checklist: LessonVisitChecklistConfig,
+  row: LessonVisitResponseRow,
+): LessonVisitChecklistConfig & { rubricVersion: string } {
+  const source = row.original?.answers ?? row.answers;
+  const version = rubricVersionFor(checklist, source, responseVisitDate(row));
+  const v41 = version === RUBRIC_V41_VERSION;
+  const oldCriteria = new Map(
+    (rubric as unknown as Rubric).criteria.map((c) => [c.code, c]),
+  );
+  const answered = (id: string) =>
+    answerList(row.answers[id]).length > 0 || answerList(source[id]).length > 0;
+  const adjust = (q: ChecklistQuestion): ChecklistQuestion => {
+    let options = q.options || [];
+    let type = q.type;
+    let code = q.code;
+    if (!v41) {
+      code = q.legacyCode ?? q.code;
+      const c = oldCriteria.get(code);
+      if (c?.options?.length && q.type !== "text") {
+        options = c.options.map((o) => o.label);
+        type = c.answer_mode === "multiple" ? "checkbox" : "radio";
+      }
+    }
+    if (q.type !== "text" && Array.isArray(row.answers[q.id])) type = "checkbox";
+    const other = getOtherOptionLabel({ ...q, options });
+    const extra = answerList(row.answers[q.id]).filter(
+      (v) =>
+        q.type !== "text" &&
+        !options.includes(v) &&
+        !(other && v.startsWith(`${other}:`)),
+    );
+    return { ...q, code, type, options: [...options, ...extra] };
+  };
+  const sections = checklist.sections.map((sec) => ({
+    ...sec,
+    // Пункт, которого не было в прежней форме (11.1), у старого чек-листа показываем, только если он заполнен.
+    questions: sec.questions
+      .filter((q) => v41 || q.legacyCode || answered(q.id))
+      .map(adjust),
+  }));
+  const legacy = (checklist.legacyQuestions || []).filter(
+    (q) => !v41 || answered(q.id),
+  );
+  if (legacy.length && sections.length) {
+    const last = sections[sections.length - 1];
+    sections[sections.length - 1] = {
+      ...last,
+      questions: [...last.questions, ...legacy.map(adjust)],
+    };
+  }
+  return { ...checklist, sections, legacyQuestions: [], rubricVersion: version };
+}
+
+/** Значения для формы: «Другое: текст» раскладывается на вариант и поле уточнения, как у наблюдателя. */
+export function responseEditInitial(
+  editChecklist: LessonVisitChecklistConfig,
+  answers: LessonVisitResponseRow["answers"],
+): { answers: Record<string, LessonVisitAnswerValue>; otherTexts: Record<string, string> } {
+  const out: Record<string, LessonVisitAnswerValue> = { ...answers };
+  const otherTexts: Record<string, string> = {};
+  for (const q of editChecklist.sections.flatMap((s) => s.questions)) {
+    const other = getOtherOptionLabel(q);
+    if (!other) continue;
+    const split = (v: string) => {
+      if (v.startsWith(`${other}:`)) {
+        otherTexts[q.id] = v.slice(other.length + 1).trim();
+        return other;
+      }
+      return v;
+    };
+    const v = answers[q.id];
+    if (Array.isArray(v)) out[q.id] = v.map(split);
+    else if (typeof v === "string") out[q.id] = split(v);
+  }
+  return { answers: out, otherTexts };
+}
+
+/** Что меняется: только пункты, где ответ стал другим (порядок как в форме). */
+export function responseEditChanges(
+  editChecklist: LessonVisitChecklistConfig,
+  before: LessonVisitResponseRow["answers"],
+  draft: Record<string, LessonVisitAnswerValue>,
+  otherTexts: Record<string, string>,
+): { id: string; code: string; title: string; before: string; after: string; value: LessonVisitAnswerValue }[] {
+  const prepared = prepareLessonVisitAnswersForSubmit(editChecklist, draft, otherTexts);
+  const out = [];
+  for (const q of editChecklist.sections.flatMap((s) => s.questions)) {
+    const a = answerList(before[q.id]);
+    const b =
+      q.type === "text"
+        ? answerList(String(prepared[q.id] ?? "").trim())
+        : answerList(prepared[q.id]);
+    if (a.length === b.length && a.every((v, i) => v === b[i])) continue;
+    out.push({
+      id: q.id,
+      code: q.code,
+      title: q.text,
+      before: a.join("; "),
+      after: b.join("; "),
+      value: (q.type === "checkbox" || q.allowMultiple ? b : (b[0] ?? "")) as LessonVisitAnswerValue,
+    });
+  }
+  return out;
+}
+
+/** Ответы с правками истории по шагам: [исходная версия, после правки 1, ...]. */
+export function responseEditVersions(
+  row: LessonVisitResponseRow,
+): { entry: LessonVisitResponseEditEntry | null; answers: LessonVisitResponseRow["answers"] }[] {
+  const history = row.edit_history || [];
+  let current: LessonVisitResponseRow["answers"] = { ...(row.original?.answers ?? row.answers) };
+  const out: { entry: LessonVisitResponseEditEntry | null; answers: LessonVisitResponseRow["answers"] }[] = [
+    { entry: null, answers: current },
+  ];
+  for (const entry of history) {
+    current = { ...current };
+    for (const c of entry.changes) {
+      if (c.after == null || (Array.isArray(c.after) ? !c.after.length : c.after === "")) delete current[c.id];
+      else current[c.id] = c.after;
+    }
+    out.push({ entry, answers: current });
+  }
+  return out;
+}
+
+/**
+ * Итоги до и после правки: чек-лист, урок (все наблюдатели этого урока) и средний итог учителя.
+ * Считает тот же отчёт, что и экраны аналитики, поэтому исключения 4.1 и версия правил те же.
+ */
+export function responseEditImpact(
+  responses: LessonVisitResponseRow[],
+  responseId: number,
+  answers: LessonVisitResponseRow["answers"],
+  checklist: LessonVisitChecklistConfig,
+  directory: LessonVisitDirectory,
+  now = new Date(),
+) {
+  const target = responses.find((r) => r.id === responseId);
+  if (!target) return null;
+  const replaced = responses.map((r) => (r.id === responseId ? { ...r, answers } : r));
+  const measure = (rows: LessonVisitResponseRow[]) => {
+    const report = buildLessonReport(rows, checklist, directory, now);
+    const visit = report.visits.find((v) => v.id === responseId);
+    if (!visit) return null;
+    const teacherVisits = report.visits.filter((v) => v.teacherKey === visit.teacherKey);
+    const lesson = lessonObservations(
+      teacherVisits.filter((v) => v.id === visit.id || (visit.pairKey && v.pairKey === visit.pairKey)),
+    ).find((l) => l.id === visit.id || (visit.pairKey && l.pairKey === visit.pairKey));
+    return { visit, lesson: lesson ?? null, teacherVisits };
+  };
+  return { before: measure(responses), after: measure(replaced) };
 }

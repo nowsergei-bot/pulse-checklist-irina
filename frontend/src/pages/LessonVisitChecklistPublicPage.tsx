@@ -779,7 +779,7 @@ function questionRepeatsSectionTitle(question: LessonVisitQuestion, section: Les
   return qText === sectionTitle || qText === section.title.trim();
 }
 
-function SectionBlock({
+export function SectionBlock({
   section,
   cardIndex,
   answers,

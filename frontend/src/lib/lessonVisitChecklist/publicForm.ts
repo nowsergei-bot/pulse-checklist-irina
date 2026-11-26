@@ -821,6 +821,16 @@ export type PhenomenonResponseRow = {
   created_at: string;
   general: Record<string, unknown>;
   answers: Record<string, unknown>;
+  /** Пометка «изменено»; история и исходная версия только у того, кто может править. */
+  edit?: { count: number; edited_at: string };
+  edit_history?: PhenomenonEditEntry[];
+  original?: { answers: Record<string, unknown> };
+};
+
+export type PhenomenonEditEntry = {
+  at: string;
+  reason: string;
+  changes: { id: string; before: unknown; after: unknown }[];
 };
 
 export type PhenomenonRecord = {
@@ -842,6 +852,12 @@ export type PhenomenonRecord = {
   mastery2: number | null;
   answers: PhenomenonAnswers;
   comments: string;
+  /** Чек-лист исправлен после отправки (ISO) и сколько раз: для пометки «изменено» и проверки на сервере. */
+  editedAt?: string;
+  editCount?: number;
+  /** История правок и исходные ответы наблюдателя: только у того, кто может править. */
+  editHistory?: PhenomenonEditEntry[];
+  originalAnswers?: PhenomenonAnswers;
 };
 
 function str(v: unknown): string {
@@ -925,7 +941,18 @@ export function toPhenomenonRecord(row: PhenomenonResponseRow): PhenomenonRecord
     answers: a,
     comments: a[PHENOMENON_COMMENTS_ID] || '',
   };
-  return { ...base, lessonKey: phenomenonLessonKey(base) };
+  const edited: Partial<PhenomenonRecord> = {};
+  if (row.edit && Number(row.edit.count) > 0) {
+    edited.editedAt = str(row.edit.edited_at);
+    edited.editCount = Number(row.edit.count);
+  }
+  if (Array.isArray(row.edit_history) && row.edit_history.length) {
+    edited.editHistory = row.edit_history;
+    const o: PhenomenonAnswers = {};
+    for (const [k, v] of Object.entries(row.original?.answers || {})) o[k] = str(v);
+    edited.originalAnswers = o;
+  }
+  return { ...base, ...edited, lessonKey: phenomenonLessonKey(base) };
 }
 
 /**
@@ -1169,6 +1196,7 @@ export function phenomenonExcelSheets(
       ...itemHeaders,
       PHENOMENON_OVERALL.title.ru,
       PHENOMENON_COMMENTS_TITLE.ru,
+      'Изменено',
     ],
   ];
   for (const r of records) {
@@ -1190,6 +1218,7 @@ export function phenomenonExcelSheets(
       ...PHENOMENON_ITEMS.map((i) => optionLabel(i.id, r.answers[i.id] || '')),
       optionLabel(PHENOMENON_OVERALL.id, r.answers[PHENOMENON_OVERALL.id] || ''),
       r.comments,
+      r.editedAt ? formatEditedAt(r.editedAt) : '',
     ]);
   }
   const lessonRows: Array<Array<string | number>> = [
@@ -1832,4 +1861,97 @@ export function phenomenonDynamics(records: PhenomenonRecord[], weeks: Phenomeno
     .sort((a, b) => (a.from < b.from ? -1 : 1))
     .map((week) => ({ week, summary: summarizePhenomenonWeek(phenomenonRecordsForWeek(records, week.id, weeks)) }))
     .filter((x) => x.summary.checklists > 0);
+}
+
+// ---------- Правка отправленного чек-листа феноменального урока (ТЗ 26.11.2026) ----------
+
+/** Дата и время правки по Москве: «26.11.2026, 10:15». */
+export function formatEditedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('ru-RU', {
+    timeZone: 'Europe/Moscow',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Что можно править: пункты, «Оценка урока», мастерство обоих педагогов, «Общие выводы». */
+export const PHENOMENON_EDIT_IDS: string[] = [
+  ...PHENOMENON_ITEMS.map((i) => i.id),
+  PHENOMENON_OVERALL.id,
+  'ph_mastery_1',
+  'ph_mastery_2',
+  PHENOMENON_COMMENTS_ID,
+];
+
+/** Подпись поля для сравнения «было / стало». */
+export function phenomenonEditFieldTitle(id: string, record: Pick<PhenomenonRecord, 'teacher1' | 'teacher2'>): string {
+  if (id === 'ph_mastery_1') return `Мастерство: ${record.teacher1}`;
+  if (id === 'ph_mastery_2') return `Мастерство: ${record.teacher2}`;
+  if (id === PHENOMENON_COMMENTS_ID) return PHENOMENON_COMMENTS_TITLE.ru;
+  if (id === PHENOMENON_OVERALL.id) return PHENOMENON_OVERALL.title.ru;
+  const item = PHENOMENON_ITEMS.find((i) => i.id === id);
+  return item ? item.title.ru.replace(/\s*\(.*$/, '') : id;
+}
+
+/** Значение поля для сравнения: подпись варианта или текст. */
+export function phenomenonEditValueText(id: string, value: unknown): string {
+  const v = str(value);
+  if (!v) return 'Нет ответа';
+  if (id === PHENOMENON_COMMENTS_ID || id === 'ph_mastery_1' || id === 'ph_mastery_2') return v;
+  return optionLabel(id, v) || v;
+}
+
+/** Изменённые поля: [{ id, before, after }] (значения как хранятся). */
+export function phenomenonEditChanges(before: PhenomenonAnswers, draft: PhenomenonAnswers): { id: string; before: string; after: string }[] {
+  return PHENOMENON_EDIT_IDS.filter((id) => str(before[id]) !== str(draft[id])).map((id) => ({
+    id,
+    before: str(before[id]),
+    after: str(draft[id]),
+  }));
+}
+
+/**
+ * Итоги до и после правки: чек-лист (из 22), урок и среднее мастерство каждого педагога пары.
+ * Считается той же аналитикой, что и экраны (уроки и педагоги по всем чек-листам).
+ */
+export function phenomenonEditImpact(
+  records: PhenomenonRecord[],
+  recordId: number,
+  answers: PhenomenonAnswers,
+  directory?: LessonVisitDirectory | null,
+) {
+  const target = records.find((r) => r.id === recordId);
+  if (!target) return null;
+  const edited: PhenomenonRecord = {
+    ...target,
+    answers,
+    score: scorePhenomenon(answers),
+    mastery1: masteryValue(answers, 'ph_mastery_1'),
+    mastery2: masteryValue(answers, 'ph_mastery_2'),
+    comments: answers[PHENOMENON_COMMENTS_ID] || '',
+  };
+  const measure = (list: PhenomenonRecord[], record: PhenomenonRecord) => {
+    const lesson = summarizePhenomenonLessons(list).find((l) => l.recordIds.includes(recordId)) ?? null;
+    const teachers = phenomenonTeacherRows(list, directory);
+    const mastery = [
+      { name: record.teacher1, key: record.teacher1Key },
+      { name: record.teacher2, key: record.teacher2Key },
+    ].map((t) => ({
+      name: t.name,
+      mastery:
+        teachers.find((row) => row.key === t.key)?.mastery ??
+        teachers.find((row) => personKey(row.name) === personKey(t.name))?.mastery ??
+        null,
+    }));
+    return { score: record.score, lesson, mastery };
+  };
+  return {
+    before: measure(records, target),
+    after: measure(records.map((r) => (r.id === recordId ? edited : r)), edited),
+  };
 }

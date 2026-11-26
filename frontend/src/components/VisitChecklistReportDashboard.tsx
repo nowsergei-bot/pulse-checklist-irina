@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   LessonVisitChecklistConfig,
@@ -18,6 +18,12 @@ import {
   SECTION_NAMES,
   type ReportVisit,
   RATING_LABELS,
+  responseEditChanges,
+  responseEditChecklist,
+  responseEditImpact,
+  responseEditInitial,
+  responseEditVersions,
+  RUBRIC_V41_VERSION,
 } from "../lib/lessonVisitChecklist/visitChecklistReport";
 import {
   COMPACT_LIST_SIZE,
@@ -82,6 +88,7 @@ import {
 } from "../lib/lessonVisitChecklist/visitChecklistCloudPdf";
 import { PDF_CARD_KEEP_TOGETHER_CLASS } from "../lib/pdf/captureElementToPdfA4";
 import {
+  editLessonVisitResponse,
   getLessonVisitSelfLinks,
   saveLessonVisitSelfLink,
 } from "../api/visitChecklist";
@@ -104,6 +111,10 @@ type Props = {
   /** Адрес общей «Сводки» для ссылок из цифр; null, если у пользователя нет к ней доступа. */
   analyticsPath?: string | null;
   now?: Date;
+  /** Сервер разрешил править отправленные чек-листы (кнопка «Редактировать» в карточке). */
+  canEditResponses?: boolean;
+  /** Сохранённая правка: заменить запись в списке ответов, чтобы пересчитались все экраны. */
+  onResponseEdited?: (row: LessonVisitResponseRow) => void;
 };
 const dateText = (date: string) =>
   date ? date.split("-").reverse().join(".") : "Дата не указана";
@@ -1285,6 +1296,303 @@ function DirectorSummary({
   );
 }
 
+
+/** Та же форма, что у наблюдателя (разделы и варианты), загружается только при правке. */
+const EditSectionBlock = lazy(() =>
+  import("../pages/LessonVisitChecklistPublicPage").then((m) => ({ default: m.SectionBlock })),
+);
+
+/** Дата и время правки по Москве: «26.11.2026, 10:15». */
+function editedAtText(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function EditedMark({ at }: { at?: string }) {
+  if (!at) return null;
+  return <small className="vcr-edited">изменено {editedAtText(at)}</small>;
+}
+
+function MeanScore({ rows }: { rows: ReportVisit[] }) {
+  const value = schoolAverage(rows);
+  return value == null ? <span>Итог не сформирован</span> : (
+    <ScoreLevel text={`${displayScore(value)} из 100`} percent={value} />
+  );
+}
+
+/** Сравнение итогов «было / стало»: чек-лист, урок, средний итог учителя. */
+function EditImpactTable({ impact }: { impact: ReturnType<typeof responseEditImpact> }) {
+  if (!impact?.before || !impact.after) return null;
+  const { before, after } = impact;
+  return (
+    <Table headers={["Итог", "Было", "Стало"]} fit>
+      <tr>
+        <td>Чек-лист</td>
+        <td><Score visit={before.visit} /></td>
+        <td><Score visit={after.visit} /></td>
+      </tr>
+      {before.lesson && after.lesson ? (
+        <tr>
+          <td>Урок</td>
+          <td><Score visit={before.lesson} /></td>
+          <td><Score visit={after.lesson} /></td>
+        </tr>
+      ) : null}
+      <tr>
+        <td>Средний итог учителя (все уроки)</td>
+        <td><MeanScore rows={before.teacherVisits} /></td>
+        <td><MeanScore rows={after.teacherVisits} /></td>
+      </tr>
+    </Table>
+  );
+}
+
+/** Пункты, исключённые Пульсом автоматически: правка ответа в них на итог не влияет. */
+function autoExcludedNote(visit: ReportVisit | undefined, codes: string[]) {
+  if (!visit) return [];
+  return visit.score.items.filter(
+    (i) => i.ruleId.endsWith("/exception/auto") && codes.includes(i.code),
+  );
+}
+
+function ResponseEditPanel({
+  row,
+  responses,
+  checklist,
+  directory,
+  projectId,
+  now,
+  onSaved,
+  onCancel,
+}: {
+  row: LessonVisitResponseRow;
+  responses: LessonVisitResponseRow[];
+  checklist: LessonVisitChecklistConfig;
+  directory: LessonVisitDirectory;
+  projectId: number;
+  now?: Date;
+  onSaved: (row: LessonVisitResponseRow) => void;
+  onCancel: () => void;
+}) {
+  const form = useMemo(() => responseEditChecklist(checklist, row), [checklist, row]);
+  const initial = useMemo(() => responseEditInitial(form, row.answers), [form, row]);
+  const [answers, setAnswers] = useState(initial.answers);
+  const [otherTexts, setOtherTexts] = useState(initial.otherTexts);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [tried, setTried] = useState(false);
+  const changes = useMemo(
+    () => responseEditChanges(form, row.answers, answers, otherTexts),
+    [form, row, answers, otherTexts],
+  );
+  const deferredChanges = useDeferredValue(changes);
+  // Итоги считаются по ответам этого учителя: тот же отчёт, что на экранах, без пересчёта всей школы.
+  const teacherResponses = useMemo(() => {
+    const report = buildLessonReport(responses, checklist, directory, now);
+    const key = report.visits.find((v) => v.id === row.id)?.teacherKey;
+    const ids = new Set(report.visits.filter((v) => v.teacherKey === key).map((v) => v.id));
+    return responses.filter((r) => r.id === row.id || ids.has(r.id));
+  }, [responses, checklist, directory, now, row.id]);
+  const impact = useMemo(() => {
+    const next = { ...row.answers };
+    for (const c of deferredChanges) {
+      if (Array.isArray(c.value) ? !c.value.length : !c.value) delete next[c.id];
+      else next[c.id] = c.value;
+    }
+    return responseEditImpact(teacherResponses, row.id, next, checklist, directory, now);
+  }, [deferredChanges, teacherResponses, row, checklist, directory, now]);
+  const excluded = autoExcludedNote(impact?.after?.visit, deferredChanges.map((c) => c.code));
+  const g = row.general || {};
+  const teacherName =
+    directory.teachers.find((t) => t.id === g.teacher_id)?.name ||
+    (directory.retiredTeachers || []).find((t) => t.id === g.teacher_id)?.name ||
+    g.teacher_name ||
+    g.teacher_id ||
+    "";
+  const locked: [string, string][] = [
+    ["Дата посещения", dateText(String(g.visit_date || g.date || "").slice(0, 10))],
+    ["Класс", g.class_name || ""],
+    ["Учитель", teacherName],
+    ["Наблюдатель", g.visitor_name || g.observer_name || ""],
+    ["Предмет", g.subject || ""],
+    ["Версия чек-листа", form.rubricVersion === RUBRIC_V41_VERSION ? "4.1 (с 09.11.2026)" : "до 09.11.2026"],
+  ];
+  async function save() {
+    setTried(true);
+    if (!reason.trim() || !changes.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      const saved = await editLessonVisitResponse(projectId, {
+        response_id: row.id,
+        answers: Object.fromEntries(changes.map((c) => [c.id, c.value])),
+        reason: reason.trim(),
+        expected_count: row.edit?.count ?? 0,
+      });
+      onSaved(saved);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось сохранить правку");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="vcr-edit lf-visit-form">
+      <h4>Правка чек-листа</h4>
+      <dl className="vcr-edit__locked">
+        {locked.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v || "—"}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="vcr-note">
+        Дату, класс, учителя, наблюдателя и версию изменить нельзя. Если ошибка в них, чек-лист удаляется и заполняется заново.
+      </p>
+      <div className="public-form-stack">
+        <Suspense fallback={<p className="vcr-note">Загрузка формы…</p>}>
+          {form.sections.map((sec, i) => (
+            <EditSectionBlock
+              key={sec.id}
+              section={sec}
+              cardIndex={i}
+              answers={answers}
+              otherTexts={otherTexts}
+              invalidFieldIds={new Set()}
+              onChange={(qid, val) => setAnswers((a) => ({ ...a, [qid]: val }))}
+              onOtherTextChange={(qid, text) => setOtherTexts((m) => ({ ...m, [qid]: text }))}
+            />
+          ))}
+        </Suspense>
+      </div>
+      <section className="vcr-edit__summary" aria-label="Что меняется">
+        <h4>Что меняется</h4>
+        {deferredChanges.length ? (
+          <Table headers={["Пункт", "Было", "Стало"]} fit>
+            {deferredChanges.map((c) => (
+              <tr key={c.id}>
+                <td>{c.code} {c.title}</td>
+                <td>{c.before || "Нет ответа"}</td>
+                <td>{c.after || "Нет ответа"}</td>
+              </tr>
+            ))}
+          </Table>
+        ) : (
+          <p className="vcr-note">Пока ничего не изменено.</p>
+        )}
+        {excluded.map((i) => (
+          <p key={i.code} className="vcr-note">
+            Пункт {i.code} Пульс не учитывает автоматически ({i.reason.replace(/^Не учитывается: /, "")}), поэтому правка в нём на итог не влияет.
+          </p>
+        ))}
+        <EditImpactTable impact={impact} />
+        <label className="vcr-edit__reason">
+          <strong>Причина правки <span className="public-required-mark">*</span></strong>
+          <textarea
+            value={reason}
+            maxLength={1000}
+            rows={3}
+            onChange={(e) => setReason(e.target.value)}
+            aria-invalid={tried && !reason.trim()}
+          />
+        </label>
+        {tried && !reason.trim() ? <p className="err">Укажите причину правки, без неё сохранить нельзя.</p> : null}
+        {tried && !changes.length ? <p className="err">Нет изменений.</p> : null}
+        {error ? <p className="err">{error}</p> : null}
+        <div className="vcr-edit__actions">
+          <button
+            type="button"
+            className="vcr-action vcr-action--primary"
+            disabled={busy || !reason.trim() || !changes.length}
+            onClick={() => void save()}
+          >
+            {busy ? "Сохранение…" : "Сохранить правку"}
+          </button>
+          <button type="button" className="vcr-action" disabled={busy} onClick={onCancel}>
+            Отмена
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** История правок: только тому, кто может править (сервер отдаёт её только ему). */
+function ResponseEditHistory({
+  row,
+  responses,
+  checklist,
+  directory,
+  now,
+}: {
+  row: LessonVisitResponseRow;
+  responses: LessonVisitResponseRow[];
+  checklist: LessonVisitChecklistConfig;
+  directory: LessonVisitDirectory;
+  now?: Date;
+}) {
+  const [open, setOpen] = useState(false);
+  const history = row.edit_history || [];
+  const steps = useMemo(() => {
+    if (!open) return [];
+    const form = responseEditChecklist(checklist, row);
+    const questions = new Map(form.sections.flatMap((s) => s.questions).map((q) => [q.id, q]));
+    const versions = responseEditVersions(row);
+    return versions.slice(1).map((v, i) => {
+      const prev = versions[i].answers;
+      const report = (answers: LessonVisitResponseRow["answers"]) =>
+        buildLessonReport(
+          responses.map((r) => (r.id === row.id ? { ...r, answers } : r)).filter((r) => r.id === row.id),
+          checklist,
+          directory,
+          now,
+        ).visits.find((x) => x.id === row.id);
+      return { entry: v.entry!, questions, before: report(prev), after: report(v.answers) };
+    });
+  }, [open, row, responses, checklist, directory, now]);
+  if (!history.length) return null;
+  const text = (v: unknown) => (Array.isArray(v) ? v.join("; ") : v == null || v === "" ? "Нет ответа" : String(v));
+  return (
+    <details className="vcr-edit-history" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>История правок ({history.length})</summary>
+      {steps.map(({ entry, questions, before, after }, i) => (
+        <div key={`${entry.at}-${i}`} className="vcr-edit-history__step">
+          <p>
+            <strong>{editedAtText(entry.at)}</strong> · причина: {entry.reason}
+          </p>
+          <Table headers={["Пункт", "Было", "Стало"]} fit>
+            {entry.changes.map((c) => {
+              const q = questions.get(c.id);
+              return (
+                <tr key={c.id}>
+                  <td>{q ? `${q.code} ${q.text}` : c.id}</td>
+                  <td>{text(c.before)}</td>
+                  <td>{text(c.after)}</td>
+                </tr>
+              );
+            })}
+          </Table>
+          {before && after ? (
+            <p>
+              Итог чек-листа: было <Score visit={before} />, стало <Score visit={after} />
+            </p>
+          ) : null}
+        </div>
+      ))}
+    </details>
+  );
+}
+
 export default function VisitChecklistReportDashboard({
   responses,
   projectId,
@@ -1296,7 +1604,11 @@ export default function VisitChecklistReportDashboard({
   onSaveNewTeachers,
   analyticsPath,
   now,
+  canEditResponses = false,
+  onResponseEdited,
 }: Props) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const responseById = useMemo(() => new Map(responses.map((r) => [r.id, r])), [responses]);
   // Охват, «Кто не посещён» и отчёты считаем по справочнику формы, а не по снимку проекта в базе.
   const directory = useMemo(() => withSeedRoster(sourceDirectory), [sourceDirectory]);
   const [params, setParams] = useSearchParams();
@@ -2114,8 +2426,21 @@ export default function VisitChecklistReportDashboard({
             Статус: i.status,
             Метод: i.method,
             Правило: i.ruleId,
+            Изменено: v.editedAt ? editedAtText(v.editedAt) : "",
           })),
         ),
+      );
+      sheet(
+        "Выводы",
+        rows.map((v) => ({
+          ID: v.id,
+          Учитель: v.teacher,
+          Дата: v.date,
+          Наблюдатель: v.visitor,
+          "Общие выводы": v.feedback,
+          "Что я возьму с собой": v.practice === v.feedback ? "" : v.practice,
+          Изменено: v.editedAt ? editedAtText(v.editedAt) : "",
+        })),
       );
       sheet(
         "Критерии урока",
@@ -2615,7 +2940,39 @@ export default function VisitChecklistReportDashboard({
                 <summary>
                   {v.self ? "Самоанализ" : shortName(v.visitor)} ·{" "}
                   {dateText(v.date)} · {v.subject}
+                  {v.editedAt ? <> · <EditedMark at={v.editedAt} /></> : null}
                 </summary>
+                {canEditResponses && projectId && responseById.get(v.id) && editingId !== v.id ? (
+                  <p className={VCD_PDF_HIDE_CLASS}>
+                    <button type="button" className="vcr-action" onClick={() => setEditingId(v.id)}>
+                      Редактировать
+                    </button>
+                  </p>
+                ) : null}
+                {canEditResponses && projectId && editingId === v.id && responseById.get(v.id) ? (
+                  <ResponseEditPanel
+                    row={responseById.get(v.id)!}
+                    responses={responses}
+                    checklist={checklist}
+                    directory={directory}
+                    projectId={projectId}
+                    now={now}
+                    onCancel={() => setEditingId(null)}
+                    onSaved={(saved) => {
+                      setEditingId(null);
+                      onResponseEdited?.(saved);
+                    }}
+                  />
+                ) : null}
+                {canEditResponses && responseById.get(v.id)?.edit_history?.length ? (
+                  <ResponseEditHistory
+                    row={responseById.get(v.id)!}
+                    responses={responses}
+                    checklist={checklist}
+                    directory={directory}
+                    now={now}
+                  />
+                ) : null}
                 <p>Общая оценка: {v.ratingMapped || "Не выбрана"}</p>
                 {flags
                   .filter((f) => f.participants.some((p) => p.id === v.id))

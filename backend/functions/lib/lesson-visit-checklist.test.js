@@ -999,3 +999,204 @@ test('seed directory keeps every removed and merged teacher resolvable', () => {
     assert.equal(keys.has(teacherAliasKey(teacher.name)), false);
   }
 });
+
+// --- Правка отправленных чек-листов (ТЗ 26.11.2026) -----------------------------------------
+const responseEditLib = require('./lesson-visit-checklist').responseEdit;
+const editPh = require('./lesson-visit-checklist').phenomenon;
+const { VISIT_CHECKLIST_ANALYTICS_PEOPLE: EDIT_PEOPLE } = require('./visit-checklist-analytics-access');
+/** Сотрудник из существующей записи списка аналитики, по ключу (почта берётся из кода сервера). */
+function editPerson(key) {
+  const person = EDIT_PEOPLE.find((p) => p.key === key);
+  assert.ok(person, key);
+  return { id: 900, role: 'methodist', permissions: [], email: person.emails[0] };
+}
+const EDIT_PH_ANSWERS = {
+  ph_org: 'full', ph_objectives: 'students', ph_method: 'varied', ph_phenomenon: 'students_link', ph_coteaching: 'complement',
+  ph_tools: 'high', ph_reflection: 'meaningful', ph_engagement: 'all', ph_communication: 'good', ph_overall: 'very_high',
+  ph_mastery_1: '9', ph_mastery_2: '8',
+};
+const EDIT_PH_GENERAL = { date: '2026-11-16', observer_name: 'Наблюдатель Тестовый', class_name: '8А', teacher1_name: 'Педагог Первый', teacher2_name: 'Педагог Второй' };
+const editSeed = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '../../../frontend/src/lib/lessonVisitChecklist/defaultSeed.json'), 'utf8'),
+);
+const editChecklist = { v: 1, formVersion: editSeed.formVersion, generalFields: editSeed.generalFields, sections: editSeed.sections, legacyQuestions: editSeed.legacyQuestions };
+const q91 = editSeed.sections.flatMap((s) => s.questions).find((q) => q.code === '9.1');
+const q122 = editSeed.sections.flatMap((s) => s.questions).find((q) => q.code === '12.2');
+const EDIT_GENERAL = { visit_date: '2026-11-20', visitor_name: 'Наблюдатель Тестовый', class_name: '7А', teacher_id: 'teacher_1', subject: 'Математика' };
+
+/** Поддельная БД для правки: основной проект 1 и феноменальный 2, по одному ответу. */
+function editPool() {
+  const projectsRows = [
+    { id: 1, user_id: null, title: 'Чек-лист', form_token: 'main-token', state_json: { draft: { checklist: editChecklist } } },
+    { id: 2, user_id: null, title: 'Феномен', form_token: editPh.PHENOMENON_FORM_TOKEN, state_json: { draft: editPh.phenomenonDraft() } },
+    { id: 3, user_id: 77, title: 'Личный', form_token: 'own', state_json: { draft: { checklist: editChecklist } } },
+  ];
+  const responses = [
+    { id: 10, project_id: 1, created_at: '2026-11-20T10:00:00Z', answers_json: { general: EDIT_GENERAL, answers: { [q91.id]: q91.options[0], [q122.id]: 'Исходный вывод с опечаткой' } } },
+    { id: 20, project_id: 2, created_at: '2026-11-17T10:00:00Z', answers_json: { general: { ...EDIT_PH_GENERAL, kind: 'phenomenon' }, answers: { ...EDIT_PH_ANSWERS } } },
+  ];
+  const calls = [];
+  return {
+    projectsRows,
+    responses,
+    calls,
+    async query(sql, params = []) {
+      calls.push(sql);
+      if (/SELECT id, user_id, title, state_json, form_token FROM lesson_visit_projects WHERE id = \$1/.test(sql)) {
+        return { rows: projectsRows.filter((p) => p.id === params[0]) };
+      }
+      if (/SELECT id, answers_json, created_at FROM lesson_visit_responses WHERE id = \$1 AND project_id = \$2/.test(sql)) {
+        return { rows: responses.filter((r) => r.id === params[0] && r.project_id === params[1]) };
+      }
+      if (/UPDATE lesson_visit_responses SET answers_json/.test(sql)) {
+        const row = responses.find((r) => r.id === params[0] && r.project_id === params[1]);
+        if (!row || (Number(row.answers_json.edit && row.answers_json.edit.count) || 0) !== params[3]) return { rows: [] };
+        row.answers_json = JSON.parse(params[2]);
+        return { rows: [row] };
+      }
+      if (/SELECT id, user_id FROM lesson_visit_projects WHERE id = \$1/.test(sql)) {
+        return { rows: projectsRows.filter((p) => p.id === Number(params[0])).map((p) => ({ id: p.id, user_id: p.user_id })) };
+      }
+      if (/SELECT form_token FROM lesson_visit_projects WHERE id = \$1/.test(sql)) {
+        return { rows: projectsRows.filter((p) => p.id === Number(params[0])).map((p) => ({ form_token: p.form_token })) };
+      }
+      if (/FROM lesson_visit_responses\s+WHERE project_id = \$1/.test(sql)) {
+        return { rows: responses.filter((r) => r.project_id === params[0]) };
+      }
+      // Пересборка снимка аналитики (в фоне): в тесте не нужна.
+      return { rows: [] };
+    },
+  };
+}
+const editPut = (pool, sessionUser, pid, editResponse, viaKey = false) =>
+  projects.handlePutLessonVisitProject(pool, null, viaKey, sessionUser, pid, putBody({ patch: { editResponse } }));
+
+test('response edit: conclusions text is corrected, observer original and history are kept, general untouched', async () => {
+  const pool = editPool();
+  const ira = editPerson('kostyukovich');
+  const r = await editPut(pool, ira, 1, { response_id: 10, answers: { [q122.id]: 'Исправленный вывод' }, reason: 'Опечатка в выводах' });
+  assert.equal(r.statusCode, 200, r.body);
+  const aj = pool.responses[0].answers_json;
+  assert.equal(aj.answers[q122.id], 'Исправленный вывод');
+  assert.equal(aj.original.answers[q122.id], 'Исходный вывод с опечаткой');
+  assert.deepEqual(aj.general, EDIT_GENERAL);
+  assert.deepEqual(aj.original.general, EDIT_GENERAL);
+  assert.equal(aj.edit.count, 1);
+  assert.equal(aj.edit_history[0].reason, 'Опечатка в выводах');
+  assert.deepEqual(aj.edit_history[0].changes, [{ id: q122.id, before: 'Исходный вывод с опечаткой', after: 'Исправленный вывод' }]);
+  // Вторая правка: исходная версия наблюдателя не перезаписывается.
+  const r2 = await editPut(pool, ira, 1, { response_id: 10, answers: { [q91.id]: q91.options[2] }, reason: 'Наблюдатель ошибся в 9.1', expected_count: 1 });
+  assert.equal(r2.statusCode, 200, r2.body);
+  assert.equal(pool.responses[0].answers_json.original.answers[q122.id], 'Исходный вывод с опечаткой');
+  assert.equal(pool.responses[0].answers_json.original.answers[q91.id], q91.options[0]);
+  assert.equal(pool.responses[0].answers_json.answers[q91.id], q91.options[2]);
+  assert.equal(pool.responses[0].answers_json.edit_history.length, 2);
+  // Устаревшая страница: правка поверх чужой не проходит.
+  const stale = await editPut(pool, ira, 1, { response_id: 10, answers: { [q91.id]: q91.options[1] }, reason: 'x', expected_count: 1 });
+  assert.equal(stale.statusCode, 409);
+});
+
+test('response edit: only listed options, a reason is required, date/class/teacher/observer cannot change', async () => {
+  const pool = editPool();
+  const ira = editPerson('kostyukovich');
+  const before = JSON.stringify(pool.responses);
+  const cases = [
+    [{ response_id: 10, answers: { [q91.id]: 'Свой вариант' }, reason: 'x' }, 400, /только вариант/],
+    [{ response_id: 10, answers: { [q91.id]: q91.options[2] }, reason: '   ' }, 400, /причину/],
+    [{ response_id: 10, answers: { [q91.id]: q91.options[2] } }, 400, /причину/],
+    [{ response_id: 10, general: { visit_date: '2026-11-01' }, answers: {}, reason: 'x' }, 400, /Дату, класс, учителя, наблюдателя/],
+    [{ response_id: 10, answers: { visit_date: '2026-11-01' }, reason: 'x' }, 400, /только вариант/],
+    [{ response_id: 10, answers: { teacher_id: 'teacher_2', visitor_name: 'Другой' }, reason: 'x' }, 400, /только вариант/],
+    [{ response_id: 10, answers: { [q91.id]: q91.options[0] }, reason: 'x' }, 400, /Нет изменений/],
+    [{ response_id: 20, answers: { [q91.id]: q91.options[2] }, reason: 'x' }, 404, /Not found/],
+  ];
+  for (const [edit, status, msg] of cases) {
+    const r = await editPut(pool, ira, 1, edit);
+    assert.equal(r.statusCode, status, JSON.stringify(edit));
+    assert.match(r.body, msg);
+  }
+  // Лишние поля в patch и смена черновика вместе с правкой тоже не проходят.
+  assert.equal((await projects.handlePutLessonVisitProject(pool, null, false, ira, 1, putBody({ patch: { editResponse: { response_id: 10 }, newTeacherIds: [] } }))).statusCode, 400);
+  assert.equal((await editPut(pool, ira, 3, { response_id: 10, answers: { [q91.id]: q91.options[2] }, reason: 'x' })).statusCode, 404, 'личные проекты не правятся');
+  assert.equal(JSON.stringify(pool.responses), before, 'ничего не записано');
+});
+
+test('response edit: nobody else may edit, including full-access admins and the API key', async () => {
+  const pool = editPool();
+  const before = JSON.stringify(pool.responses);
+  const edit = { response_id: 10, answers: { [q91.id]: q91.options[2] }, reason: 'x' };
+  const others = [
+    { id: 2, email: 'admin@example.org', role: 'admin', permissions: ['*'] },
+    { id: 3, email: 'a@example.org', permissions: ['pulse.analytics.all', 'pulse.director.checklist'] },
+    { id: 501, email: 'teacher@example.org', role: 'teacher', permissions: [] },
+    editPerson('khoroshilov'),
+    editPerson('novozhilov'),
+    editPerson('maisuradze'),
+  ];
+  for (const who of others) {
+    const r = await editPut(pool, who, 1, edit);
+    assert.equal(r.statusCode, 403, who.email);
+    assert.match(JSON.parse(r.body).message, /может только ответственный/);
+    assert.equal((await editPut(pool, who, 2, { response_id: 20, answers: { ph_org: 'none' }, reason: 'x' })).statusCode, 403);
+  }
+  assert.equal((await editPut(pool, null, 1, edit, true)).statusCode, 403, 'ключ API');
+  assert.equal((await editPut(pool, null, 1, edit)).statusCode, 403, 'без сессии');
+  assert.equal(JSON.stringify(pool.responses), before);
+  assert.deepEqual(responseEditLib.RESPONSE_EDITOR_PERSON_KEYS, ['kostyukovich']);
+});
+
+test('response edit: everyone sees the «изменено» mark, only the editor sees history and the original', async () => {
+  const pool = editPool();
+  const ira = editPerson('kostyukovich');
+  await editPut(pool, ira, 1, { response_id: 10, answers: { [q122.id]: 'Новый текст' }, reason: 'Формулировка' });
+  const admin = { id: 2, email: 'admin@example.org', role: 'admin', permissions: ['*'] };
+  const listed = async (who) => JSON.parse((await projects.handleListLessonVisitResponses(pool, null, false, who, 1)).body);
+  const forAdmin = await listed(admin);
+  assert.equal(forAdmin.can_edit_responses, false);
+  assert.equal(forAdmin.responses[0].answers[q122.id], 'Новый текст');
+  assert.equal(forAdmin.responses[0].edit.count, 1);
+  assert.match(forAdmin.responses[0].edit.edited_at, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(forAdmin.responses[0].edit_history, undefined);
+  assert.equal(forAdmin.responses[0].original, undefined);
+  assert.doesNotMatch(JSON.stringify(forAdmin), /Исходный вывод/);
+  const forIra = await listed(ira);
+  assert.equal(forIra.can_edit_responses, true);
+  assert.equal(forIra.responses[0].original.answers[q122.id], 'Исходный вывод с опечаткой');
+  assert.equal(forIra.responses[0].edit_history[0].reason, 'Формулировка');
+  assert.equal(forIra.responses[0].edit_history[0].by, undefined, 'кто правил: в базе, на экран не отдаём');
+});
+
+test('response edit: phenomenon checklist takes only its own options and mastery 1-10', async () => {
+  const pool = editPool();
+  const ira = editPerson('kostyukovich');
+  const put = (answers, extra = {}) => editPut(pool, ira, 2, { response_id: 20, answers, reason: 'Проверка', ...extra });
+  assert.equal((await put({ ph_org: 'bogus' })).statusCode, 400);
+  assert.equal((await put({ ph_mastery_1: '11' })).statusCode, 400);
+  assert.equal((await put({ ph_mastery_2: '0' })).statusCode, 400);
+  assert.equal((await put({ [q91.id]: q91.options[1] })).statusCode, 400, 'пункты основного чек-листа не подходят');
+  const ok = await put({ ph_org: 'partly', ph_overall: 'average', ph_mastery_1: '6', ph_comments: 'Общие выводы после правки' });
+  assert.equal(ok.statusCode, 200, ok.body);
+  const aj = pool.responses[1].answers_json;
+  assert.equal(aj.answers.ph_org, 'partly');
+  assert.equal(aj.answers.ph_mastery_1, '6');
+  assert.equal(aj.answers.ph_comments, 'Общие выводы после правки');
+  assert.equal(aj.original.answers.ph_org, 'full');
+  assert.equal(aj.general.teacher1_name, 'Педагог Первый');
+  // Снимок основной аналитики феноменальная правка не трогает.
+  assert.ok(pool.calls.every((sql) => !/lesson_visit_teacher_stats|lesson_visit_dashboard/.test(sql)));
+});
+
+test('response edit: old checklists may take the wording of the rules before 09.11', () => {
+  const old = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../frontend/src/lib/lessonVisitChecklist/pulseV6Rubric.json'), 'utf8'));
+  const old91 = old.criteria.find((c) => c.code === '9.1');
+  const label = old91.options[2].label;
+  assert.ok(!q91.options.includes(label), 'формулировки до 09.11 нет в форме 4.1');
+  const r = responseEditLib.applyResponseEdit(
+    { general: { visit_date: '2026-10-20' }, answers: { [q91.id]: [old91.options[0].label] } },
+    { answers: { [q91.id]: [label] }, reason: 'Старый чек-лист' },
+    { checklist: editChecklist, editorKey: 'k', now: new Date('2026-11-26T10:00:00Z') },
+  );
+  assert.equal(r.ok, true, r.message);
+  assert.deepEqual(r.answersJson.answers[q91.id], [label]);
+  assert.equal(r.answersJson.edit.edited_at, '2026-11-26T10:00:00.000Z');
+});

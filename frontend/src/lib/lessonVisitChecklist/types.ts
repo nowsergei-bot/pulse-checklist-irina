@@ -75,7 +75,21 @@ export interface LessonVisitResponseRow {
   id: number;
   created_at: string;
   general: Record<string, string>;
+  /** Текущая версия ответов: после правки исправленная, её считают аналитика, выгрузка и PDF. */
   answers: Record<string, string | string[]>;
+  /** Пометка «изменено» (видят все, у кого есть ответы). */
+  edit?: { count: number; edited_at: string };
+  /** История правок и исходная версия наблюдателя: сервер отдаёт только тому, кто может править. */
+  edit_history?: LessonVisitResponseEditEntry[];
+  original?: { answers: Record<string, string | string[]> };
+}
+
+export type LessonVisitAnswerValue = string | string[];
+
+export interface LessonVisitResponseEditEntry {
+  at: string;
+  reason: string;
+  changes: { id: string; before: LessonVisitAnswerValue | null; after: LessonVisitAnswerValue }[];
 }
 
 export interface LessonVisitMediaPhoto {

@@ -1492,3 +1492,153 @@ test("old checklists on merged records count as one teacher in coverage", () => 
   const once = applyTeacherAliases({ teacher_id: "gone" }, dir);
   assert.deepEqual(applyTeacherAliases(once, dir), once);
 });
+
+// ---- Правка отправленных чек-листов (ТЗ 26.11.2026): вымышленные учителя и ответы. ----
+import {
+  responseEditChanges,
+  responseEditChecklist,
+  responseEditImpact,
+  responseEditInitial,
+  responseEditVersions,
+} from "./visitChecklistReport.ts";
+import { schoolAverage as editSchoolAverage } from "./reportPresentation.ts";
+
+const editNow = new Date("2026-11-26T12:00:00Z");
+const editDir: LessonVisitDirectory = {
+  departments: [{ id: "d", name: "Кафедра математики и информатики" }],
+  teachers: [
+    { id: "a", name: "Учитель Правкин Тестович", departmentId: "d" },
+    { id: "o", name: "Наблюдатель Правкин Тестович", departmentId: "d" },
+  ],
+};
+const editRow = (
+  id: number,
+  date: string,
+  answers: LessonVisitResponseRow["answers"],
+  over: Partial<LessonVisitResponseRow> = {},
+): LessonVisitResponseRow => ({
+  id,
+  created_at: date,
+  general: { teacher_id: "a", visit_date: date, subject: "Алгебра", class_name: "7А", visitor_name: "Наблюдатель Правкин Тестович" },
+  answers,
+  ...over,
+});
+/** Правка как в интерфейсе: форма правки, черновик, изменения, итог «было / стало». */
+function editThrough(
+  rows: LessonVisitResponseRow[],
+  id: number,
+  patch: (draft: Record<string, string | string[]>, form: LessonVisitChecklistConfig) => void,
+  checklist: LessonVisitChecklistConfig = formV41,
+) {
+  const target = rows.find((r) => r.id === id)!;
+  const form = responseEditChecklist(checklist, target);
+  const init = responseEditInitial(form, target.answers);
+  const draft = { ...init.answers };
+  patch(draft, form);
+  const changes = responseEditChanges(form, target.answers, draft, init.otherTexts);
+  const next = { ...target.answers };
+  for (const c of changes) next[c.id] = c.value;
+  return { form, changes, impact: responseEditImpact(rows, id, next, checklist, editDir, editNow)!, next };
+}
+
+test("правка 1: «Общие выводы» меняются, итог тот же, пометка «изменено» в отчёте", () => {
+  const rows = [editRow(1, "2026-11-20", maxAnswersV41({ "12.2": "Исходный вывод" }))];
+  const { changes, impact, next } = editThrough(rows, 1, (d) => {
+    d[v41Q("12.2").id] = "Исправленный вывод";
+  });
+  assert.deepEqual(changes.map((c) => [c.code, c.before, c.after]), [["12.2", "Исходный вывод", "Исправленный вывод"]]);
+  assert.equal(impact.after!.visit.score.total, impact.before!.visit.score.total);
+  const saved = { ...rows[0], answers: next, edit: { count: 1, edited_at: "2026-11-26T07:15:00.000Z" } };
+  const visit = buildLessonReport([saved], formV41, editDir, editNow).visits[0];
+  assert.equal(visit.feedback, "Исправленный вывод");
+  assert.equal(visit.editedAt, "2026-11-26T07:15:00.000Z");
+});
+
+test("правка 2: 9.1 «уважительное, выслушивает» → «почти целиком монолог»: 6 → 1, пересчёт чек-листа, урока и учителя", () => {
+  const rows = [
+    editRow(1, "2026-11-20", maxAnswersV41()),
+    editRow(2, "2026-11-20", maxAnswersV41(), { general: { teacher_id: "a", visit_date: "2026-11-20", subject: "Алгебра", class_name: "7А", visitor_name: "Другой Наблюдатель Тестович" } }),
+    editRow(3, "2026-11-23", maxAnswersV41()),
+  ];
+  const monologue = v41Q("9.1").options.find((o) => o.includes("монолог"))!;
+  const { changes, impact } = editThrough(rows, 1, (d) => {
+    d[v41Q("9.1").id] = monologue;
+  });
+  assert.deepEqual(changes.map((c) => c.code), ["9.1"]);
+  const before = impact.before!, after = impact.after!;
+  const i91 = (v: ReportVisit) => v.score.items.find((i) => i.code === "9.1")!;
+  assert.equal(i91(before.visit).value, 6);
+  assert.equal(i91(after.visit).value, 1);
+  assert.equal(after.visit.score.total, before.visit.score.total! - 5);
+  // Урок: среднее двух наблюдателей, минус 2,5 балла.
+  assert.equal(after.lesson!.score.total, before.lesson!.score.total! - 2.5);
+  assert.ok(editSchoolAverage(after.teacherVisits)! < editSchoolAverage(before.teacherVisits)!);
+  // Другие чек-листы не меняются.
+  for (const id of [2, 3]) {
+    const a = after.teacherVisits.find((v) => v.id === id)!.score.total;
+    const b = before.teacherVisits.find((v) => v.id === id)!.score.total;
+    assert.equal(a, b);
+  }
+});
+
+test("правка 3: 3.6 «не предполагается по типу урока» уходит и из суммы, и из максимума", () => {
+  const rows = [editRow(1, "2026-11-20", maxAnswersV41({ "3.6": "дифференцированность заданий предусмотрена" }))];
+  const notIntended = v41Q("3.6").options.find((o) => o.includes("не предполагается"))!;
+  const { impact } = editThrough(rows, 1, (d) => {
+    d[v41Q("3.6").id] = notIntended;
+  });
+  const i36 = (v: ReportVisit) => v.score.items.find((i) => i.code === "3.6")!;
+  assert.equal(i36(impact.before!.visit).value, 6);
+  assert.equal(i36(impact.after!.visit).na, true);
+  assert.equal(impact.after!.visit.score.max, impact.before!.visit.score.max - 6);
+  assert.equal(impact.after!.visit.score.total, impact.before!.visit.score.total! - 6);
+});
+
+test("правка 4: старый чек-лист (до 09.11) считается по прежней разбалловке, другие старые не меняются", () => {
+  const old91 = v41Q("9.1").id;
+  // Без 11.1: этого пункта не было в форме до 4.1 (иначе чек-лист считается по 4.1).
+  const { [v41Q("11.1").id]: _new, ...withoutNew } = maxAnswersV41();
+  const oldAnswers = (over: Record<string, string | string[]> = {}) => ({
+    ...withoutNew,
+    [old91]: ["Общение строится в уважительном, доброжелательном и деловом тоне", "Учитель внимательно выслушивает ответы: не перебивает без необходимости, даёт время подумать и закончить высказывание"],
+    ...over,
+  });
+  const rows = [editRow(1, "2026-10-20", oldAnswers()), editRow(2, "2026-10-21", oldAnswers())];
+  const { form, impact } = editThrough(rows, 1, (d) => {
+    d[old91] = ["Общение строится в уважительном, доброжелательном и деловом тоне", '"монолог" учителя большую часть урока'];
+  });
+  const q = form.sections.flatMap((s) => s.questions).find((x) => x.id === old91)!;
+  assert.equal(form.rubricVersion, "pulse-100-v4-2026-10-05");
+  assert.equal(q.type, "checkbox", "9.1 до 09.11 с несколькими вариантами");
+  assert.ok(q.options.includes('"монолог" учителя большую часть урока'));
+  assert.ok(!form.sections.flatMap((s) => s.questions).some((x) => x.id === v41Q("11.1").id), "11.1 у старого чек-листа не показывается");
+  assert.ok(form.sections.flatMap((s) => s.questions).some((x) => x.code === "10.3"), "«Что я возьму с собой» у старого есть");
+  const before = impact.before!, after = impact.after!;
+  assert.equal(after.visit.score.items[0].version, "pulse-100-v4-2026-10-05");
+  const old91Item = (v: ReportVisit) => v.score.items.find((i) => i.code === "9.1")!;
+  assert.equal(old91Item(before.visit).ruleId.startsWith("9.1/"), true);
+  assert.ok(old91Item(after.visit).value! < old91Item(before.visit).value!, "монолог снижает 9.1 по прежним правилам");
+  assert.equal(after.visit.score.subtotal, before.visit.score.subtotal - (old91Item(before.visit).value! - old91Item(after.visit).value!));
+  const other = (r: typeof before) => r.teacherVisits.find((v) => v.id === 2)!.score.subtotal;
+  assert.equal(other(after), other(before));
+});
+
+test("правка: «Другое: текст» раскладывается для формы и собирается обратно, история восстанавливает версии", () => {
+  const id53 = v41Q("5.3").id;
+  const rows = [editRow(1, "2026-11-20", maxAnswersV41())];
+  const form = responseEditChecklist(formV41, rows[0]);
+  const init = responseEditInitial(form, rows[0].answers);
+  const other = form.sections.flatMap((s) => s.questions).find((q) => q.id === id53)!.options.find((o) => /^другое/i.test(o))!;
+  assert.ok((init.answers[id53] as string[]).includes(other));
+  assert.equal(init.otherTexts[id53], "устный зачёт");
+  assert.deepEqual(responseEditChanges(form, rows[0].answers, init.answers, init.otherTexts), [], "без правки изменений нет");
+  const versions = responseEditVersions({
+    ...rows[0],
+    answers: { ...rows[0].answers, [v41Q("12.2").id]: "Новый" },
+    original: { answers: rows[0].answers },
+    edit_history: [{ at: "2026-11-26T07:00:00Z", reason: "Опечатка", changes: [{ id: v41Q("12.2").id, before: null, after: "Новый" }] }],
+  });
+  assert.equal(versions.length, 2);
+  assert.equal(versions[0].answers[v41Q("12.2").id], undefined);
+  assert.equal(versions[1].answers[v41Q("12.2").id], "Новый");
+});

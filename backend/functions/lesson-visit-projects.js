@@ -22,6 +22,7 @@ const {
 const { maybeNotifyKhoroshilovVisitChecklist } = require('./lib/khoroshilov-activity-notify');
 const { applyResponseToSnapshot, rebuildProjectSnapshot } = require('./lib/visit-checklist-cloud-snapshot');
 const phenomenonLib = require('./lib/lesson-visit-checklist').phenomenon;
+const responseEditLib = require('./lib/lesson-visit-checklist').responseEdit;
 const {
   PHENOMENON_FORM_TOKEN,
   isPhenomenonDraft,
@@ -177,7 +178,7 @@ async function countResponses(pool, projectId) {
   return r.rows[0]?.c ?? 0;
 }
 
-async function listResponseRows(pool, projectId, limit = 5000) {
+async function listResponseRows(pool, projectId, limit = 5000, opts = {}) {
   const r = await pool.query(
     `SELECT id, answers_json, created_at
      FROM lesson_visit_responses
@@ -193,8 +194,15 @@ async function listResponseRows(pool, projectId, limit = 5000) {
       created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       general: applyTeacherAliases(aj.general && typeof aj.general === 'object' ? aj.general : {}),
       answers: aj.answers && typeof aj.answers === 'object' ? aj.answers : {},
+      // Пометка «изменено»; история и исходная версия только тому, кто может править.
+      ...responseEditLib.responseEditView(aj, opts.withHistory === true),
     };
   });
+}
+
+/** Может ли этот запрос править отправленные чек-листы (ключ API не может). */
+function canEditResponsesFor(user, viaAdminKey, sessionUser) {
+  return !viaAdminKey && responseEditLib.canEditResponses(visitChecklistAnalyticsActor(user, sessionUser));
 }
 
 async function handleListLessonVisitProjects(pool, user, viaAdminKey, sessionUser) {
@@ -410,6 +418,8 @@ async function handleGetLessonVisitProject(pool, user, viaAdminKey, sessionUser,
       project: { ...payload.project, form_token: row.form_token, response_count },
       staff_units,
       directorSummary,
+      // Кнопка «Редактировать» у чек-листов: решает сервер по сессии.
+      canEditResponses: canEditResponsesFor(user, viaAdminKey, sessionUser),
       // Собственный номер учётной записи человека: нужен, чтобы при закрытом экране его можно было назвать администратору.
       viewerId: viaAdminKey ? null : visitChecklistAnalyticsActor(user, sessionUser)?.id ?? null,
     });
@@ -475,6 +485,76 @@ async function patchPhenomenonTeachers(pool, user, viaAdminKey, sessionUser, pid
   return json(200, { ok: true, phenomenonTeachers: list });
 }
 
+/**
+ * Узкий режим PUT: `{ patch: { editResponse: { response_id, answers, reason, expected_count } } }`
+ * правит ответы одного отправленного чек-листа (основного или феноменального).
+ * Допуск только по ключу записи (responseEditLib); ключ API и полный доступ администратора получают 403.
+ * Общие поля (дата, класс, учитель, наблюдатель, версия) не меняются; исходная версия хранится в answers_json.original.
+ */
+async function patchEditResponse(pool, user, viaAdminKey, sessionUser, pid, body) {
+  const patch = body.patch;
+  if (body.draft !== undefined || body.title !== undefined || Object.keys(patch).length !== 1) {
+    return json(400, { error: 'Bad request', message: 'Разрешено менять только ответы одного чек-листа.' });
+  }
+  const actor = viaAdminKey ? null : visitChecklistAnalyticsActor(user, sessionUser);
+  const editorKey = responseEditLib.responseEditorKey(actor);
+  if (!editorKey) return json(403, { error: 'Forbidden', message: responseEditLib.RESPONSE_EDIT_FORBIDDEN_MESSAGE });
+  const edit = patch.editResponse && typeof patch.editResponse === 'object' ? patch.editResponse : {};
+  const rid = Number(edit.response_id);
+  if (!Number.isInteger(rid) || rid <= 0) return json(400, { error: 'Bad request', message: 'Не указан чек-лист.' });
+  const pr = await pool.query(
+    `SELECT id, user_id, title, state_json, form_token FROM lesson_visit_projects WHERE id = $1`,
+    [pid],
+  );
+  // Правятся только общие проекты (основной чек-лист и феноменальный урок).
+  if (!pr.rows.length || pr.rows[0].user_id != null) return json(404, { error: 'Not found' });
+  const project = pr.rows[0];
+  const phenomenon = isPhenomenonToken(project.form_token);
+  const rr = await pool.query(
+    `SELECT id, answers_json, created_at FROM lesson_visit_responses WHERE id = $1 AND project_id = $2`,
+    [rid, pid],
+  );
+  if (!rr.rows.length) return json(404, { error: 'Not found' });
+  const before = rr.rows[0].answers_json && typeof rr.rows[0].answers_json === 'object' ? rr.rows[0].answers_json : {};
+  const result = responseEditLib.applyResponseEdit(before, edit, {
+    checklist: phenomenon ? null : normalizeDraft(project).checklist,
+    phenomenon,
+    editorKey,
+  });
+  if (!result.ok) {
+    return json(result.status, { error: result.status === 409 ? 'Conflict' : 'Validation', message: result.message, fields: result.fields });
+  }
+  const expected = Number(before.edit && before.edit.count) || 0;
+  const u = await pool.query(
+    `UPDATE lesson_visit_responses SET answers_json = $3::jsonb
+     WHERE id = $1 AND project_id = $2 AND COALESCE((answers_json->'edit'->>'count')::int, 0) = $4
+     RETURNING id, answers_json, created_at`,
+    [rid, pid, JSON.stringify(result.answersJson), expected],
+  );
+  if (!u.rows.length) {
+    return json(409, { error: 'Conflict', message: 'Чек-лист уже изменили. Обновите страницу и повторите правку.' });
+  }
+  // Снимок аналитики пересобирается так же, как после удаления ответа (феноменальный урок его не использует).
+  if (!phenomenon) {
+    void rebuildProjectSnapshot(pool, pid, { pruneMissing: true }).catch((err) => {
+      console.warn('visit checklist snapshot rebuild failed', err instanceof Error ? err.message : err);
+    });
+  }
+  const row = u.rows[0];
+  const aj = row.answers_json && typeof row.answers_json === 'object' ? row.answers_json : result.answersJson;
+  return json(200, {
+    ok: true,
+    response: {
+      id: row.id,
+      created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      general: applyTeacherAliases(aj.general && typeof aj.general === 'object' ? aj.general : {}),
+      answers: aj.answers && typeof aj.answers === 'object' ? aj.answers : {},
+      ...responseEditLib.responseEditView(aj, true),
+    },
+    changes: result.changes,
+  });
+}
+
 /** Возвращает в записываемый черновик уже сохранённый newTeacherIds (если он там есть). */
 const KEEP_STORED_NEW_TEACHER_IDS = ` || CASE WHEN jsonb_typeof(state_json->'draft'->'newTeacherIds') = 'array'
          THEN jsonb_build_object('newTeacherIds', state_json->'draft'->'newTeacherIds') ELSE '{}'::jsonb END`;
@@ -487,6 +567,9 @@ async function handlePutLessonVisitProject(pool, user, viaAdminKey, sessionUser,
   const scope = resolveProjectOwner(user, viaAdminKey, sessionUser);
   try {
     const body = parseAllowedBody(event, ['title', 'draft', 'patch']);
+    if (body.patch && typeof body.patch === 'object' && 'editResponse' in body.patch) {
+      return await patchEditResponse(pool, user, viaAdminKey, sessionUser, pid, body);
+    }
     if (body.patch && typeof body.patch === 'object' && 'phenomenonTeachers' in body.patch) {
       return await patchPhenomenonTeachers(pool, user, viaAdminKey, sessionUser, pid, body);
     }
@@ -765,8 +848,9 @@ async function handleListLessonVisitResponses(pool, user, viaAdminKey, sessionUs
       }
     }
 
-    const rows = await listResponseRows(pool, pid);
-    return json(200, { responses: rows });
+    const canEdit = canEditResponsesFor(user, viaAdminKey, sessionUser);
+    const rows = await listResponseRows(pool, pid, 5000, { withHistory: canEdit });
+    return json(200, { responses: rows, can_edit_responses: canEdit });
   } catch (err) {
     const mapped = schemaErrorResponse(err);
     if (mapped) return mapped;

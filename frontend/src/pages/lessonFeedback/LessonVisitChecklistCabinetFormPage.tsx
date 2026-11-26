@@ -4,6 +4,8 @@ import '../../corporateEvent.css';
 import './lessonFeedback.css';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import {
+  editLessonVisitResponse,
+  getLessonVisitProject,
   getPublicLatestLessonVisitForm,
   getPublicLessonVisitForm,
   listLessonVisitResponses,
@@ -57,6 +59,12 @@ import {
   masteryQuestionText,
   optionLabel,
   phenomenonExcelSheets,
+  formatEditedAt,
+  phenomenonEditChanges,
+  phenomenonEditFieldTitle,
+  phenomenonEditImpact,
+  phenomenonEditValueText,
+  scorePhenomenon,
   phenomenonTeacherNames,
   pick,
   phenomenonLessonByRecord,
@@ -788,6 +796,8 @@ export function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolea
   const [records, setRecords] = useState<PhenomenonRecord[] | null>(null);
   const [tab, setTab] = useState<'form' | 'results'>('form');
   const [access, setAccess] = useState<PhenomenonAccess | null>(null);
+  // Кнопка «Редактировать» у чек-листов: решает сервер по сессии.
+  const [canEditResponses, setCanEditResponses] = useState(false);
   useDocumentTitle(pick(PHENOMENON_TITLE, locale));
 
   const changeLocale = useCallback((l: PhenomenonLocale) => {
@@ -850,6 +860,11 @@ export function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolea
           .map((row) => toPhenomenonRecord(row as unknown as Parameters<typeof toPhenomenonRecord>[0]))
           .sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
         setRecords(list);
+        void getLessonVisitProject(projectId)
+          .then((pack) => {
+            if (!cancelled) setCanEditResponses(pack.canEditResponses);
+          })
+          .catch(() => undefined);
       })
       .catch(() => {
         if (!cancelled) setRecords(null);
@@ -905,6 +920,20 @@ export function PhenomenonChecklistPage({ embedded = true }: { embedded?: boolea
           <PhenomenonAnalytics
             records={records}
             directory={directory}
+            onEditRecord={
+              canEditResponses && projectId != null
+                ? async (record, answers, reason) => {
+                    const saved = await editLessonVisitResponse(projectId, {
+                      response_id: record.id,
+                      answers,
+                      reason,
+                      expected_count: record.editCount ?? 0,
+                    });
+                    const next = toPhenomenonRecord(saved as unknown as Parameters<typeof toPhenomenonRecord>[0]);
+                    setRecords((list) => (list ? list.map((r) => (r.id === next.id ? next : r)) : list));
+                  }
+                : undefined
+            }
             extraTeachers={extraTeachers}
             onSaveExtraTeachers={
               projectId == null
@@ -1205,8 +1234,199 @@ function PhenomenonLessonsView({
   );
 }
 
-function PhenomenonLessonCard({ detail, onBack }: { detail: PhenomenonLessonDetail; onBack: () => void }) {
+type PhenomenonEditHandler = (record: PhenomenonRecord, answers: PhenomenonAnswers, reason: string) => Promise<void>;
+
+/** Правка отправленного феноменального чек-листа: та же форма, без общих полей. */
+function PhenomenonEditPanel({
+  record,
+  records,
+  directory,
+  onSave,
+  onCancel,
+}: {
+  record: PhenomenonRecord;
+  records: PhenomenonRecord[];
+  directory?: LessonVisitDirectory | null;
+  onSave: PhenomenonEditHandler;
+  onCancel: () => void;
+}) {
+  const [answers, setAnswers] = useState<PhenomenonAnswers>(() => ({ ...record.answers }));
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [tried, setTried] = useState(false);
+  const setA = (id: string, v: string) => setAnswers((a) => ({ ...a, [id]: v }));
+  const changes = useMemo(() => phenomenonEditChanges(record.answers, answers), [record, answers]);
+  const impact = useMemo(() => phenomenonEditImpact(records, record.id, answers, directory), [records, record, answers, directory]);
+  const save = async () => {
+    setTried(true);
+    if (!reason.trim() || !changes.length) return;
+    setBusy(true);
+    setError('');
+    try {
+      await onSave(record, Object.fromEntries(changes.map((c) => [c.id, c.after])), reason.trim());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить правку');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const lockedRows: [string, string][] = [
+    ['Дата', formatPhenomenonDate(record.date)],
+    ['Класс', record.className],
+    ['№ урока', record.lessonNumber],
+    ['Первый педагог', record.teacher1],
+    ['Второй педагог', record.teacher2],
+    ['Наблюдатель', record.observer],
+  ];
+  const lessonText = (l: { points: number; percent: number } | null) => (l ? `${phenomenonPointsText(l.points)}` : '—');
+  return (
+    <div className="vcr-edit lf-visit-form">
+      <h4>Правка чек-листа</h4>
+      <dl className="vcr-edit__locked">
+        {lockedRows.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v || '—'}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="vcr-note">Дату, класс, педагогов и наблюдателя изменить нельзя. Если ошибка в них, чек-лист удаляется и заполняется заново.</p>
+      <div className="card public-form-glass-card">
+        <strong className="public-question-title">{pick(PHENOMENON_SECTIONS.evaluation, 'ru')}</strong>
+        {PHENOMENON_ITEMS.map((item) => (
+          <ChoiceQuestion key={item.id} item={item} locale="ru" value={answers[item.id] || ''} invalid={false} onChange={(v) => setA(item.id, v)} />
+        ))}
+      </div>
+      <div className="card public-form-glass-card">
+        <strong className="public-question-title">{pick(PHENOMENON_SECTIONS.overall, 'ru')}</strong>
+        <ChoiceQuestion item={PHENOMENON_OVERALL} locale="ru" value={answers[PHENOMENON_OVERALL.id] || ''} invalid={false} onChange={(v) => setA(PHENOMENON_OVERALL.id, v)} />
+        {PHENOMENON_MASTERY_IDS.map((id) => (
+          <MasteryQuestion
+            key={id}
+            text={masteryQuestionText(id, 'ru', id === 'ph_mastery_1' ? record.teacher1 : record.teacher2)}
+            value={answers[id] || ''}
+            invalid={false}
+            locale="ru"
+            onChange={(v) => setA(id, v)}
+          />
+        ))}
+        <FieldWrap id={`edit-${PHENOMENON_COMMENTS_ID}`} invalid={false} label={pick(PHENOMENON_COMMENTS_TITLE, 'ru')} required={false}>
+          <textarea className="field" rows={4} value={answers[PHENOMENON_COMMENTS_ID] || ''} onChange={(e) => setA(PHENOMENON_COMMENTS_ID, e.target.value)} />
+        </FieldWrap>
+      </div>
+      <section className="vcr-edit__summary" aria-label="Что меняется">
+        <h4>Что меняется</h4>
+        {changes.length ? (
+          <Table headers={['Пункт', 'Было', 'Стало']} fit>
+            {changes.map((c) => (
+              <tr key={c.id}>
+                <td>{phenomenonEditFieldTitle(c.id, record)}</td>
+                <td>{phenomenonEditValueText(c.id, c.before)}</td>
+                <td>{phenomenonEditValueText(c.id, c.after)}</td>
+              </tr>
+            ))}
+          </Table>
+        ) : (
+          <p className="vcr-note">Пока ничего не изменено.</p>
+        )}
+        {impact ? (
+          <Table headers={['Итог', 'Было', 'Стало']} fit>
+            <tr>
+              <td>Чек-лист</td>
+              <td>{impact.before.score.points} из {impact.before.score.max} ({displayScore(impact.before.score.percent)}%)</td>
+              <td>{impact.after.score.points} из {impact.after.score.max} ({displayScore(impact.after.score.percent)}%)</td>
+            </tr>
+            <tr>
+              <td>Урок</td>
+              <td>{lessonText(impact.before.lesson)}</td>
+              <td>{lessonText(impact.after.lesson)}</td>
+            </tr>
+            {impact.before.mastery.map((m, i) => (
+              <tr key={`${m.name}-${i}`}>
+                <td>Среднее мастерство: {m.name}</td>
+                <td>{m.mastery ?? '—'}</td>
+                <td>{impact.after.mastery[i]?.mastery ?? '—'}</td>
+              </tr>
+            ))}
+          </Table>
+        ) : null}
+        <label className="vcr-edit__reason">
+          <strong>Причина правки <span className="public-required-mark">*</span></strong>
+          <textarea value={reason} maxLength={1000} rows={3} onChange={(e) => setReason(e.target.value)} aria-invalid={tried && !reason.trim()} />
+        </label>
+        {tried && !reason.trim() ? <p className="err">Укажите причину правки, без неё сохранить нельзя.</p> : null}
+        {error ? <p className="err">{error}</p> : null}
+        <div className="vcr-edit__actions">
+          <button type="button" className="vcr-action vcr-action--primary" disabled={busy || !reason.trim() || !changes.length} onClick={() => void save()}>
+            {busy ? 'Сохранение…' : 'Сохранить правку'}
+          </button>
+          <button type="button" className="vcr-action" disabled={busy} onClick={onCancel}>
+            Отмена
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** История правок феноменального чек-листа: только тому, кто может править. */
+function PhenomenonEditHistory({ record }: { record: PhenomenonRecord }) {
+  const history = record.editHistory || [];
+  if (!history.length) return null;
+  let current: PhenomenonAnswers = { ...(record.originalAnswers || record.answers) };
+  const steps = history.map((h) => {
+    const before = current;
+    const after: PhenomenonAnswers = { ...before };
+    for (const c of h.changes) {
+      const v = c.after == null ? '' : String(c.after);
+      if (v) after[c.id] = v;
+      else delete after[c.id];
+    }
+    current = after;
+    return { h, before: scorePhenomenon(before), after: scorePhenomenon(after) };
+  });
+  return (
+    <details className="vcr-edit-history">
+      <summary>История правок ({history.length})</summary>
+      {steps.map(({ h, before, after }, i) => (
+        <div key={`${h.at}-${i}`} className="vcr-edit-history__step">
+          <p>
+            <strong>{formatEditedAt(h.at)}</strong> · причина: {h.reason}
+          </p>
+          <Table headers={['Пункт', 'Было', 'Стало']} fit>
+            {h.changes.map((c) => (
+              <tr key={c.id}>
+                <td>{phenomenonEditFieldTitle(c.id, record)}</td>
+                <td>{phenomenonEditValueText(c.id, c.before)}</td>
+                <td>{phenomenonEditValueText(c.id, c.after)}</td>
+              </tr>
+            ))}
+          </Table>
+          <p>
+            Итог чек-листа: было {before.points} из {before.max}, стало {after.points} из {after.max}
+          </p>
+        </div>
+      ))}
+    </details>
+  );
+}
+
+function PhenomenonLessonCard({
+  detail,
+  onBack,
+  records = [],
+  directory,
+  onEditRecord,
+}: {
+  detail: PhenomenonLessonDetail;
+  onBack: () => void;
+  records?: PhenomenonRecord[];
+  directory?: LessonVisitDirectory | null;
+  onEditRecord?: PhenomenonEditHandler;
+}) {
   const { lesson } = detail;
+  const [editingId, setEditingId] = useState<number | null>(null);
   return (
     <>
       <header className="vcr-header">
@@ -1254,7 +1474,10 @@ function PhenomenonLessonCard({ detail, onBack }: { detail: PhenomenonLessonDeta
       {detail.checklists.map((r) => (
         <section key={r.id} className="vcr-panel ph-checklist">
           <div className="vcr-head">
-            <h3>{r.observer || 'Наблюдатель не указан'}</h3>
+            <h3>
+              {r.observer || 'Наблюдатель не указан'}
+              {r.editedAt ? <> <small className="vcr-edited">изменено {formatEditedAt(r.editedAt)}</small></> : null}
+            </h3>
             <span className="vcr-scorecell">
               <span className="vcr-scorecell__value">
                 {displayScore(r.score.percent)} из 100 ({r.score.points} из {r.score.max} баллов)
@@ -1287,6 +1510,26 @@ function PhenomenonLessonCard({ detail, onBack }: { detail: PhenomenonLessonDeta
               <strong>{PHENOMENON_COMMENTS_TITLE.ru}:</strong> {r.comments}
             </blockquote>
           ) : null}
+          {onEditRecord && editingId !== r.id ? (
+            <p className={VCD_PDF_HIDE_CLASS}>
+              <button type="button" className="vcr-action" onClick={() => setEditingId(r.id)}>
+                Редактировать
+              </button>
+            </p>
+          ) : null}
+          {onEditRecord && editingId === r.id ? (
+            <PhenomenonEditPanel
+              record={r}
+              records={records}
+              directory={directory}
+              onCancel={() => setEditingId(null)}
+              onSave={async (record, answers, reason) => {
+                await onEditRecord(record, answers, reason);
+                setEditingId(null);
+              }}
+            />
+          ) : null}
+          {onEditRecord ? <PhenomenonEditHistory record={r} /> : null}
         </section>
       ))}
     </>
@@ -1718,10 +1961,13 @@ export function PhenomenonAnalytics({
   weeks = PHENOMENON_WEEKS,
   extraTeachers,
   onSaveExtraTeachers,
+  onEditRecord,
 }: {
   records: PhenomenonRecord[];
   directory?: LessonVisitDirectory | null;
   today?: Date;
+  /** Правка отправленного чек-листа (только у того, кому сервер разрешил). */
+  onEditRecord?: PhenomenonEditHandler;
   /** Педагоги «Другие сотрудники» (только феноменальная форма) и сохранение их списка. */
   extraTeachers?: { id: string; name: string }[];
   onSaveExtraTeachers?: (list: { id?: string; name: string }[]) => Promise<void>;
@@ -1775,7 +2021,13 @@ export function PhenomenonAnalytics({
   return (
     <div className="vcr-dashboard ph-analytics">
       {lesson ? (
-        <PhenomenonLessonCard detail={phenomenonLessonDetail(scoped, lesson)} onBack={() => setLessonKey(null)} />
+        <PhenomenonLessonCard
+          detail={phenomenonLessonDetail(scoped, lesson)}
+          onBack={() => setLessonKey(null)}
+          records={scoped}
+          directory={directory}
+          onEditRecord={onEditRecord}
+        />
       ) : (
         <>
           <header className="vcr-header vcr-header--compact">

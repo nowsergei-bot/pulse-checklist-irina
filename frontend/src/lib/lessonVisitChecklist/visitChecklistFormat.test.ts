@@ -651,3 +651,40 @@ test('phenomenon-only teachers: in the phenomenon form and its analytics, not in
   assert.equal(withPhenomenonExtraTeachers(main, []), main);
   assert.equal(withPhenomenonExtraTeachers(main, [{ id: 'ph_extra_x', name: main.teachers[0].name }]), main);
 });
+
+// ---- Правка отправленного феноменального чек-листа (ТЗ 26.11.2026) ----
+import {
+  phenomenonEditChanges as phEditChanges,
+  phenomenonEditImpact as phEditImpact,
+} from './publicForm.ts';
+
+test('правка 5: феноменальный чек-лист: пункт даёт итог из 22, мастерство меняет среднее педагога, пометка и выгрузка', () => {
+  const row = (id: number, answers: PhenomenonAnswers, extra: Record<string, unknown> = {}) =>
+    toPhenomenonRecord({ id, created_at: '2026-11-16T10:00:00Z', general: { ...GENERAL }, answers, ...extra });
+  const records = [row(1, maxAnswers()), row(2, maxAnswers())];
+  const draft = { ...records[0].answers, ph_phenomenon: 'none', ph_mastery_1: '3' };
+  const changes = phEditChanges(records[0].answers, draft);
+  assert.deepEqual(changes.map((c) => c.id), ['ph_phenomenon', 'ph_mastery_1']);
+  const impact = phEditImpact(records, 1, draft)!;
+  assert.equal(impact.before.score.max, 22);
+  assert.equal(impact.before.score.points, 22);
+  assert.equal(impact.after.score.max, 22);
+  assert.ok(impact.after.score.points < 22);
+  assert.ok(impact.after.lesson!.points < impact.before.lesson!.points);
+  assert.equal(impact.before.mastery[0].mastery, 9);
+  assert.equal(impact.after.mastery[0].mastery, 6, 'среднее мастерство первого педагога: (3 + 9) / 2');
+  assert.equal(impact.after.mastery[1].mastery, impact.before.mastery[1].mastery);
+  // Пометка «изменено» и история доходят до записи и выгрузки.
+  const edited = row(1, draft, {
+    edit: { count: 1, edited_at: '2026-11-26T07:15:00.000Z' },
+    edit_history: [{ at: '2026-11-26T07:15:00.000Z', reason: 'Проверка', changes }],
+    original: { answers: maxAnswers() },
+  });
+  assert.equal(edited.editedAt, '2026-11-26T07:15:00.000Z');
+  assert.equal(edited.editCount, 1);
+  assert.equal(edited.originalAnswers?.ph_phenomenon, maxAnswers().ph_phenomenon);
+  const sheet = phenomenonExcelSheets([edited, records[1]])[0];
+  assert.equal(sheet.rows[0][sheet.rows[0].length - 1], 'Изменено');
+  assert.equal(sheet.rows[1][sheet.rows[1].length - 1], '26.11.2026, 10:15');
+  assert.equal(sheet.rows[2][sheet.rows[2].length - 1], '');
+});

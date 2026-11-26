@@ -52,6 +52,8 @@ export async function getLessonVisitProject(
   directorSummary: boolean;
   /** Номер учётной записи самого пользователя в Пульсе (для обращения за доступом). */
   viewerId: number | null;
+  /** Сервер разрешил этому пользователю править отправленные чек-листы (по его сессии). */
+  canEditResponses: boolean;
 }> {
   const res = await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}`, { headers: adminHeaders() });
   const data = await parseJson<{
@@ -60,6 +62,7 @@ export async function getLessonVisitProject(
     staff_units?: Record<string, string[]>;
     directorSummary?: boolean;
     viewerId?: number | null;
+    canEditResponses?: boolean;
     error?: string;
     message?: string;
   }>(res);
@@ -70,6 +73,7 @@ export async function getLessonVisitProject(
     staffUnits: data.staff_units || {},
     directorSummary: data.directorSummary === true,
     viewerId: typeof data.viewerId === 'number' ? data.viewerId : null,
+    canEditResponses: data.canEditResponses === true,
   };
 }
 
@@ -144,6 +148,34 @@ export async function listLessonVisitResponses(projectId: number): Promise<
   }>(res);
   if (!res.ok) throw new Error(apiErrText(data, res.statusText));
   return data.responses ?? [];
+}
+
+/**
+ * Правка отправленного чек-листа: только ответы по пунктам и выводы, с причиной.
+ * Дату, класс, учителя и наблюдателя сервер не меняет. Возвращает обновлённую запись с историей.
+ */
+export async function editLessonVisitResponse(
+  projectId: number,
+  body: {
+    response_id: number;
+    answers: Record<string, string | string[]>;
+    reason: string;
+    expected_count: number;
+  },
+): Promise<import('../lib/lessonVisitChecklist/types').LessonVisitResponseRow> {
+  const res = await apiFetch(`${API_BASE}/api/lesson-visit-projects/${projectId}`, {
+    method: 'PUT',
+    headers: adminHeaders(),
+    body: JSON.stringify({ patch: { editResponse: body } }),
+  });
+  const data = await parseJson<{
+    ok?: boolean;
+    response?: import('../lib/lessonVisitChecklist/types').LessonVisitResponseRow;
+    error?: string;
+    message?: string;
+  }>(res);
+  if (!res.ok || !data.response) throw new Error(apiErrText(data, res.statusText));
+  return data.response;
 }
 
 export async function deleteLessonVisitResponse(projectId: number, responseId: number): Promise<void> {

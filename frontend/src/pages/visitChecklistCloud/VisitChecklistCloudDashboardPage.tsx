@@ -157,6 +157,7 @@ function LegacyVisitChecklistCloudDashboardPage({
   );
   const [liveDirectory, setLiveDirectory] = useState<LessonVisitDirectory | null>(null);
   const [liveStaffUnits, setLiveStaffUnits] = useState<Record<string, string[]>>({});
+  const [canEditResponses, setCanEditResponses] = useState(false);
   const [liveReady, setLiveReady] = useState(false);
   const [liveLoadErr, setLiveLoadErr] = useState<string | null>(null);
   const [liveRetry, setLiveRetry] = useState(0);
@@ -202,6 +203,7 @@ function LegacyVisitChecklistCloudDashboardPage({
       if (pack?.draft?.checklist) setLiveChecklist(pack.draft.checklist);
       setLiveDirectory(pack?.draft?.directory ?? null);
       setLiveStaffUnits(pack?.staffUnits ?? {});
+      setCanEditResponses(pack?.canEditResponses === true);
       onDirectorSummary(pack?.directorSummary === true);
       setLiveReady(true);
     }).catch((error) => {
@@ -469,7 +471,7 @@ function LegacyVisitChecklistCloudDashboardPage({
           </div>
         ) : null}
         {projectId && !liveReady ? <p role="status">Загружаем ответы для сводки…</p> : null}
-        {projectId && liveReady && !liveLoadErr ? <VisitChecklistReportDashboard projectId={projectId} responses={liveResponses} checklist={liveChecklist} directory={liveDirectory || defaultSeed.directory} staffUnits={liveStaffUnits} /> : null}
+        {projectId && liveReady && !liveLoadErr ? <VisitChecklistReportDashboard projectId={projectId} responses={liveResponses} checklist={liveChecklist} directory={liveDirectory || defaultSeed.directory} staffUnits={liveStaffUnits} canEditResponses={canEditResponses} onResponseEdited={(saved) => setLiveResponses((rows) => rows.map((r) => (r.id === saved.id ? saved : r)))} /> : null}
         {canArchive ? (
           <p className={`vcd-archive-link ${VCD_PDF_HIDE_CLASS}`}>
             <button type="button" className="vcr-link" aria-expanded={archiveOpen} onClick={onToggleArchive}>
