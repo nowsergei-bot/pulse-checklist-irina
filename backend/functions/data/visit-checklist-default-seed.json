@@ -1703,7 +1703,8 @@
       {
         "id": "teacher_192",
         "name": "Колпаков Антон Владимирович",
-        "departmentId": "dept_4"
+        "departmentId": "dept_4",
+        "visitor": false
       }
     ],
     "teacherAliases": [

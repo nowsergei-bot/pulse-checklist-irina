@@ -58,7 +58,7 @@ test('visitor groups keep only four surnames in Administration', () => {
   );
   const names = visitChecklistVisitorNames(directory);
   assert.equal(new Set(names).size, names.length);
-  assert.equal(names.length, 190);
+  assert.equal(names.length, 189);
 });
 
 test('former Administration people sit in their staff/JD subdivisions', () => {
@@ -133,7 +133,7 @@ test('visitor and teacher lists merge Campus 1+2 and drop UVP sections', () => {
 
 test('observed teachers exclude administration and academic office', () => {
   const chairs = visitChecklistObservedTeachers(directory);
-  assert.equal(chairs.length, 169);
+  assert.equal(chairs.length, 168);
   assert.equal(chairs.some((t) => t.departmentId === VISIT_ADMIN_DEPT_ID), false);
   assert.equal(chairs.some((t) => t.departmentId === VISIT_ACADEMIC_DEPT_ID), false);
   assert.deepEqual(
@@ -219,6 +219,24 @@ test('teachers removed from the list stay in visitor choices but not in observed
   const visitors = new Set(visitChecklistVisitorNames(seedDir));
   for (const t of retired) {
     assert.equal(observed.has(t.id), false);
-    assert.equal(visitors.has(t.name), true);
+    assert.equal(visitors.has(t.name), t.visitor !== false);
   }
+});
+
+test('retired teacher with visitor: false is not offered as the lesson visitor', () => {
+  const dir: LessonVisitDirectory = {
+    departments: [{ id: 'dept_4', name: 'Кафедра социальных наук' }],
+    teachers: [{ id: 'a1', name: 'Активный Учитель Тестович', departmentId: 'dept_4' }],
+    retiredTeachers: [
+      { id: 'r1', name: 'Убранный Посетитель Тестович', departmentId: 'dept_4' },
+      { id: 'r2', name: 'Выбывший Совсем Тестович', departmentId: 'dept_4', visitor: false },
+    ],
+  };
+  const names = visitChecklistVisitorNames(dir);
+  assert.equal(names.includes('Убранный Посетитель Тестович'), true);
+  assert.equal(names.includes('Выбывший Совсем Тестович'), false);
+  const gone = (directory.retiredTeachers || []).find((t) => t.id === 'teacher_192');
+  assert.equal(gone?.visitor, false);
+  assert.equal(visitChecklistVisitorNames(directory).includes(gone!.name), false);
+  assert.equal(visitChecklistObservedTeachers(directory).some((t) => t.id === gone!.id), false);
 });

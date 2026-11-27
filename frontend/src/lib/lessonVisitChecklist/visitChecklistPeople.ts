@@ -205,11 +205,14 @@ function visitorGroupRank(heading: string): number {
 /** Кто ходит на уроки: по подразделениям, Администрация — только 4 фамилии. */
 export function visitChecklistVisitorGroups(source: LessonVisitDirectory | null | undefined): PersonSelectGroup[] {
   if (!source) return [];
-  // Убранные из списка учителей по-прежнему могут посещать уроки.
+  // Убранные из списка учителей по-прежнему могут посещать уроки, кроме выбывших совсем (visitor: false).
   const activeIds = new Set(source.teachers.map((t) => t.id));
   const directory: LessonVisitDirectory = {
     ...source,
-    teachers: [...source.teachers, ...(source.retiredTeachers || []).filter((t) => !activeIds.has(t.id))],
+    teachers: [
+      ...source.teachers,
+      ...(source.retiredTeachers || []).filter((t) => !activeIds.has(t.id) && t.visitor !== false),
+    ],
   };
   const used = new Set<string>();
   const byHeading = new Map<string, string[]>();

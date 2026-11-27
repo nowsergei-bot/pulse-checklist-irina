@@ -50,6 +50,8 @@ export interface LessonVisitTeacher {
    * Нужно, чтобы после перевода учителя пункты по кафедре (4.2 и др.) в старых чек-листах не пересчитывались.
    */
   departmentHistory?: { departmentId: string; until: string }[];
+  /** false (для retiredTeachers): человек выбыл совсем и не показывается в «ФИО посетившего урок». */
+  visitor?: boolean;
 }
 
 export interface LessonVisitDirectory {
