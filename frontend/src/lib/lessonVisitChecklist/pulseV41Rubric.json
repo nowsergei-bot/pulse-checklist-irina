@@ -502,11 +502,12 @@
       "scoring_mode": "direct",
       "answer_map": {
         "o1": 6,
-        "o2": 0,
+        "o2": 3,
         "o3": "not_applicable"
       },
       "allowed_scores": [
         0,
+        3,
         6
       ],
       "allow_not_applicable": true,

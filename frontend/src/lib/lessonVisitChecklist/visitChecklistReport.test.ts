@@ -1099,6 +1099,7 @@ import {
   classGrade,
 } from "./visitChecklistReport.ts";
 import { LEVELS as LEVEL_NAMES, levelIndex as levelOf } from "./reportPresentation.ts";
+import rubricV41Json from "./pulseV41Rubric.json" with { type: "json" };
 
 const formV41 = ensureChecklistFormV41(structuredClone(seed));
 const v41Q = (code: string) =>
@@ -1209,6 +1210,36 @@ test("ТЗ 2–3: physical education and grades 1–2 exclude 3.6 automatically"
   assert.equal(item(v41(answered, { className: "12А" }), "3.6").value, 6);
   assert.equal(classGrade("Подготовка"), null);
   assert.equal(item(v41(answered, { className: "" }), "3.6").value, 6);
+});
+
+test("3.6 frontal tasks in v4.1: 3 of 6, level by share of the unchanged maximum", () => {
+  const frontal = { "3.6": 'фронтальные задания "одно для всех"' };
+  const differentiated = { "3.6": "дифференцированность заданий предусмотрена" };
+  const i = item(v41(frontal), "3.6");
+  assert.equal(i.value, 3);
+  assert.equal(i.max, 6);
+  assert.equal(i.na, false);
+  assert.equal(i.ruleId, "3.6/answer/o2");
+  assert.equal(LEVEL_NAMES[levelOf((i.value! / i.max) * 100)], "Средний");
+  assert.equal(item(v41(differentiated), "3.6").value, 6);
+  // «не предполагается по типу урока» и автоисключения по-прежнему не учитываются.
+  assert.equal(item(v41(), "3.6").na, true);
+  assert.equal(item(v41(frontal, { subject: "Физическая культура" }), "3.6").na, true);
+  assert.equal(item(v41(frontal, { className: "2Б" }), "3.6").na, true);
+  const allowed = (rubricV41Json.criteria.find((c) => c.code === "3.6") as { allowed_scores: number[] }).allowed_scores;
+  assert.deepEqual(allowed, [0, 3, 6]);
+});
+
+test("v4.1 lesson with maximum answers and 3.6 frontal: 3 points below the differentiated one, out of 100", () => {
+  const frontal = v41({ "3.6": 'фронтальные задания "одно для всех"' });
+  const differentiated = v41({ "3.6": "дифференцированность заданий предусмотрена" });
+  assert.equal(frontal.max, 100);
+  assert.deepEqual(frontal.missing, []);
+  // Все пункты на максимуме, кроме 3.6 (3 из 6) и 3.5, 5.2, 5.3, которые по форме дают минимальный уровень (−10).
+  for (const x of frontal.items)
+    if (x.code !== "3.6" && !["3.5", "5.2", "5.3"].includes(x.code)) assert.equal(x.value, x.max, x.code);
+  assert.equal(frontal.total, 100 - 3 - 10);
+  assert.equal(differentiated.total! - frontal.total!, 3);
 });
 
 test("ТЗ 4: 9.1 monologue gives 1, incorrect address gives 0", () => {
@@ -1373,6 +1404,11 @@ test("ТЗ 8: a 05.11.2026 checklist scores the same before and after the v4.1 f
     before.score.items.map((i) => [i.code, i.value, i.na, i.version]),
   );
   assert.equal(after.score.items[0].version, "pulse-100-v4-2026-10-05");
+  // До 09.11 «фронтальные задания» по-прежнему дают 0 из 6, итог не меняется.
+  const frontal = after.score.items.find((i) => i.code === "3.6")!;
+  assert.equal(frontal.value, 0);
+  assert.equal(frontal.max, 6);
+  assert.equal(after.score.total, 53);
   assert.equal(after.rating, before.rating);
   assert.equal(after.feedback, "Выводы наблюдателя.");
   assert.equal(after.practice, "Возьму приём с карточками.");
