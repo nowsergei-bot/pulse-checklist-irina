@@ -1066,7 +1066,7 @@ test("coverage over the real seed directory counts every listed teacher once", (
       t.departmentId !== "dept_academic" &&
       t.coverage !== false,
   );
-  assert.equal(counted.length, 166);
+  assert.equal(counted.length, 165);
   assert.equal(teachers.filter((t) => t.coverage === false).length, 3);
   assert.equal(new Set(teachers.map((t) => t.id)).size, teachers.length);
   const entry = (t: (typeof teachers)[number], visited: boolean) => ({
@@ -1079,16 +1079,16 @@ test("coverage over the real seed directory counts every listed teacher once", (
   });
   assert.equal(new Set(counted.map((t) => reportPersonKey(t.name))).size, counted.length);
   const none = visitCoverage(counted.map((t) => entry(t, false)), full.directory, {});
-  assert.equal(none.total, 166);
+  assert.equal(none.total, 165);
   assert.equal(none.visited, 0);
-  assert.equal(none.notVisited.length, 166);
+  assert.equal(none.notVisited.length, 165);
   const one = visitCoverage(
     counted.map((t, i) => entry(t, i === 0)),
     full.directory,
     {},
   );
   assert.equal(one.visited, 1);
-  assert.equal(one.notVisited.length, 165);
+  assert.equal(one.notVisited.length, 164);
 });
 
 // ---- Чек-лист 4.1 (с 09.11.2026): вымышленные учителя и ответы. ----
@@ -1421,7 +1421,7 @@ test("teacherAliasKey matches the server key: sha256 of the normalized name", ()
   assert.equal(teacherAliasKey(""), "");
 });
 
-test("summary coverage uses the form roster of 166, not a stale project snapshot", () => {
+test("summary coverage uses the form roster of 165, not a stale project snapshot", () => {
   const full = JSON.parse(
     readFileSync(new URL("./defaultSeed.json", import.meta.url), "utf8"),
   ) as { directory: LessonVisitDirectory };
@@ -1447,9 +1447,9 @@ test("summary coverage uses the form roster of 166, not a stale project snapshot
   }));
   const report = buildLessonReport(rows, seed, dir, new Date("2026-10-06T12:00:00Z"));
   const coverage = visitCoverage(report.teachers, dir, {});
-  assert.equal(coverage.total, 166);
+  assert.equal(coverage.total, 165);
   assert.equal(coverage.visited, 0);
-  assert.equal(coverage.notVisited.length, 166);
+  assert.equal(coverage.notVisited.length, 165);
   const missing = new Set(coverage.notVisited.map((r) => r.name));
   for (const t of retired) assert.equal(missing.has(t.name), false);
   // Старые чек-листы на убранных учителей видны с их ФИО.

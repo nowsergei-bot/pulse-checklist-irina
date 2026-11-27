@@ -149,9 +149,13 @@ test('directory follows Excel chairs plus JD leadership teachers', () => {
   assert.equal(teachers.filter((t) => t.departmentId === 'dept_academic').length, 2);
   assert.equal(
     teachers.filter((t) => t.departmentId !== 'dept_admin' && t.departmentId !== 'dept_academic').length,
-    169,
+    168,
   );
-  assert.equal(teachers.length, 180);
+  assert.equal(teachers.length, 179);
+  // Выбывший педагог кафедры социальных наук (24.11.2026): только в retiredTeachers.
+  assert.equal(teachers.some((t) => t.id === 'teacher_192'), false);
+  assert.equal(teachers.filter((t) => t.departmentId === 'dept_4').length, 20);
+  assert.equal((full.directory.retiredTeachers || []).some((t) => t.id === 'teacher_192'), true);
   const ids = teachers.map((t) => t.id);
   assert.equal(new Set(ids).size, ids.length);
 });

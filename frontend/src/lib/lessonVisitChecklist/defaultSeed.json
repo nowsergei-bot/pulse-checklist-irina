@@ -1087,11 +1087,6 @@
         "departmentId": "dept_3"
       },
       {
-        "id": "teacher_192",
-        "name": "Колпаков Антон Владимирович",
-        "departmentId": "dept_4"
-      },
-      {
         "id": "teacher_180",
         "name": "Кондина Анастасия Александровна",
         "departmentId": "dept_1"
@@ -1704,6 +1699,11 @@
         "id": "teacher_167",
         "name": "Gary Krautkramer",
         "departmentId": "dept_9"
+      },
+      {
+        "id": "teacher_192",
+        "name": "Колпаков Антон Владимирович",
+        "departmentId": "dept_4"
       }
     ],
     "teacherAliases": [
